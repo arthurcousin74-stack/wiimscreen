@@ -2,13 +2,14 @@
 //
 // Démarrage :
 //  - pas encore configuré → portail de configuration (Wi-Fi + QR code à l'écran)
-//  - sinon → connexion Wi-Fi puis interface : presets, lecture/pause, piste
-//    précédente/suivante, volume, titre en cours
+//  - sinon → connexion Wi-Fi puis interface : pochette et titre en cours,
+//    presets, lecture/pause, piste précédente/suivante, volume
 // Appui long (3 s) sur l'en-tête → portail de configuration.
 
 #include <M5Unified.h>
 #include <WiFi.h>
 
+#include "art.h"
 #include "core.h"
 #include "portal.h"
 #include "settings.h"
@@ -19,6 +20,10 @@ static Settings g_settings;
 static Ui g_ui;
 static WiimClient g_wiim;
 static UiState g_state;
+static ArtFetcher g_artFetcher;
+static ArtImage g_art;           // pochette affichée
+static std::string g_artWanted;  // adresse de la pochette attendue ("" = aucune)
+static int g_metaRefresh = 0;    // getMetaInfo à refaire (la pochette suit parfois le titre avec retard)
 
 static uint32_t g_lastPoll = 0;
 static uint32_t g_lastFull = 0;
@@ -84,12 +89,46 @@ static void poll() {
         g_messageUntil = millis() + 600000;
     }
 
+    // Nouvelle piste (ou première réponse) : album, qualité et pochette via getMetaInfo,
+    // redemandés au relevé suivant car le WiiM les met parfois à jour en retard
+    if (next.online) {
+        bool trackChanged = !g_state.online || next.player.title != g_state.player.title ||
+                            next.player.artist != g_state.player.artist ||
+                            next.player.album != g_state.player.album;
+        if (trackChanged) g_metaRefresh = 2;
+        if (g_metaRefresh > 0) {
+            --g_metaRefresh;
+            wr::TrackMeta meta;
+            if (g_wiim.metaInfo(meta) == WiimError::None) next.meta = meta;
+            else if (trackChanged) next.meta = wr::TrackMeta();
+        }
+        if (next.meta.artUrl != g_artWanted) {
+            g_artWanted = next.meta.artUrl;
+            if (g_artWanted.empty()) {
+                g_art.reset();
+                g_ui.drawArt(nullptr);
+            } else {
+                g_artFetcher.request(g_artWanted);
+            }
+        }
+    }
+
     bool playingChanged = next.player.playing != g_state.player.playing;
-    bool headerChanged = next.player != g_state.player || next.online != g_state.online ||
-                         next.message != g_state.message || next.battery != g_state.battery;
+    bool headerChanged = next.player != g_state.player || next.meta != g_state.meta ||
+                         next.online != g_state.online || next.message != g_state.message ||
+                         next.battery != g_state.battery;
     g_state = next;
     if (headerChanged) g_ui.drawHeader(g_state);
     if (playingChanged) g_ui.showTransport(wr::kPlayPause, false, g_state.player.playing);
+}
+
+// Pochette téléchargée en tâche de fond : affichage dès qu'elle est prête
+static void checkArt() {
+    if (g_artWanted.empty()) return;
+    ArtImage img;
+    if (!g_artFetcher.take(g_artWanted, img)) return;
+    g_art = std::move(img);
+    g_ui.drawArt(&g_art);
 }
 
 static void handleTap(int x, int y) {
@@ -164,8 +203,9 @@ void setup() {
 
     connectWifi();
     g_wiim.configure(g_settings);
+    g_artFetcher.begin();
     g_state.battery = batteryLevel();
-    g_ui.drawMain(g_state, true);
+    g_ui.drawMain(g_state, nullptr, true);
     g_lastFull = millis();
     poll();
 }
@@ -190,11 +230,12 @@ void loop() {
     }
 
     if (millis() - g_lastPoll > kPollMs) poll();
+    checkArt();
 
     // Rafraîchissement complet contre les images fantômes de l'e-ink, jamais pendant l'utilisation
     bool idle = millis() - g_lastTouch > 10000;
     if (idle && (g_ui.needsDeghost() || millis() - g_lastFull > kFullRefreshMs)) {
-        g_ui.drawMain(g_state, true);
+        g_ui.drawMain(g_state, &g_art, true);
         g_lastFull = millis();
     }
     delay(10);

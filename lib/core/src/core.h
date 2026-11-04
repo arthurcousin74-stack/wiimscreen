@@ -27,11 +27,13 @@ struct PlayerStatus {
     bool ok = false;
     bool playing = false;
     int volume = 0;
+    int mode = 0;  // source : 1 AirPlay, 2 DLNA, 31 Spotify, 41 Bluetooth…
     std::string title;
     std::string artist;
+    std::string album;
     bool operator==(const PlayerStatus& o) const {
-        return ok == o.ok && playing == o.playing && volume == o.volume && title == o.title &&
-               artist == o.artist;
+        return ok == o.ok && playing == o.playing && volume == o.volume && mode == o.mode &&
+               title == o.title && artist == o.artist && album == o.album;
     }
     bool operator!=(const PlayerStatus& o) const { return !(*this == o); }
 };
@@ -39,6 +41,33 @@ struct PlayerStatus {
 // Valeur d'un champ texte d'un objet JSON plat ({"cle":"valeur",...}).
 bool jsonString(const std::string& json, const std::string& key, std::string& out);
 PlayerStatus parsePlayerStatus(const std::string& json);
+
+// Nom lisible de la source (champ "mode" de getPlayerStatus), vide si inconnue.
+std::string sourceName(int mode);
+
+// Réponse de getMetaInfo : {"metaData":{"album":…,"albumArtURI":…,"sampleRate":…}}
+struct TrackMeta {
+    bool ok = false;
+    std::string album;
+    std::string artUrl;  // http(s) uniquement, vide sinon
+    int sampleRate = 0;  // Hz
+    int bitDepth = 0;
+    bool operator==(const TrackMeta& o) const {
+        return ok == o.ok && album == o.album && artUrl == o.artUrl && sampleRate == o.sampleRate &&
+               bitDepth == o.bitDepth;
+    }
+    bool operator!=(const TrackMeta& o) const { return !(*this == o); }
+};
+TrackMeta parseMetaInfo(const std::string& json);
+
+// "24 bits · 96 kHz", "16 bits · 44,1 kHz" ; vide si inconnu.
+std::string formatQuality(int sampleRate, int bitDepth);
+
+// URL http:// ou https:// avec un hôte, sans espace ni caractère de contrôle.
+bool isHttpUrl(const std::string& url);
+
+enum class ImageType { Unknown, Jpeg, Png };
+ImageType sniffImage(const uint8_t* data, size_t len);
 
 struct HttpResponse {
     int status = 0;
@@ -70,11 +99,14 @@ struct Rect {
 enum Transport { kVolDown = 0, kPrev, kPlayPause, kNext, kVolUp, kTransportCount };
 
 struct Layout {
-    Rect header;
+    Rect header;  // bandeau « en cours de lecture » (pochette + infos), appui long = configuration
+    Rect art;     // pochette, carrée, à gauche du bandeau
+    Rect info;    // titre, artiste, volume…
     std::vector<Rect> presets;
     Rect transport[kTransportCount];
 };
 
+// Le bandeau grandit tant que les boutons de presets gardent une hauteur confortable.
 Layout computeLayout(int width, int height, int columns, int presetCount);
 
 }  // namespace wr

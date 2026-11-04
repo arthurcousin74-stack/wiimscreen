@@ -90,3 +90,11 @@ WiimError WiimClient::status(wr::PlayerStatus& out) {
     out = wr::parsePlayerStatus(body);
     return out.ok ? WiimError::None : WiimError::Http;
 }
+
+WiimError WiimClient::metaInfo(wr::TrackMeta& out) {
+    std::string body;
+    WiimError e = command("getMetaInfo", &body);
+    if (e != WiimError::None) return e;
+    out = wr::parseMetaInfo(body);
+    return out.ok ? WiimError::None : WiimError::Http;
+}

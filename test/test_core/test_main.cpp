@@ -60,6 +60,63 @@ static void test_player_status() {
     TEST_ASSERT_FALSE(stop.playing);
     TEST_ASSERT_EQUAL_STRING("", stop.title.c_str());
     TEST_ASSERT_FALSE(parsePlayerStatus("Failed").ok);
+
+    PlayerStatus full = parsePlayerStatus(
+        "{\"status\":\"pause\",\"mode\":\"31\",\"Album\":\"4c6120566965\",\"Artist\":\"un_known\"}");
+    TEST_ASSERT_EQUAL(31, full.mode);
+    TEST_ASSERT_EQUAL_STRING("La Vie", full.album.c_str());
+    TEST_ASSERT_EQUAL_STRING("", full.artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("Spotify", sourceName(full.mode).c_str());
+    TEST_ASSERT_EQUAL_STRING("", sourceName(12345).c_str());
+}
+
+static void test_meta_info() {
+    TrackMeta m = parseMetaInfo(
+        "{ \"metaData\": { \"album\": \"Kind of Blue\", \"title\": \"So What\", "
+        "\"albumArtURI\": \"https:\\/\\/i.scdn.co\\/image\\/ab67616d\", "
+        "\"sampleRate\": \"44100\", \"bitDepth\": \"16\" } }");
+    TEST_ASSERT_TRUE(m.ok);
+    TEST_ASSERT_EQUAL_STRING("Kind of Blue", m.album.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://i.scdn.co/image/ab67616d", m.artUrl.c_str());
+    TEST_ASSERT_EQUAL(44100, m.sampleRate);
+    TEST_ASSERT_EQUAL(16, m.bitDepth);
+
+    TrackMeta none = parseMetaInfo(
+        "{\"metaData\":{\"album\":\"unknow\",\"albumArtURI\":\"un_known\",\"sampleRate\":\"x\"}}");
+    TEST_ASSERT_TRUE(none.ok);
+    TEST_ASSERT_EQUAL_STRING("", none.album.c_str());
+    TEST_ASSERT_EQUAL_STRING("", none.artUrl.c_str());
+    TEST_ASSERT_EQUAL(0, none.sampleRate);
+    TEST_ASSERT_FALSE(parseMetaInfo("Failed").ok);
+    TEST_ASSERT_EQUAL_STRING("", parseMetaInfo("{\"metaData\":{\"albumArtURI\":\"file:///etc/x\"}}").artUrl.c_str());
+}
+
+static void test_quality() {
+    TEST_ASSERT_EQUAL_STRING("16 bits \xC2\xB7 44,1 kHz", formatQuality(44100, 16).c_str());
+    TEST_ASSERT_EQUAL_STRING("24 bits \xC2\xB7 96 kHz", formatQuality(96000, 24).c_str());
+    TEST_ASSERT_EQUAL_STRING("48 kHz", formatQuality(48000, 0).c_str());
+    TEST_ASSERT_EQUAL_STRING("24 bits", formatQuality(0, 24).c_str());
+    TEST_ASSERT_EQUAL_STRING("", formatQuality(0, 0).c_str());
+    TEST_ASSERT_EQUAL_STRING("88,2 kHz", formatQuality(88200, 0).c_str());
+}
+
+static void test_urls_and_images() {
+    TEST_ASSERT_TRUE(isHttpUrl("https://i.scdn.co/image/ab67616d"));
+    TEST_ASSERT_TRUE(isHttpUrl("http://192.168.1.20:8080/cover.jpg"));
+    TEST_ASSERT_FALSE(isHttpUrl("https://"));
+    TEST_ASSERT_FALSE(isHttpUrl("https:///path"));
+    TEST_ASSERT_FALSE(isHttpUrl("ftp://host/x"));
+    TEST_ASSERT_FALSE(isHttpUrl("/tmp/cover.jpg"));
+    TEST_ASSERT_FALSE(isHttpUrl("http://host/a b"));
+    TEST_ASSERT_FALSE(isHttpUrl("http://host/\r\nX: y"));
+
+    const uint8_t jpg[] = {0xFF, 0xD8, 0xFF, 0xE0};
+    const uint8_t png[] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0};
+    const uint8_t gif[] = {'G', 'I', 'F', '8', '9', 'a'};
+    TEST_ASSERT_TRUE(sniffImage(jpg, sizeof jpg) == ImageType::Jpeg);
+    TEST_ASSERT_TRUE(sniffImage(png, sizeof png) == ImageType::Png);
+    TEST_ASSERT_TRUE(sniffImage(gif, sizeof gif) == ImageType::Unknown);
+    TEST_ASSERT_TRUE(sniffImage(jpg, 2) == ImageType::Unknown);
 }
 
 static void test_json_escapes() {
@@ -163,6 +220,24 @@ static void test_layout() {
     L = computeLayout(540, 960, 2, 5);
     TEST_ASSERT_EQUAL(5, (int)L.presets.size());
     TEST_ASSERT_TRUE(L.presets[4].y + L.presets[4].h <= L.transport[0].y);
+
+    // Bandeau : pochette carrée à gauche, infos à droite, sans chevauchement
+    L = computeLayout(960, 540, 3, 6);
+    TEST_ASSERT_EQUAL(L.art.w, L.art.h);
+    TEST_ASSERT_EQUAL(L.header.h, L.art.h);
+    TEST_ASSERT_TRUE(L.art.h >= 160);  // peu de presets : grande pochette
+    TEST_ASSERT_TRUE(L.info.x >= L.art.x + L.art.w);
+    TEST_ASSERT_TRUE(L.info.x + L.info.w <= L.header.x + L.header.w);
+    TEST_ASSERT_TRUE(L.presets[0].h >= 64);
+    // 12 presets : le bandeau rétrécit, les boutons restent utilisables
+    L = computeLayout(960, 540, 3, 12);
+    TEST_ASSERT_EQUAL(12, (int)L.presets.size());
+    TEST_ASSERT_TRUE(L.header.h >= 112);
+    TEST_ASSERT_TRUE(L.presets[0].h >= 56);
+    TEST_ASSERT_TRUE(L.presets[11].y + L.presets[11].h <= L.transport[0].y);
+    L = computeLayout(540, 960, 2, 12);
+    TEST_ASSERT_TRUE(L.presets[11].y + L.presets[11].h <= L.transport[0].y);
+    TEST_ASSERT_TRUE(L.info.w >= 200);
 }
 
 int main() {
@@ -171,6 +246,9 @@ int main() {
     RUN_TEST(test_presets_errors);
     RUN_TEST(test_hex_text);
     RUN_TEST(test_player_status);
+    RUN_TEST(test_meta_info);
+    RUN_TEST(test_quality);
+    RUN_TEST(test_urls_and_images);
     RUN_TEST(test_json_escapes);
     RUN_TEST(test_http_response);
     RUN_TEST(test_fingerprint);

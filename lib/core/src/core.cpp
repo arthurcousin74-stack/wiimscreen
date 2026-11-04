@@ -51,6 +51,10 @@ std::vector<std::string> words(const std::string& s) {
     return out;
 }
 
+bool isUnknown(const std::string& s) {
+    return s.empty() || s == "unknow" || s == "Unknown" || s == "un_known" || s == "unknown";
+}
+
 void popUtf8(std::string& s) {
     while (!s.empty()) {
         unsigned char c = s.back();
@@ -96,7 +100,7 @@ bool parsePresets(const std::string& text, std::vector<Preset>& out, std::string
             error = "12 presets au maximum";
             return false;
         }
-        out.push_back({static_cast<int>(slot), label});
+        out.push_back(Preset{static_cast<int>(slot), label});
         if (end == text.size()) break;
     }
     if (out.empty()) {
@@ -177,9 +181,70 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     if (jsonString(json, "vol", v)) st.volume = std::max(0, std::min(100, std::atoi(v.c_str())));
     if (jsonString(json, "Title", v)) st.title = decodeHexText(v);
     if (jsonString(json, "Artist", v)) st.artist = decodeHexText(v);
-    if (st.title == "unknow" || st.title == "Unknown") st.title.clear();
-    if (st.artist == "unknow" || st.artist == "Unknown") st.artist.clear();
+    if (jsonString(json, "Album", v)) st.album = decodeHexText(v);
+    if (jsonString(json, "mode", v)) st.mode = std::atoi(v.c_str());
+    for (std::string* f : {&st.title, &st.artist, &st.album})
+        if (isUnknown(*f)) f->clear();
     return st;
+}
+
+std::string sourceName(int mode) {
+    switch (mode) {
+        case 1: return "AirPlay";
+        case 2: return "DLNA";
+        case 31: return "Spotify";
+        case 40: return "Entrée ligne";
+        case 41: return "Bluetooth";
+        case 43: return "Optique";
+        default: return "";
+    }
+}
+
+TrackMeta parseMetaInfo(const std::string& json) {
+    TrackMeta m;
+    if (json.find("\"metaData\"") == std::string::npos) return m;
+    m.ok = true;
+    std::string v;
+    if (jsonString(json, "album", v) && !isUnknown(v)) m.album = v;
+    if (jsonString(json, "albumArtURI", v) && isHttpUrl(v)) m.artUrl = v;
+    if (jsonString(json, "sampleRate", v)) m.sampleRate = std::max(0, std::atoi(v.c_str()));
+    if (jsonString(json, "bitDepth", v)) m.bitDepth = std::max(0, std::atoi(v.c_str()));
+    if (m.sampleRate > 768000) m.sampleRate = 0;
+    if (m.bitDepth > 64) m.bitDepth = 0;
+    return m;
+}
+
+std::string formatQuality(int sampleRate, int bitDepth) {
+    std::string bits = bitDepth > 0 ? std::to_string(bitDepth) + " bits" : "";
+    std::string rate;
+    if (sampleRate >= 1000) {
+        int tenths = (sampleRate + 50) / 100;  // en dixièmes de kHz
+        rate = std::to_string(tenths / 10);
+        if (tenths % 10) rate += "," + std::to_string(tenths % 10);
+        rate += " kHz";
+    }
+    if (bits.empty()) return rate;
+    if (rate.empty()) return bits;
+    return bits + " \xC2\xB7 " + rate;  // ·
+}
+
+bool isHttpUrl(const std::string& url) {
+    size_t hostStart;
+    if (url.compare(0, 7, "http://") == 0) hostStart = 7;
+    else if (url.compare(0, 8, "https://") == 0) hostStart = 8;
+    else return false;
+    if (url.size() > 1024 || url.size() == hostStart) return false;
+    if (url[hostStart] == '/' || url[hostStart] == ':' || url[hostStart] == '?') return false;
+    for (unsigned char c : url)
+        if (c <= 0x20 || c == 0x7f) return false;
+    return true;
+}
+
+ImageType sniffImage(const uint8_t* d, size_t n) {
+    if (n >= 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF) return ImageType::Jpeg;
+    static const uint8_t png[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+    if (n >= 8 && std::equal(png, png + 8, d)) return ImageType::Png;
+    return ImageType::Unknown;
 }
 
 bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
@@ -317,24 +382,32 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
 Layout computeLayout(int width, int height, int columns, int presetCount) {
     Layout L;
     const int m = 16, gap = 12;
-    const int headerH = 96;
     const int transportH = std::max(90, height / 6);
+    const int minCellH = 64;
     columns = std::max(1, columns);
-    L.header = {m, m, width - 2 * m, headerH};
+    int rows = std::max(1, (presetCount + columns - 1) / columns);
+
+    // Bandeau : tout ce qui reste une fois les presets servis, entre 112 et 200 px
+    int avail = height - 2 * m - transportH - 2 * gap;
+    int headerH = avail - rows * minCellH - (rows - 1) * gap;
+    headerH = std::max(112, std::min(std::min(200, width / 3), headerH));
+    L.header = Rect{m, m, width - 2 * m, headerH};
+    L.art = Rect{m, m, headerH, headerH};
+    const int artGap = 20;
+    L.info = Rect{m + headerH + artGap, m, width - 2 * m - headerH - artGap, headerH};
 
     int gridTop = m + headerH + gap;
     int gridBottom = height - m - transportH - gap;
-    int rows = std::max(1, (presetCount + columns - 1) / columns);
     int cellW = (width - 2 * m - (columns - 1) * gap) / columns;
     int cellH = (gridBottom - gridTop - (rows - 1) * gap) / rows;
     for (int i = 0; i < presetCount; ++i) {
         int r = i / columns, c = i % columns;
-        L.presets.push_back({m + c * (cellW + gap), gridTop + r * (cellH + gap), cellW, cellH});
+        L.presets.push_back(Rect{m + c * (cellW + gap), gridTop + r * (cellH + gap), cellW, cellH});
     }
 
     int tW = (width - 2 * m - (kTransportCount - 1) * gap) / kTransportCount;
     for (int i = 0; i < kTransportCount; ++i)
-        L.transport[i] = {m + i * (tW + gap), height - m - transportH, tW, transportH};
+        L.transport[i] = Rect{m + i * (tW + gap), height - m - transportH, tW, transportH};
     return L;
 }
 
