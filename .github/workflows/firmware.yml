@@ -1,0 +1,52 @@
+# Compile le firmware et produit UN fichier .bin à flasher à l'adresse 0x0
+# depuis le navigateur (voir LISEZMOI.md).
+# Résultat : onglet Actions > dernière exécution > artefact "wiim-remote-papers3".
+name: firmware
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Installer PlatformIO
+        run: pip install platformio
+
+      - name: Tests de la logique (PC)
+        run: pio test -e native
+
+      - name: Compiler le firmware
+        run: pio run -e papers3
+
+      - name: Fusionner en un seul .bin (adresse 0x0)
+        run: |
+          B=.pio/build/papers3
+          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          mkdir -p dist
+          python ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 merge_bin \
+            -o dist/wiim-remote-papers3.bin \
+            --flash_mode keep --flash_freq keep --flash_size keep \
+            0x0 "$B/bootloader.bin" 0x8000 "$B/partitions.bin" 0xe000 "$BOOT_APP0" 0x10000 "$B/firmware.bin"
+          cp LISEZMOI.md dist/
+          sha256sum dist/wiim-remote-papers3.bin | tee dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wiim-remote-papers3
+          path: dist/
