@@ -24,6 +24,7 @@ bool loadSettings(Settings& s) {
     s.columns = constrain(p.getInt("columns", 3), 1, 4);
     s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
     s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
+    s.beep = constrain(p.getInt("beep", 2), 0, 3);
     p.end();
 
     std::string err;
@@ -46,6 +47,7 @@ void saveSettings(const Settings& s) {
     p.putInt("columns", s.columns);
     p.putInt("rotation", s.rotation);
     p.putInt("volstep", s.volStep);
+    p.putInt("beep", s.beep);
     p.end();
 }
 

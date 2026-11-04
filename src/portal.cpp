@@ -77,6 +77,14 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
     h += option("http", "HTTP", !s.https);
     h += F("</select></label></div></div>");
 
+    h += F("<label>Bips à chaque appui<select name=beep>");
+    h += option("0", "Désactivés", s.beep == 0);
+    h += option("1", "Discrets", s.beep == 1);
+    h += option("2", "Normaux", s.beep == 2);
+    h += option("3", "Forts", s.beep == 3);
+    h += F("</select><small>Un clic à chaque appui, deux notes graves si le WiiM ne répond pas."
+           "</small></label>");
+
     if (s.fingerprint.length()) {
         h += F("<label><input type=checkbox name=forgetfp value=1 style='width:auto'> "
                "Oublier le certificat enregistré du WiiM</label><small>Empreinte actuelle : ");
@@ -138,6 +146,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.columns = constrain(server.arg("columns").toInt(), 1, 4);
         next.rotation = constrain(server.arg("rotation").toInt(), 0, 3);
         next.volStep = constrain(server.arg("volstep").toInt(), 1, 20);
+        next.beep = constrain(server.arg("beep").toInt(), 0, 3);
         bool https = server.arg("scheme") != "http";
         if (https != s.https || next.host != s.host || server.hasArg("forgetfp")) next.fingerprint = "";
         next.https = https;

@@ -13,6 +13,7 @@
 #include "core.h"
 #include "portal.h"
 #include "settings.h"
+#include "sound.h"
 #include "ui.h"
 #include "wiim_client.h"
 
@@ -61,6 +62,7 @@ static String errorText(WiimError e) {
 }
 
 static void afterCommand(WiimError e) {
+    if (e != WiimError::None) sound::error();
     if (g_wiim.takeJustPinned()) setMessage("Certificat du WiiM enregistré");
     else setMessage(errorText(e), e == WiimError::PinMismatch ? 600000 : 8000);
     g_state.online = (e == WiimError::None);
@@ -134,6 +136,7 @@ static void checkArt() {
 static void handleTap(int x, int y) {
     int p = g_ui.hitPreset(x, y);
     if (p >= 0) {
+        sound::tap();
         g_ui.showPreset(p, true);
         WiimError e = g_wiim.command("MCUKeyShortClick:" + String(g_settings.presets[p].slot));
         g_ui.showPreset(p, false);
@@ -143,6 +146,7 @@ static void handleTap(int x, int y) {
 
     int t = g_ui.hitTransport(x, y);
     if (t < 0) return;
+    sound::tap();
     g_ui.showTransport(t, true, g_state.player.playing);
     WiimError e = WiimError::None;
     switch (t) {
@@ -184,8 +188,10 @@ static void connectWifi() {
                           "Touche l'écran pour ouvrir la configuration");
             shownError = true;
         }
-        if (shownError && M5.Touch.getDetail().wasPressed())
+        if (shownError && M5.Touch.getDetail().wasPressed()) {
+            sound::tap();
             runSetupPortal(g_settings, g_ui, "Le Wi-Fi « " + g_settings.ssid + " » est injoignable.");
+        }
         delay(20);
     }
 }
@@ -196,6 +202,7 @@ void setup() {
     Serial.begin(115200);
 
     bool presetsOk = loadSettings(g_settings);
+    sound::begin(g_settings.beep);
     g_ui.begin(g_settings);
 
     if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Première configuration.");
@@ -225,8 +232,10 @@ void loop() {
     }
     if (g_headerPressed) {
         if (!t.isPressed()) g_headerPressed = false;
-        else if (millis() - g_headerPressStart > kLongPressMs)
+        else if (millis() - g_headerPressStart > kLongPressMs) {
+            sound::confirm();
             runSetupPortal(g_settings, g_ui, "Reconfiguration demandée.");
+        }
     }
 
     if (millis() - g_lastPoll > kPollMs) poll();

@@ -6,6 +6,7 @@ Firmware pour le M5PaperS3 (écran e-ink tactile 4,7", 960×540) qui pilote un s
 
 - **Pochette** en 16 niveaux de gris, téléchargée en arrière-plan (l'écran reste réactif), avec titre, artiste, album, source (Spotify, AirPlay…), qualité audio (« 16 bits · 44,1 kHz »), barre de volume et niveau de batterie
 
+- **Bips** par le buzzer : un clic à chaque appui (l'e-ink réagit en ~0,1 s, le son tout de suite), deux notes graves si le WiiM ne répond pas, deux notes aiguës quand l'appui long ouvre la configuration. Volume réglable ou désactivé dans la configuration
 - **Aucune appli à installer** : tout se règle depuis un téléphone, via un portail Wi-Fi affiché à l'écran (avec QR code)
 - **API locale du WiiM** (`httpapi.asp`), aucun cloud
 - **TLS épinglé** : le certificat auto-signé du WiiM est enregistré à la première connexion, puis comparé (SHA-256) avant chaque requête
