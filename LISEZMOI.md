@@ -9,6 +9,8 @@ Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qu
 - **Presets du WiiM** repris automatiquement, avec leurs noms et leurs images (ou une liste saisie à la main)
 - **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
 - **Vue ambiance** : après 30 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
+- **Visualiseur** : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
+- **Réveil par mouvement** : soulever ou déplacer le Tab5 rallume l'écran et affiche les commandes ; les petites vibrations (enceinte sur le même meuble) sont ignorées
 
   ![Vue ambiance](docs/ambiance.png)
 
@@ -65,6 +67,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 | ▶ / II | Lecture / pause |
 | Bandeau du haut, 3 s | Configuration |
 | N'importe où, en vue ambiance | Revenir aux commandes |
+| Soulever / déplacer le Tab5 | Rallumer l'écran, revenir aux commandes |
 
 ## En cas de souci
 
@@ -72,6 +75,8 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 - **« Certificat du WiiM inattendu »** : après une réinitialisation ou une mise à jour du WiiM, son certificat peut changer. Si c'est le cas, reconfigure et coche « Oublier le certificat enregistré ». Si rien n'a changé côté WiiM, quelqu'un s'intercale peut-être sur ton réseau : ne l'accepte pas à l'aveugle.
 - **« Wi-Fi injoignable »** : touche l'écran pour rouvrir la configuration. Si le Wi-Fi ne démarre jamais, le module Wi-Fi (ESP32-C6) du Tab5 a peut-être besoin de son firmware d'origine : M5Stack fournit un guide de restauration.
 - **Pas de pochette** (deux croches à la place) : la source n'en fournit pas (entrée ligne, Bluetooth, certaines radios), ou l'image est dans un format non pris en charge (WebP, JPEG progressif).
+- **Le visualiseur reste plat** : le micro capte peu de son (Tab5 loin des enceintes, volume bas). La sensibilité s'adapte en quelques secondes.
+- **L'écran se rallume tout seul** : le Tab5 est peut-être posé sur un meuble qui vibre fort ; désactive le réveil par mouvement dans la configuration.
 - **Journal** : moniteur série à 115200 bauds (`pio device monitor`).
 
 ## Développement
@@ -102,9 +107,10 @@ src/art.*            téléchargement des images (tâche de fond, HTTPS vérifi�
 src/wiim_client.*    API WiiM, TLS avec épinglage
 src/portal.*         portail de configuration (point d'accès + DNS + formulaire)
 src/settings.*       réglages en NVS
-src/sound.*          sons (M5.Speaker)
+src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
 src/fonts/           polices VLW générées (tools/make_vlw.py)
-lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent…
+lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
+                     spectre (FFT), lissage du visualiseur, détection de mouvement
 certs/               certificats racines Mozilla (images en HTTPS)
 tools/preview/       aperçu de l'interface sur PC
 ```
@@ -127,5 +133,6 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Le Wi-Fi de configuration est protégé par un mot de passe aléatoire de 10 caractères (générateur matériel), affiché uniquement sur l'écran. Il n'existe que pendant la configuration.
 - Le mot de passe Wi-Fi n'est jamais renvoyé dans la page de configuration.
 - Toutes les valeurs réaffichées dans la page sont échappées (HTML).
+- Micro : actif uniquement en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.
 - Images (pochettes, presets) : certificat du serveur vérifié (certificats racines Mozilla) pour les adresses HTTPS ; taille plafonnée à 768 Ko ; seuls JPEG et PNG sont décodés, après vérification de leur signature.

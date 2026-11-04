@@ -457,6 +457,7 @@ void Ui::info(const UiState& st) {
 // ---------------------------------------------------------------------- vues
 
 void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
+    ambientShown_ = false;
     background();
     roundedPush(art_, layout_.art.x, layout_.art.y, sc(16), true, 0);
     info(st);
@@ -484,11 +485,18 @@ void Ui::renderAmbient(const UiState& st) {
     }
     roundedPush(artBig_, m, m, sc(20), true, 0);
 
-    // Textes à droite (paysage) ou dessous (portrait), centrés verticalement
+    // Textes à droite (paysage) ou dessous (portrait), centrés verticalement ;
+    // visualiseur en bas de cette colonne
     const int tx = landscape ? m + side + sc(40) : m;
     const int tw = landscape ? W - tx - m : W - 2 * m;
     const int top = landscape ? m : m + side + sc(30);
-    const int bottom = H - m;
+    int bottom = H - m;
+    visRect_ = wr::Rect{};
+    if (visEnabled_) {
+        const int visH = sc(110);
+        visRect_ = wr::Rect{tx, H - m - visH, tw, visH};
+        bottom = visRect_.y - sc(24);
+    }
 
     std::string title = st.player.title.empty() ? (st.online ? "Rien en lecture" : "Hors ligne")
                                                 : st.player.title;
@@ -534,7 +542,47 @@ void Ui::renderAmbient(const UiState& st) {
         y += smallH;
     }
     progressRow(st, tx, tw, y + sc(44), nullptr);
+    if (visEnabled_) drawBars();
+    ambientShown_ = true;
     present();
+}
+
+// Spectre : barres arrondies posées sur une ligne, plus claires quand elles montent,
+// avec un repère de crête
+void Ui::drawBars() {
+    auto& C = canvas_;
+    const wr::Rect& r = visRect_;
+    const int n = visLevels_.empty() ? 24 : (int)visLevels_.size();
+    const int gap = sc(6);
+    const int bw = std::max(2, (r.w - (n - 1) * gap) / n);
+    const int x0 = r.x + (r.w - (n * bw + (n - 1) * gap)) / 2;
+    const int base = r.y + r.h, capH = sc(4), minH = sc(5);
+    for (int i = 0; i < n; ++i) {
+        float l = visLevels_.empty() ? 0.0f : visLevels_[i];
+        int h = std::max(minH, (int)(l * (r.h - capH - sc(4))));
+        int x = x0 + i * (bw + gap);
+        C.fillRoundRect(x, base - h, bw, h, std::min(bw / 2, sc(4)), mix(accent_, kText, 0.35f * l));
+        if (!visPeaks_.empty() && visPeaks_[i] > 0.04f) {
+            int py = base - std::max(minH, (int)(visPeaks_[i] * (r.h - capH - sc(4)))) - capH - sc(3);
+            C.fillRoundRect(x, py, bw, capH, capH / 2, kText2);
+        }
+    }
+}
+
+void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& peaks) {
+    visLevels_ = levels;
+    visPeaks_ = peaks;
+    if (!ambientShown_ || visRect_.w == 0) return;
+    const wr::Rect& r = visRect_;
+    canvas_.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&canvas_, 0, 0);
+    drawBars();
+    canvas_.clearClipRect();
+    D.startWrite();
+    D.setClipRect(r.x, r.y, r.w, r.h);
+    canvas_.pushSprite(&D, 0, 0);
+    D.clearClipRect();
+    D.endWrite();
 }
 
 // -------------------------------------------------------------------- zones
@@ -572,6 +620,7 @@ bool Ui::hitProgress(int x, int y, uint32_t& posMs) const {
 // -------------------------------------------------------------- plein écran
 
 void Ui::showInfo(const char* title, const String& body, const char* footer) {
+    ambientShown_ = false;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;
@@ -596,6 +645,7 @@ void Ui::showInfo(const char* title, const String& body, const char* footer) {
 }
 
 void Ui::showPortal(const String& apName, const String& apPass, const String& url, const String& reason) {
+    ambientShown_ = false;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;

@@ -11,4 +11,9 @@ void tap();      // clic court à chaque appui
 void error();    // deux notes descendantes : le WiiM n'a pas répondu ou a refusé
 void confirm();  // deux notes montantes : appui long reconnu (configuration)
 
+// Sur le Tab5, micro et haut-parleur partagent le même bus audio (I2S 0) :
+// suspend() libère le bus pour le micro, resume() le rend au haut-parleur.
+void suspend();
+void resume();
+
 }  // namespace sound

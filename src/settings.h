@@ -18,6 +18,8 @@ struct Settings {
     int rotation = 1;    // 0 portrait, 1 paysage, 2 portrait inversé, 3 paysage inversé
     int volStep = 5;
     int beep = 2;        // bips : 0 désactivés, 1 discrets, 2 normaux, 3 forts
+    bool visualizer = true;  // vue ambiance : spectre du son de la pièce (micro, traité sur place)
+    bool motionWake = true;  // soulever / déplacer le Tab5 rallume l'écran
 
     std::vector<wr::Preset> presets;  // déduit de presetsText (vide : repris du WiiM)
 

@@ -45,6 +45,10 @@ public:
     void render(const UiState& st, int pressedPreset = -1, int pressedTransport = -1);
     // Vue ambiance
     void renderAmbient(const UiState& st);
+    // Visualiseur de la vue ambiance : réserve sa place si activé
+    void setVisualizer(bool enabled) { visEnabled_ = enabled; }
+    // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
+    void showLevels(const std::vector<float>& levels, const std::vector<float>& peaks);
 
     int hitPreset(int x, int y) const;
     int hitTransport(int x, int y) const;
@@ -72,6 +76,7 @@ private:
     void progressRow(const UiState& st, int x, int w, int cy, wr::Rect* hit);
     void button(int index, bool pressed);
     void transportIcon(int which, const wr::Rect& r, bool pressed, bool playing);
+    void drawBars();
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -90,4 +95,9 @@ private:
     // Zones tactiles des barres, mises à jour à chaque rendu de la vue commandes
     wr::Rect volHit_, muteHit_, progHit_;
     uint32_t progDuration_ = 0;
+    // Visualiseur
+    bool visEnabled_ = false;
+    bool ambientShown_ = false;
+    wr::Rect visRect_;
+    std::vector<float> visLevels_, visPeaks_;
 };

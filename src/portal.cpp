@@ -87,6 +87,16 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
     h += F("</select><small>Un clic à chaque appui, deux notes graves si le WiiM ne répond pas."
            "</small></label>");
 
+    h += F("<div class=row><div><label>Visualiseur<select name=visu>");
+    h += option("1", "Activé", s.visualizer);
+    h += option("0", "Désactivé", !s.visualizer);
+    h += F("</select></label></div><div><label>Réveil par mouvement<select name=motion>");
+    h += option("1", "Activé", s.motionWake);
+    h += option("0", "Désactivé", !s.motionWake);
+    h += F("</select></label></div></div><small>Visualiseur : en vue ambiance, le micro écoute la pièce "
+           "pour animer un spectre. Le son est analysé sur place, jamais enregistré ni envoyé. "
+           "Réveil par mouvement : soulever ou déplacer le Tab5 rallume l'écran.</small>");
+
     if (s.fingerprint.length()) {
         h += F("<label><input type=checkbox name=forgetfp value=1 style='width:auto'> "
                "Oublier le certificat enregistré du WiiM</label><small>Empreinte actuelle : ");
@@ -149,6 +159,8 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.rotation = constrain(server.arg("rotation").toInt(), 0, 3);
         next.volStep = constrain(server.arg("volstep").toInt(), 1, 20);
         next.beep = constrain(server.arg("beep").toInt(), 0, 3);
+        next.visualizer = server.arg("visu") != "0";
+        next.motionWake = server.arg("motion") != "0";
         bool https = server.arg("scheme") != "http";
         if (https != s.https || next.host != s.host || server.hasArg("forgetfp")) next.fingerprint = "";
         next.https = https;

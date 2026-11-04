@@ -7,7 +7,9 @@
 //    piste précédente/suivante, volume
 // Appui long (3 s) sur le bandeau → portail de configuration.
 // Après 30 s sans appui pendant la lecture : vue ambiance (grande pochette).
+// En vue ambiance, le micro anime un visualiseur (son analysé sur place, jamais envoyé).
 // Après 10 min sans appui, l'écran s'atténue ; il s'éteint après 20 min si rien ne joue.
+// Soulever ou déplacer le Tab5 rallume l'écran (capteur de mouvement).
 
 #include <M5Unified.h>
 #include <WiFi.h>
@@ -16,6 +18,7 @@
 
 #include "art.h"
 #include "core.h"
+#include "dsp.h"
 #include "portal.h"
 #include "settings.h"
 #include "sound.h"
@@ -44,6 +47,19 @@ static bool g_headerPressed = false;
 static uint32_t g_lastTouch = 0;
 static bool g_ambient = false;
 static int g_brightness = -1;
+
+// Visualiseur : blocs de 512 échantillons à 16 kHz (32 ms), deux tampons en alternance
+static constexpr int kMicRate = 16000, kMicBlock = 512, kBands = 24;
+static wr::Visualizer g_vis(kBands);
+static bool g_micOn = false;
+static int16_t g_micBuf[2][kMicBlock];
+static int g_micCur = 0;
+static bool g_micPending = false;
+static uint32_t g_lastVisFrame = 0;
+
+// Réveil par mouvement : accéléromètre lu à 50 Hz
+static wr::MotionDetector g_motion;
+static uint32_t g_lastImu = 0;
 
 static constexpr uint32_t kPollMs = 5000;
 static constexpr uint32_t kLongPressMs = 3000;
@@ -87,6 +103,63 @@ static void show(int pressedPreset = -1, int pressedTransport = -1) {
     g_lastTick = millis();
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
+}
+
+// Vue ambiance : le bus audio passe du haut-parleur au micro (partagés sur le Tab5)
+static void enterAmbient() {
+    g_ambient = true;
+    if (g_settings.visualizer) {
+        sound::suspend();
+        g_micOn = M5.Mic.begin();
+        g_micPending = false;
+        g_vis.reset();
+        g_ui.showLevels(g_vis.levels(), g_vis.peaks());
+    }
+    show();
+}
+
+static void exitAmbient() {
+    if (g_micOn) {
+        M5.Mic.end();
+        g_micOn = false;
+        g_micPending = false;
+    }
+    if (g_settings.visualizer) sound::resume();
+    g_ambient = false;
+    show();
+}
+
+// Micro : traite le bloc terminé pendant que le suivant s'enregistre
+static void serviceMic() {
+    if (!g_micOn) return;
+    if (!g_micPending) {
+        g_micPending = M5.Mic.record(g_micBuf[g_micCur], kMicBlock, kMicRate);
+        return;
+    }
+    if (M5.Mic.isRecording()) return;
+    const int done = g_micCur;
+    g_micCur ^= 1;
+    g_micPending = M5.Mic.record(g_micBuf[g_micCur], kMicBlock, kMicRate);
+    float db[kBands];
+    wr::spectrumBands(g_micBuf[done], kMicBlock, kMicRate, kBands, db);
+    g_vis.update(db);
+    if (millis() - g_lastVisFrame >= 33) {  // ~30 images/s, zone du visualiseur seulement
+        g_lastVisFrame = millis();
+        g_ui.showLevels(g_vis.levels(), g_vis.peaks());
+    }
+}
+
+// Mouvement détecté : écran rallumé et retour aux commandes
+static void serviceMotion(uint32_t now) {
+    if (!g_settings.motionWake || now - g_lastImu < 20) return;
+    g_lastImu = now;
+    float ax, ay, az;
+    M5.Imu.update();
+    if (!M5.Imu.getAccel(&ax, &ay, &az)) return;
+    if (!g_motion.feed(ax, ay, az)) return;
+    g_lastTouch = now;
+    if (g_brightness != kBrightOn) setBrightness(kBrightOn);
+    if (g_ambient) exitAmbient();
 }
 
 static void setMessage(const String& m, uint32_t durationMs = 8000) {
@@ -365,6 +438,7 @@ void setup() {
     bool presetsOk = loadSettings(g_settings);
     sound::begin(g_settings.beep);
     g_ui.begin(g_settings);
+    g_ui.setVisualizer(g_settings.visualizer);
 
     if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Première configuration.");
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistrée est invalide.");
@@ -389,14 +463,10 @@ void loop() {
         if (g_brightness != kBrightOn) {
             // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
             setBrightness(kBrightOn);
-            if (g_ambient) {
-                g_ambient = false;
-                show();
-            }
+            if (g_ambient) exitAmbient();
         } else if (g_ambient) {
-            g_ambient = false;  // vue ambiance : un appui ramène les commandes
+            exitAmbient();  // vue ambiance : un appui ramène les commandes
             sound::tap();
-            show();
         } else if (handleBars(t.x, t.y)) {
             // volume, coupure du son ou progression
         } else if (g_ui.hitHeader(t.x, t.y)) {
@@ -416,17 +486,20 @@ void loop() {
 
     if (now - g_lastPoll > kPollMs) poll();
     checkImages();
+    serviceMic();
+    serviceMotion(now);
 
     // Progression : une image par seconde pendant la lecture (écran allumé)
     const auto& p = g_state.player;
     if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && g_brightness == kBrightOn && idle > kAmbientMs && p.playing && g_state.online) {
-        g_ambient = true;
-        show();
+    if (!g_ambient && g_brightness == kBrightOn && idle > kAmbientMs && p.playing && g_state.online)
+        enterAmbient();
+    if (idle > kOffMs && !p.playing) {
+        if (g_ambient) exitAmbient();  // micro coupé avec l'écran
+        setBrightness(0);
     }
-    if (idle > kOffMs && !p.playing) setBrightness(0);
     else if (idle > kDimMs && g_brightness == kBrightOn) setBrightness(kBrightDim);
     delay(10);
 }

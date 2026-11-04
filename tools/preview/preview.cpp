@@ -7,6 +7,7 @@
 //   python tools/preview/topng.py dossier_sortie/*.ppm
 #include <unistd.h>
 
+#include <cmath>
 #include <cstdio>
 #include <vector>
 
@@ -133,7 +134,17 @@ int main(int argc, char** argv) {
     ui.render(st, 1);
     save(out, "2-appui-preset.ppm");
 
-    // Vue ambiance (après 30 s sans appui)
+    // Vue ambiance (après 30 s sans appui), avec le visualiseur
+    ui.setVisualizer(true);
+    {
+        std::vector<float> lv(24), pk(24);
+        for (int i = 0; i < 24; ++i) {
+            float t = i / 23.0f;
+            lv[i] = 0.15f + 0.75f * std::exp(-8 * (t - 0.25f) * (t - 0.25f)) + 0.25f * std::exp(-30 * (t - 0.7f) * (t - 0.7f));
+            pk[i] = std::min(1.0f, lv[i] + 0.08f);
+        }
+        ui.showLevels(lv, pk);
+    }
     ui.renderAmbient(st);
     save(out, "3-ambiance.ppm");
 

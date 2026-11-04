@@ -32,6 +32,8 @@ bool loadSettings(Settings& s) {
     s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
     s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
     s.beep = constrain(p.getInt("beep", 2), 0, 3);
+    s.visualizer = p.getBool("visu", true);
+    s.motionWake = p.getBool("motion", true);
     p.end();
 
     std::string err;
@@ -56,6 +58,8 @@ void saveSettings(const Settings& s) {
     p.putInt("rotation", s.rotation);
     p.putInt("volstep", s.volStep);
     p.putInt("beep", s.beep);
+    p.putBool("visu", s.visualizer);
+    p.putBool("motion", s.motionWake);
     p.end();
 }
 
