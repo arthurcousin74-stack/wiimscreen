@@ -7,14 +7,15 @@ namespace sound {
 static bool g_on = false;
 
 void begin(int level) {
-    static const uint8_t kVolume[] = {0, 40, 110, 220};
+    // Haut-parleur 1 W du Tab5 : bien plus sonore que le buzzer d'origine
+    static const uint8_t kVolume[] = {0, 30, 70, 140};
     level = constrain(level, 0, 3);
     g_on = level > 0 && M5.Speaker.begin();
     if (g_on) M5.Speaker.setVolume(kVolume[level]);
 }
 
 void tap() {
-    if (g_on) M5.Speaker.tone(3800, 12);
+    if (g_on) M5.Speaker.tone(2600, 10);
 }
 
 void error() {

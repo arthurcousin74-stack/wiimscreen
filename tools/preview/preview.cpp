@@ -2,8 +2,11 @@
 // les enregistre en PNG.
 //
 //   pio run -e preview
-//   .pio/build/preview/program pochette.jpg dossier_sortie/
-//   python tools/preview/eink.py dossier_sortie/*.ppm   # PNG en 16 niveaux de gris
+//   .pio/build/preview/program dossier_images/ dossier_sortie/
+//     dossier_images : cover.jpg, et preset1..6 en .jpg ou .png (facultatifs)
+//   python tools/preview/topng.py dossier_sortie/*.ppm
+#include <unistd.h>
+
 #include <cstdio>
 #include <vector>
 
@@ -42,7 +45,7 @@ static bool loadFile(const char* path, ArtImage& out) {
     return out.len == (size_t)n;
 }
 
-// Image brute PPM (convertie en PNG par tools/preview/eink.py)
+// Image brute PPM (convertie en PNG par tools/preview/topng.py)
 static void save(const std::string& dir, const char* name) {
     auto& D = M5.Display;
     std::string path = dir + "/" + name;
@@ -71,20 +74,29 @@ static Settings settings(int columns, const char* presets) {
     return s;
 }
 
+static bool loadAny(const std::string& base, ArtImage& out) {
+    for (const char* ext : {".jpg", ".png"})
+        if (loadFile((base + ext).c_str(), out)) return true;
+    return false;
+}
+
 int main(int argc, char** argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s pochette.jpg dossier_sortie\n", argv[0]);
+        fprintf(stderr, "usage: %s dossier_images dossier_sortie\n", argv[0]);
         return 1;
     }
+    const std::string in = argv[1], out = argv[2];
     ArtImage art;
-    if (!loadFile(argv[1], art)) {
-        fprintf(stderr, "image illisible : %s\n", argv[1]);
+    if (!loadFile((in + "/cover.jpg").c_str(), art)) {
+        fprintf(stderr, "image illisible : %s/cover.jpg\n", in.c_str());
         return 1;
     }
-    const std::string out = argv[2];
+    std::vector<ArtImage> thumbs(6);
+    for (int i = 0; i < 6; ++i) loadAny(in + "/preset" + std::to_string(i + 1), thumbs[i]);
+
     auto& D = M5.Display;
     D.setColorDepth(24);
-    if (!D.createSprite(960, 540)) {
+    if (!D.createSprite(1280, 720)) {
         fprintf(stderr, "canevas impossible à créer\n");
         return 1;
     }
@@ -96,53 +108,68 @@ int main(int argc, char** argv) {
     st.player.playing = true;
     st.player.volume = 42;
     st.player.mode = 31;
+    st.player.positionMs = 83000;
+    st.player.durationMs = 562000;
     st.player.title = "So What";
     st.player.artist = "Miles Davis";
     st.player.album = "Kind of Blue (Legacy Edition)";
     st.meta.sampleRate = 44100;
     st.meta.bitDepth = 16;
 
-    const char* six = "1=FIP\n2=Radio Swiss Jazz\n3=France Inter\n4=Couleur 3\n5=Playlist du dimanche\n6=Nova";
+    // Presets repris du WiiM, avec leurs images
+    std::vector<wr::Preset> six;
+    const char* names[] = {"FIP", "Radio Swiss Jazz", "France Inter", "Couleur 3", "Playlist du dimanche", "Nova"};
+    for (int i = 0; i < 6; ++i) six.push_back(wr::Preset{i + 1, names[i], "x"});
+    Settings s;
+    s.columns = 3;
     Ui ui;
-    ui.begin(settings(3, six));
-    ui.drawMain(st, &art, true);
+    ui.begin(s);
+    ui.setPresets(six);
+    for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);
+    ui.setArt(&art);
+    ui.render(st);
     save(out, "1-lecture.ppm");
 
-    // Bouton enfoncé (retour immédiat d'un appui)
-    ui.showPreset(1, true);
-    ui.showTransport(wr::kPlayPause, true, true);
-    save(out, "2-appui.ppm");
+    ui.render(st, 1);
+    save(out, "2-appui-preset.ppm");
 
-    // Pause, sans pochette, avec un message
-    st.player.playing = false;
-    st.player.mode = 0;
+    // Vue ambiance (après 30 s sans appui)
+    ui.renderAmbient(st);
+    save(out, "3-ambiance.ppm");
+
+    // Radio : flux sans durée, son coupé, sans pochette, message
+    st.player.mode = 10;
+    st.player.durationMs = 0;
+    st.player.muted = true;
     st.player.title = "Le Temps de l'amour";
     st.player.artist = "Françoise Hardy";
     st.player.album = "";
     st.meta = wr::TrackMeta();
     st.message = "Certificat du WiiM enregistré";
-    ui.drawMain(st, nullptr, true);
-    save(out, "3-pause-sans-pochette.ppm");
+    st.battery = -1;
+    ui.setArt(nullptr);
+    ui.render(st);
+    save(out, "4-radio-sans-pochette.ppm");
 
-    // 12 presets : bandeau compact
+    // 12 presets saisis, sans images : bandeau compact
     st.message = "";
-    st.player.playing = true;
+    st.player.muted = false;
     Ui ui12;
-    ui12.begin(settings(3, "1=FIP\n2=FIP Jazz\n3=FIP Groove\n4=Radio Swiss Jazz\n5=Radio Swiss Classic\n"
-                           "6=France Inter\n7=France Culture\n8=Couleur 3\n9=Nova\n10=TSF Jazz\n"
-                           "11=Playlist du dimanche\n12=Découvertes"));
-    ui12.drawMain(st, &art, true);
-    save(out, "4-douze-presets.ppm");
-
-    // Hors ligne
-    st.online = false;
-    st.message = "WiiM injoignable : vérifie qu'il est allumé et son IP";
-    ui.drawMain(st, &art, true);
-    save(out, "5-hors-ligne.ppm");
+    std::string err;
+    Settings s12;
+    s12.columns = 3;
+    wr::parsePresets("1=FIP\n2=FIP Jazz\n3=FIP Groove\n4=Radio Swiss Jazz\n5=Radio Swiss Classic\n"
+                     "6=France Inter\n7=France Culture\n8=Couleur 3\n9=Nova\n10=TSF Jazz\n"
+                     "11=Playlist du dimanche\n12=Découvertes", s12.presets, err);
+    ui12.begin(s12);
+    ui12.setArt(&art);
+    ui12.render(st);
+    save(out, "5-douze-presets.ppm");
 
     ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Première configuration.");
     save(out, "6-configuration.ppm");
-    D.unloadFont();  // avant la destruction des objets statiques
-    D.deleteSprite();
-    return 0;
+    // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée
+    // (sans conséquence sur l'appareil, où l'interface n'est jamais détruite)
+    fflush(stdout);
+    _exit(0);
 }

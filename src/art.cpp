@@ -11,6 +11,7 @@
 
 // Paquet de certificats racines embarqué (board_build.embed_files dans platformio.ini)
 extern const uint8_t ca_bundle_start[] asm("_binary_certs_x509_crt_bundle_bin_start");
+extern const uint8_t ca_bundle_end[] asm("_binary_certs_x509_crt_bundle_bin_end");
 
 static constexpr size_t kMaxImage = 768 * 1024;
 
@@ -82,7 +83,7 @@ bool download(const std::string& url, ArtImage& out) {
     WiFiClientSecure secure;
     WiFiClient plain;
     if (https) {
-        secure.setCACertBundle(ca_bundle_start);
+        secure.setCACertBundle(ca_bundle_start, ca_bundle_end - ca_bundle_start);
         secure.setHandshakeTimeout(8);
     }
     WiFiClient& client = https ? static_cast<WiFiClient&>(secure) : plain;
@@ -93,7 +94,7 @@ bool download(const std::string& url, ArtImage& out) {
     http.setReuse(false);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setRedirectLimit(3);
-    http.setUserAgent("wiim-remote-papers3");
+    http.setUserAgent("wiim-remote-tab5");
     if (!http.begin(client, url.c_str())) return false;
 
     int code = http.GET();
@@ -127,26 +128,25 @@ void ArtFetcher::begin() {
     xTaskCreatePinnedToCore(taskMain, "art", 16 * 1024, this, 1, &task_, 0);
 }
 
-void ArtFetcher::request(const std::string& url) {
-    if (!lock_) return;
+void ArtFetcher::request(const std::string& url, bool urgent) {
+    if (!lock_ || url.empty()) return;
     xSemaphoreTake(lock_, portMAX_DELAY);
-    pending_ = url;
-    hasPending_ = true;
+    auto it = std::find(queue_.begin(), queue_.end(), url);
+    if (it != queue_.end()) queue_.erase(it);
+    if (urgent) queue_.push_front(url);
+    else queue_.push_back(url);
     xSemaphoreGive(lock_);
     xTaskNotifyGive(task_);
 }
 
-bool ArtFetcher::take(const std::string& url, ArtImage& out) {
+bool ArtFetcher::poll(ArtImage& out) {
     if (!lock_) return false;
     bool got = false;
     xSemaphoreTake(lock_, portMAX_DELAY);
-    if (hasResult_) {
-        if (result_.url == url) {
-            out = std::move(result_);
-            got = true;
-        }
-        result_.reset();  // résultat périmé (piste déjà changée) : on le jette
-        hasResult_ = false;
+    if (!done_.empty()) {
+        out = std::move(done_.front());
+        done_.pop_front();
+        got = true;
     }
     xSemaphoreGive(lock_);
     return got;
@@ -159,9 +159,12 @@ void ArtFetcher::run() {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         for (;;) {
             xSemaphoreTake(lock_, portMAX_DELAY);
-            bool has = hasPending_;
-            std::string url = pending_;
-            hasPending_ = false;
+            bool has = !queue_.empty();
+            std::string url;
+            if (has) {
+                url = queue_.front();
+                queue_.pop_front();
+            }
             xSemaphoreGive(lock_);
             if (!has) break;
 
@@ -170,8 +173,8 @@ void ArtFetcher::run() {
             if (!download(url, img)) img.reset();
 
             xSemaphoreTake(lock_, portMAX_DELAY);
-            result_ = std::move(img);
-            hasResult_ = true;
+            done_.push_back(std::move(img));
+            while (done_.size() > 16) done_.pop_front();
             xSemaphoreGive(lock_);
         }
     }

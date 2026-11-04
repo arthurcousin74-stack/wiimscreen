@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 
 namespace wr {
@@ -182,33 +184,110 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     if (jsonString(json, "Title", v)) st.title = decodeHexText(v);
     if (jsonString(json, "Artist", v)) st.artist = decodeHexText(v);
     if (jsonString(json, "Album", v)) st.album = decodeHexText(v);
-    if (jsonString(json, "mode", v)) st.mode = std::atoi(v.c_str());
+    long n;
+    if (jsonInt(json, "mode", n)) st.mode = static_cast<int>(n);
+    if (jsonInt(json, "mute", n)) st.muted = n == 1;
+    if (jsonInt(json, "curpos", n) && n > 0) st.positionMs = static_cast<uint32_t>(n);
+    if (jsonInt(json, "totlen", n) && n > 0) st.durationMs = static_cast<uint32_t>(n);
     for (std::string* f : {&st.title, &st.artist, &st.album})
         if (isUnknown(*f)) f->clear();
     return st;
 }
 
+// Valeurs du champ "mode" d'après la documentation WiiM (HTTP API v1.2)
 std::string sourceName(int mode) {
     switch (mode) {
         case 1: return "AirPlay";
         case 2: return "DLNA";
+        case 11: return "USB";
+        case 16: return "Carte SD";
         case 31: return "Spotify";
+        case 32: return "TIDAL";
         case 40: return "Entrée ligne";
         case 41: return "Bluetooth";
+        case 42: return "Stockage externe";
         case 43: return "Optique";
+        case 99: return "Multiroom";
         default: return "";
     }
+}
+
+bool jsonInt(const std::string& json, const std::string& key, long& out) {
+    std::string needle = "\"" + key + "\"";
+    size_t p = 0;
+    while ((p = json.find(needle, p)) != std::string::npos) {
+        size_t q = p + needle.size();
+        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        if (q >= json.size() || json[q] != ':') {
+            p = q;
+            continue;
+        }
+        ++q;
+        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        if (q < json.size() && json[q] == '"') ++q;
+        char* end = nullptr;
+        long v = std::strtol(json.c_str() + q, &end, 10);
+        if (end == json.c_str() + q) return false;
+        out = v;
+        return true;
+    }
+    return false;
+}
+
+std::string formatTime(uint32_t ms) {
+    uint32_t s = ms / 1000, h = s / 3600, m = (s / 60) % 60;
+    s %= 60;
+    char buf[16];
+    if (h) snprintf(buf, sizeof buf, "%u:%02u:%02u", (unsigned)h, (unsigned)m, (unsigned)s);
+    else snprintf(buf, sizeof buf, "%u:%02u", (unsigned)m, (unsigned)s);
+    return buf;
+}
+
+bool parsePresetInfo(const std::string& json, std::vector<Preset>& out) {
+    out.clear();
+    size_t p = json.find("\"preset_list\"");
+    if (p == std::string::npos) return false;
+    p = json.find('[', p);
+    if (p == std::string::npos) return false;
+    // Objets plats successifs { ... } jusqu'au ']' de fin
+    while (true) {
+        size_t open = json.find_first_of("{]", p);
+        if (open == std::string::npos || json[open] == ']') break;
+        size_t close = json.find('}', open);
+        if (close == std::string::npos) return false;
+        std::string item = json.substr(open, close - open + 1);
+        p = close + 1;
+        long number = 0;
+        std::string name, pic;
+        if (!jsonInt(item, "number", number) || number < 1 || number > 20) continue;
+        jsonString(item, "name", name);
+        name = decodeHexText(name);
+        if (isUnknown(name)) name = "Preset " + std::to_string(number);
+        if (name.size() > 60) name.resize(60);
+        if (jsonString(item, "picurl", pic) && !isHttpUrl(pic)) pic.clear();
+        out.push_back(Preset{static_cast<int>(number), name, pic});
+        if (static_cast<int>(out.size()) >= kMaxPresets) break;
+    }
+    std::sort(out.begin(), out.end(), [](const Preset& a, const Preset& b) { return a.slot < b.slot; });
+    return true;
 }
 
 TrackMeta parseMetaInfo(const std::string& json) {
     TrackMeta m;
     if (json.find("\"metaData\"") == std::string::npos) return m;
     m.ok = true;
+    // La documentation WiiM écrit certaines clés avec une espace finale ("albumArtURI ") :
+    // les deux formes sont acceptées
+    auto get = [&](const char* key, std::string& v) {
+        return jsonString(json, key, v) || jsonString(json, std::string(key) + " ", v);
+    };
     std::string v;
-    if (jsonString(json, "album", v) && !isUnknown(v)) m.album = v;
-    if (jsonString(json, "albumArtURI", v) && isHttpUrl(v)) m.artUrl = v;
-    if (jsonString(json, "sampleRate", v)) m.sampleRate = std::max(0, std::atoi(v.c_str()));
-    if (jsonString(json, "bitDepth", v)) m.bitDepth = std::max(0, std::atoi(v.c_str()));
+    if (get("title", v) && !isUnknown(v)) m.title = v;
+    if (get("artist", v) && !isUnknown(v)) m.artist = v;
+    if (get("album", v) && !isUnknown(v)) m.album = v;
+    if (get("albumArtURI", v) && isHttpUrl(v)) m.artUrl = v;
+    if (get("sampleRate", v)) m.sampleRate = std::max(0, std::atoi(v.c_str()));
+    if (get("bitDepth", v)) m.bitDepth = std::max(0, std::atoi(v.c_str()));
     if (m.sampleRate > 768000) m.sampleRate = 0;
     if (m.bitDepth > 64) m.bitDepth = 0;
     return m;
@@ -381,19 +460,21 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
 
 Layout computeLayout(int width, int height, int columns, int presetCount) {
     Layout L;
-    const int m = 16, gap = 12;
-    const int transportH = std::max(90, height / 6);
-    const int minCellH = 64;
+    const int ref = std::min(width, height);  // 720 sur le Tab5 (référence de mise en page : 540)
+    auto sc = [ref](int v) { return v * ref / 540; };
+    const int m = sc(16), gap = sc(12);
+    const int transportH = std::max(sc(90), height / 6);
+    const int minCellH = sc(64);
     columns = std::max(1, columns);
     int rows = std::max(1, (presetCount + columns - 1) / columns);
 
-    // Bandeau : tout ce qui reste une fois les presets servis, entre 112 et 200 px
+    // Bandeau : tout ce qui reste une fois les presets servis, entre 112 et 225 (x échelle)
     int avail = height - 2 * m - transportH - 2 * gap;
     int headerH = avail - rows * minCellH - (rows - 1) * gap;
-    headerH = std::max(112, std::min(std::min(200, width / 3), headerH));
+    headerH = std::max(sc(112), std::min(std::min(sc(225), width / 3), headerH));
     L.header = Rect{m, m, width - 2 * m, headerH};
     L.art = Rect{m, m, headerH, headerH};
-    const int artGap = 20;
+    const int artGap = sc(20);
     L.info = Rect{m + headerH + artGap, m, width - 2 * m - headerH - artGap, headerH};
 
     int gridTop = m + headerH + gap;
@@ -409,6 +490,69 @@ Layout computeLayout(int width, int height, int columns, int presetCount) {
     for (int i = 0; i < kTransportCount; ++i)
         L.transport[i] = Rect{m + i * (tW + gap), height - m - transportH, tW, transportH};
     return L;
+}
+
+namespace {
+
+void rgbToHsl(float r, float g, float b, float& h, float& s, float& l) {
+    float mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b));
+    l = (mx + mn) / 2;
+    if (mx == mn) {
+        h = s = 0;
+        return;
+    }
+    float d = mx - mn;
+    s = l > 0.5f ? d / (2 - mx - mn) : d / (mx + mn);
+    if (mx == r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (mx == g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+}
+
+float hueToRgb(float p, float q, float t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1.0f / 6) return p + (q - p) * 6 * t;
+    if (t < 1.0f / 2) return q;
+    if (t < 2.0f / 3) return p + (q - p) * (2.0f / 3 - t) * 6;
+    return p;
+}
+
+uint32_t hslToRgb(float h, float s, float l) {
+    float r, g, b;
+    if (s == 0) {
+        r = g = b = l;
+    } else {
+        float q = l < 0.5f ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+        r = hueToRgb(p, q, h + 1.0f / 3);
+        g = hueToRgb(p, q, h);
+        b = hueToRgb(p, q, h - 1.0f / 3);
+    }
+    auto c = [](float v) { return static_cast<uint32_t>(std::lround(std::max(0.f, std::min(1.f, v)) * 255)); };
+    return (c(r) << 16) | (c(g) << 8) | c(b);
+}
+
+}  // namespace
+
+uint32_t accentColor(const uint8_t* rgb, size_t n, uint32_t fallback) {
+    double sr = 0, sg = 0, sb = 0, sw = 0;
+    for (size_t i = 0; i < n; ++i) {
+        int r = rgb[3 * i], g = rgb[3 * i + 1], b = rgb[3 * i + 2];
+        int mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b));
+        if (mx < 40) continue;  // presque noir : ne dit rien de la teinte
+        double sat = double(mx - mn) / mx, val = mx / 255.0;
+        double w = sat * sat * val;  // les couleurs vives comptent le plus
+        sr += w * r;
+        sg += w * g;
+        sb += w * b;
+        sw += w;
+    }
+    if (n == 0 || sw < 0.02 * n) return fallback;
+    float h, s, l;
+    rgbToHsl(float(sr / sw / 255), float(sg / sw / 255), float(sb / sw / 255), h, s, l);
+    s = std::max(s, 0.45f);
+    l = std::max(0.55f, std::min(0.68f, l));
+    return hslToRgb(h, s, l);
 }
 
 }  // namespace wr

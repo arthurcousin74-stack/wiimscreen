@@ -58,9 +58,11 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
     h += esc(s.host) + F("\"><small>App WiiM Home &gt; ton appareil &gt; Paramètres &gt; Informations. "
                          "Réserve cette IP dans ta box.</small></label>");
 
-    h += F("<label>Presets<textarea name=presets maxlength=1200>");
-    h += esc(s.presetsText) + F("</textarea><small>Une ligne par bouton : numéro=nom. Le numéro est "
-                                "celui du preset dans l'app WiiM Home (12 boutons max).</small></label>");
+    h += F("<label>Presets<textarea name=presets maxlength=1200 placeholder='Vide : presets du WiiM'>");
+    h += esc(s.presetsText) + F("</textarea><small><b>Laisse vide</b> pour reprendre les presets de l'app "
+                                "WiiM Home, avec leurs noms et leurs images. Sinon, une ligne par bouton : "
+                                "numéro=nom (12 boutons max), par exemple <code>1=Radio Swiss Jazz</code>."
+                                "</small></label>");
 
     h += F("<div class=row><div><label>Colonnes<select name=columns>");
     for (int c = 1; c <= 4; ++c) h += option(String(c).c_str(), String(c).c_str(), s.columns == c);
@@ -157,7 +159,8 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         else if (next.pass.length() && (next.pass.length() < 8 || next.pass.length() > 63))
             err = "Le mot de passe Wi-Fi doit faire entre 8 et 63 caractères.";
         else if (!wr::isValidHost(next.host.c_str())) err = "Adresse du WiiM invalide (exemple : 192.168.1.50).";
-        else if (!wr::parsePresets(next.presetsText.c_str(), next.presets, perr))
+        else if (!presetsTextIsAuto(next.presetsText) &&
+                 !wr::parsePresets(next.presetsText.c_str(), next.presets, perr))
             err = String("Presets : ") + perr.c_str();
 
         if (err.length()) {

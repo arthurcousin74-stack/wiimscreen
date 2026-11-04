@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include <deque>
 #include <string>
 
 // Image de pochette téléchargée (JPEG ou PNG), stockée en PSRAM.
@@ -21,8 +22,8 @@ struct ArtImage {
     void reset();
 };
 
-// Téléchargement des pochettes dans une tâche de fond : l'écran reste réactif
-// pendant le transfert (souvent 50 à 300 Ko).
+// Téléchargement des images (pochette en cours, images des presets) dans une
+// tâche de fond : l'écran reste réactif pendant les transferts.
 //
 // HTTPS : les certificats des serveurs (Spotify, Qobuz, Deezer, TuneIn…) sont
 // vérifiés avec le paquet de certificats racines Mozilla embarqué
@@ -31,12 +32,13 @@ class ArtFetcher {
 public:
     void begin();
 
-    // Thread principal : demande une pochette (remplace toute demande en attente).
-    void request(const std::string& url);
+    // Thread principal : ajoute une image à télécharger (ignorée si déjà en attente).
+    // urgent : passe devant les autres (pochette de la piste en cours).
+    void request(const std::string& url, bool urgent = false);
 
-    // Thread principal : vrai si un résultat est prêt pour `url`. En cas d'échec,
-    // `out` est vide (out.ok() faux) : afficher l'image par défaut.
-    bool take(const std::string& url, ArtImage& out);
+    // Thread principal : prochain téléchargement terminé. En cas d'échec, out.url
+    // est renseignée mais out.ok() est faux : afficher l'image par défaut.
+    bool poll(ArtImage& out);
 
 private:
     static void taskMain(void* self);
@@ -44,8 +46,6 @@ private:
 
     SemaphoreHandle_t lock_ = nullptr;
     TaskHandle_t task_ = nullptr;
-    std::string pending_;
-    bool hasPending_ = false;
-    ArtImage result_;
-    bool hasResult_ = false;
+    std::deque<std::string> queue_;
+    std::deque<ArtImage> done_;  // résultats non encore lus (les plus anciens sont jetés)
 };

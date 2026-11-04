@@ -91,6 +91,57 @@ static void test_meta_info() {
     TEST_ASSERT_EQUAL_STRING("", parseMetaInfo("{\"metaData\":{\"albumArtURI\":\"file:///etc/x\"}}").artUrl.c_str());
 }
 
+static void test_wiim_doc_examples() {
+    // Exemples tirés de la documentation WiiM (HTTP API v1.2)
+    PlayerStatus st = parsePlayerStatus(
+        "{\"type\":\"0\",\"ch\":\"2\",\"mode\":\"10\",\"loop\":\"4\",\"eq\":\"0\",\"status\":\"play\","
+        "\"curpos\":\"184919\",\"offset_pts\":\"184919\",\"totlen\":\"0\",\"alarmflag\":\"0\","
+        "\"plicount\":\"0\",\"plicurr\":\"0\",\"vol\":\"39\",\"mute\":\"0\"}");
+    TEST_ASSERT_TRUE(st.ok && st.playing);
+    TEST_ASSERT_EQUAL(39, st.volume);
+    TEST_ASSERT_EQUAL(10, st.mode);
+    TEST_ASSERT_EQUAL_UINT32(184919, st.positionMs);
+    TEST_ASSERT_EQUAL_UINT32(0, st.durationMs);
+    TEST_ASSERT_FALSE(st.muted);
+    TEST_ASSERT_EQUAL_STRING("", st.title.c_str());  // pas de titre dans getPlayerStatus
+
+    TrackMeta m = parseMetaInfo(
+        "{ \"metaData\": { \"album\": \"Country Heat\", \"title\": \"Old Dirt Roads\", "
+        "\"artist\": \"Owen Riegling\", "
+        "\"albumArtURI \": \"https://m.media-amazon.com/images/I/51iU0odzJwL.jpg\", "
+        "\"sampleRate \": \"44100\", \"bitDepth\": \"16\" } }");
+    TEST_ASSERT_EQUAL_STRING("Old Dirt Roads", m.title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Owen Riegling", m.artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://m.media-amazon.com/images/I/51iU0odzJwL.jpg", m.artUrl.c_str());
+    TEST_ASSERT_EQUAL(44100, m.sampleRate);
+
+    std::vector<Preset> p;
+    TEST_ASSERT_TRUE(parsePresetInfo(
+        "{ \"preset_num\": 3, \"preset_list\": [{ \"number\": 1, \"name\": \"BBC Radio Norfolk\", "
+        "\"url\": \"http:\\/\\/as-hls-ww-live.akamaized.net\\/x.m3u8\", \"source\": \"Linkplay Radio\", "
+        "\"picurl\": \"http:\\/\\/cdn-profiles.tunein.com\\/s6852\\/images\\/logoq.jpg?t=6383\" }, "
+        "{ \"number\": 8, \"name\": \"1. Country Heat\", \"url\": \"unknow\", \"source\": \"Prime\", "
+        "\"picurl\": \"https:\\/\\/m.media-amazon.com\\/images\\/I\\/51uR6AJUAQL.jpg\" }, "
+        "{ \"number\": 6, \"name\": \"Radio Paradise\", \"url\": \"http:\\/\\/stream.radioparadise.com\\/flacm\", "
+        "\"source\": \"RadioParadise\", \"picurl\": \"\" }] }",
+        p));
+    TEST_ASSERT_EQUAL(3, (int)p.size());
+    TEST_ASSERT_EQUAL(1, p[0].slot);  // triés par numéro
+    TEST_ASSERT_EQUAL(6, p[1].slot);
+    TEST_ASSERT_EQUAL(8, p[2].slot);
+    TEST_ASSERT_EQUAL_STRING("BBC Radio Norfolk", p[0].label.c_str());
+    TEST_ASSERT_EQUAL_STRING("http://cdn-profiles.tunein.com/s6852/images/logoq.jpg?t=6383", p[0].picUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("", p[1].picUrl.c_str());
+    TEST_ASSERT_FALSE(parsePresetInfo("Failed", p));
+    TEST_ASSERT_TRUE(parsePresetInfo("{\"preset_num\":0,\"preset_list\":[]}", p));
+    TEST_ASSERT_EQUAL(0, (int)p.size());
+
+    TEST_ASSERT_EQUAL_STRING("0:00", formatTime(0).c_str());
+    TEST_ASSERT_EQUAL_STRING("3:04", formatTime(184919).c_str());
+    TEST_ASSERT_EQUAL_STRING("1:02:03", formatTime(3723000).c_str());
+    TEST_ASSERT_EQUAL_STRING("TIDAL", sourceName(32).c_str());
+}
+
 static void test_quality() {
     TEST_ASSERT_EQUAL_STRING("16 bits \xC2\xB7 44,1 kHz", formatQuality(44100, 16).c_str());
     TEST_ASSERT_EQUAL_STRING("24 bits \xC2\xB7 96 kHz", formatQuality(96000, 24).c_str());
@@ -229,6 +280,12 @@ static void test_layout() {
     TEST_ASSERT_TRUE(L.info.x >= L.art.x + L.art.w);
     TEST_ASSERT_TRUE(L.info.x + L.info.w <= L.header.x + L.header.w);
     TEST_ASSERT_TRUE(L.presets[0].h >= 64);
+    // Tab5 1280x720 : mêmes proportions, à plus grande échelle
+    L = computeLayout(1280, 720, 3, 6);
+    TEST_ASSERT_TRUE(L.art.h >= 210);
+    TEST_ASSERT_TRUE(L.presets[0].h >= 85);
+    TEST_ASSERT_TRUE(L.presets[5].y + L.presets[5].h <= L.transport[0].y);
+    TEST_ASSERT_TRUE(L.transport[kVolUp].x + L.transport[kVolUp].w <= 1280);
     // 12 presets : le bandeau rétrécit, les boutons restent utilisables
     L = computeLayout(960, 540, 3, 12);
     TEST_ASSERT_EQUAL(12, (int)L.presets.size());
@@ -240,6 +297,32 @@ static void test_layout() {
     TEST_ASSERT_TRUE(L.info.w >= 200);
 }
 
+static void test_accent() {
+    const uint32_t fb = 0x123456;
+    std::vector<uint8_t> px;
+    auto fill = [&](int n, uint8_t r, uint8_t g, uint8_t b) {
+        for (int i = 0; i < n; ++i) px.insert(px.end(), {r, g, b});
+    };
+    // Noir, blanc, gris : pas de teinte, couleur par défaut
+    fill(100, 0, 0, 0);
+    fill(100, 255, 255, 255);
+    fill(100, 128, 128, 128);
+    TEST_ASSERT_EQUAL_HEX32(fb, accentColor(px.data(), px.size() / 3, fb));
+    TEST_ASSERT_EQUAL_HEX32(fb, accentColor(nullptr, 0, fb));
+    // Pochette surtout grise avec une tache bleue : l'accent est bleu
+    fill(60, 30, 60, 220);
+    uint32_t c = accentColor(px.data(), px.size() / 3, fb);
+    int r = c >> 16, g = (c >> 8) & 0xFF, b = c & 0xFF;
+    TEST_ASSERT_TRUE(b > r && b > g);
+    // Rouge sombre : éclairci pour rester lisible sur fond sombre
+    px.clear();
+    fill(50, 90, 10, 10);
+    c = accentColor(px.data(), px.size() / 3, fb);
+    r = c >> 16;
+    g = (c >> 8) & 0xFF;
+    TEST_ASSERT_TRUE(r > 180 && r > g + 60);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -248,6 +331,7 @@ int main() {
     RUN_TEST(test_player_status);
     RUN_TEST(test_meta_info);
     RUN_TEST(test_quality);
+    RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);
     RUN_TEST(test_json_escapes);
     RUN_TEST(test_http_response);
@@ -256,5 +340,6 @@ int main() {
     RUN_TEST(test_html_escape);
     RUN_TEST(test_wrap);
     RUN_TEST(test_layout);
+    RUN_TEST(test_accent);
     return UNITY_END();
 }

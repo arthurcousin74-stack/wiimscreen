@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Génère le paquet de certificats racines (format esp_crt_bundle d'ESP-IDF 4.4).
+"""Génère le paquet de certificats racines (format esp_crt_bundle d'ESP-IDF 5.4).
 
 Sert à vérifier les serveurs HTTPS des pochettes d'album (Spotify, Qobuz,
 Deezer, TuneIn…), dont les adresses varient selon le service.
@@ -8,9 +8,10 @@ Usage :
     curl -o certs/cacrt_all.pem https://raw.githubusercontent.com/espressif/esp-idf/master/components/mbedtls/esp_crt_bundle/cacrt_all.pem
     python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 
-Format : nombre de certificats (u16 BE), puis pour chacun, trié par nom :
-longueur du nom (u16 BE), longueur de la clé (u16 BE), nom du sujet (DER),
-clé publique SubjectPublicKeyInfo (DER).
+Format (petit-boutiste) : table des positions de chaque certificat (u32,
+une par certificat, le nombre se déduit de la première), puis pour chacun,
+trié par nom : longueur du nom (u16), longueur de la clé (u16), nom du sujet
+(DER), clé publique SubjectPublicKeyInfo (DER).
 """
 import struct
 import sys
@@ -32,9 +33,12 @@ def main(src: str, dst: str) -> None:
         )
         entries.append((name, key))
     entries.sort(key=lambda e: e[0])  # recherche dichotomique côté ESP32
-    out = struct.pack(">H", len(entries))
+    body = b""
+    offsets = []
     for name, key in entries:
-        out += struct.pack(">HH", len(name), len(key)) + name + key
+        offsets.append(4 * len(entries) + len(body))
+        body += struct.pack("<HH", len(name), len(key)) + name + key
+    out = struct.pack("<%dL" % len(offsets), *offsets) + body
     with open(dst, "wb") as f:
         f.write(out)
     print(f"{len(entries)} certificats, {len(out)} octets -> {dst}")

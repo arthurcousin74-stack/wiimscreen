@@ -2,13 +2,20 @@
 
 #include <Preferences.h>
 
-const char* kDefaultPresets =
-    "1=Preset 1\n"
-    "2=Preset 2\n"
-    "3=Preset 3\n"
-    "4=Preset 4\n"
-    "5=Preset 5\n"
-    "6=Preset 6\n";
+bool presetsTextIsAuto(const String& text) {
+    int start = 0;
+    while (start <= (int)text.length()) {
+        int end = text.indexOf('\n', start);
+        if (end < 0) end = text.length();
+        String line = text.substring(start, end);
+        line.trim();
+        if (line.length() && line[0] != '#') return false;
+        start = end + 1;
+    }
+    return true;
+}
+
+bool Settings::autoPresets() const { return presetsTextIsAuto(presetsText); }
 
 static const char* kNamespace = "wiimremote";
 
@@ -20,7 +27,7 @@ bool loadSettings(Settings& s) {
     s.host = p.getString("host", "");
     s.https = p.getBool("https", true);
     s.fingerprint = p.getString("fp", "");
-    s.presetsText = p.getString("presets", kDefaultPresets);
+    s.presetsText = p.getString("presets", "");
     s.columns = constrain(p.getInt("columns", 3), 1, 4);
     s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
     s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
@@ -28,8 +35,9 @@ bool loadSettings(Settings& s) {
     p.end();
 
     std::string err;
-    if (!wr::parsePresets(s.presetsText.c_str(), s.presets, err)) {
-        wr::parsePresets(kDefaultPresets, s.presets, err);
+    s.presets.clear();
+    if (!s.autoPresets() && !wr::parsePresets(s.presetsText.c_str(), s.presets, err)) {
+        s.presets.clear();  // presets repris du WiiM en attendant une liste valide
         return false;
     }
     return true;

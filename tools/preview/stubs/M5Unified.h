@@ -1,4 +1,4 @@
-// Aperçu PC : M5.Display devient un canevas M5GFX en mémoire (960×540 par défaut).
+// Aperçu PC : M5.Display devient un canevas M5GFX en mémoire (1280×720).
 #pragma once
 
 #include <M5GFX.h>
@@ -11,9 +11,6 @@ public:
     void setAutoDisplay(bool) {}
     void waitDisplay() {}
     void display() { ++refreshes; }
-    void setEpdMode(epd_mode_t m) { mode = m; }
-
-    epd_mode_t mode = epd_mode_t::epd_quality;
     int refreshes = 0;
 };
 

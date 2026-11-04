@@ -30,6 +30,8 @@ public:
     WiimError status(wr::PlayerStatus& out);
     // Album, adresse de la pochette, qualité audio de la piste en cours
     WiimError metaInfo(wr::TrackMeta& out);
+    // Presets enregistrés sur le WiiM : numéro, nom, image
+    WiimError presets(std::vector<wr::Preset>& out);
 
     // Empreinte vue lors de la dernière poignée de main (utile en cas de changement)
     const String& lastSeenFingerprint() const { return lastSeen_; }

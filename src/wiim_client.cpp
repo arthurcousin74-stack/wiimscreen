@@ -32,7 +32,8 @@ WiimError WiimClient::command(const String& cmd, std::string* body) {
     } else {
         client.reset(new WiFiClient());
     }
-    client->setTimeout(4);  // secondes (arduino-esp32 2.x)
+    client->setTimeout(4000);            // ms (arduino-esp32 3.x)
+    client->setConnectionTimeout(4000);  // ms
 
     if (!client->connect(host_.c_str(), port_)) return WiimError::Network;
 
@@ -97,4 +98,11 @@ WiimError WiimClient::metaInfo(wr::TrackMeta& out) {
     if (e != WiimError::None) return e;
     out = wr::parseMetaInfo(body);
     return out.ok ? WiimError::None : WiimError::Http;
+}
+
+WiimError WiimClient::presets(std::vector<wr::Preset>& out) {
+    std::string body;
+    WiimError e = command("getPresetInfo", &body);
+    if (e != WiimError::None) return e;
+    return wr::parsePresetInfo(body, out) ? WiimError::None : WiimError::Http;
 }

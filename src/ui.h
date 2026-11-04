@@ -2,6 +2,7 @@
 
 #include <M5Unified.h>
 
+#include <memory>
 #include <vector>
 
 #include "art.h"
@@ -9,53 +10,84 @@
 #include "settings.h"
 
 struct UiState {
-    wr::PlayerStatus player;
+    wr::PlayerStatus player;  // titre/artiste/album déjà complétés par getMetaInfo
     wr::TrackMeta meta;
     bool online = false;
     String message;    // message temporaire (erreur, info), prioritaire sur l'album
-    int battery = -1;  // % ou -1 si inconnu
+    int battery = -1;  // % ou -1 si inconnu / pas de batterie
 };
 
-// Affichage e-ink.
+// Affichage sur l'écran couleur du Tab5 (1280×720).
 //
-// Le mode de rafraîchissement est choisi AVANT de dessiner : M5GFX convertit les
-// pixels au moment du dessin (1 bit tramé en mode rapide, 16 niveaux de gris sinon).
-//  - appui : bouton enfoncé en mode le plus rapide (~0,1 s)
-//  - textes : mode "text" (~0,5 s, 16 gris), uniquement sur les zones modifiées
-//  - pochette : mode "quality" (meilleurs dégradés), seulement quand elle change
-//  - après 45 mises à jour partielles, dès 10 s sans appui : rafraîchissement
-//    complet "quality" (~5 s) pour effacer les images fantômes
+// Chaque image est entièrement dessinée hors écran (canevas en PSRAM), puis
+// affichée d'un coup : pas de scintillement, et un appui s'affiche en quelques
+// millisecondes. La couleur d'accent (lueur de fond, bouton lecture, barres,
+// bouton appuyé) est tirée de la pochette en cours.
+//
+// Deux vues :
+//  - commandes : bandeau « en cours » (pochette, titre, progression, volume),
+//    presets avec leurs images, lecture/pause, piste précédente/suivante, volume
+//  - ambiance (après un moment sans appui) : grande pochette et grands textes,
+//    lisibles de loin ; un appui revient aux commandes
 class Ui {
 public:
     void begin(const Settings& s);
 
-    void drawMain(const UiState& st, const ArtImage* art, bool quality);
-    void drawHeader(const UiState& st);   // infos de lecture (sans la pochette)
-    void drawArt(const ArtImage* art);    // pochette, ou illustration par défaut
-    void showPreset(int index, bool pressed);
-    void showTransport(int which, bool pressed, bool playing);
+    // Liste des presets (change la mise en page si leur nombre change)
+    void setPresets(const std::vector<wr::Preset>& presets);
+    // Image du preset i (nullptr : pas d'image). L'image doit rester valide.
+    void setPresetArt(int index, const ArtImage* img);
+    // Nouvelle pochette (nullptr : illustration par défaut) ; recalcule l'accent.
+    // L'image doit rester valide (elle est redécodée si la mise en page change).
+    void setArt(const ArtImage* img);
+
+    // Vue commandes ; pressedPreset / pressedTransport : bouton montré enfoncé.
+    void render(const UiState& st, int pressedPreset = -1, int pressedTransport = -1);
+    // Vue ambiance
+    void renderAmbient(const UiState& st);
 
     int hitPreset(int x, int y) const;
     int hitTransport(int x, int y) const;
     bool hitHeader(int x, int y) const;
-
-    bool needsDeghost() const { return partialCount_ >= 45; }
+    bool hitVolume(int x, int y, int& volume) const;       // barre de volume : niveau visé
+    bool hitMute(int x, int y) const;                      // icône du haut-parleur
+    bool hitProgress(int x, int y, uint32_t& posMs) const;  // barre de progression
 
     // Écrans plein page
     void showInfo(const char* title, const String& body, const char* footer = nullptr);
     void showPortal(const String& apName, const String& apPass, const String& url, const String& reason);
 
 private:
-    void beginDraw(epd_mode_t mode);
-    void endDraw(bool partial = true);
+    int sc(int v) const { return v * ref_ / 540; }
+    uint32_t bgAt(int y) const;
+    void buildBackground();
+    void background();
+    void present();
+    void relayout();
 
+    bool decode(M5Canvas& dst, const ArtImage* img, uint32_t bg);
+    void roundedPush(M5Canvas& src, int x, int y, int radius, bool bgIsGradient, uint32_t bg);
+    void placeholderArt(M5Canvas& dst);
     void info(const UiState& st);
-    void art(const ArtImage* img);
-    void placeholderArt(const wr::Rect& r);
-    void button(const wr::Rect& r, const std::string& label, bool pressed);
+    void progressRow(const UiState& st, int x, int w, int cy, wr::Rect* hit);
+    void button(int index, bool pressed);
     void transportIcon(int which, const wr::Rect& r, bool pressed, bool playing);
 
+    M5Canvas canvas_;  // image complète, en PSRAM
+    M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
+    uint32_t bgAccent_ = 0xFFFFFFFFu;
+    M5Canvas art_;     // pochette à la taille du bandeau
+    M5Canvas artBig_;  // pochette à la taille de la vue ambiance (décodée à la demande)
+    const ArtImage* artSrc_ = nullptr;
+    bool artBigValid_ = false;
+    uint32_t accent_ = 0;
+    int ref_ = 540;
+    int columns_ = 3;
     wr::Layout layout_;
     std::vector<wr::Preset> presets_;
-    int partialCount_ = 0;
+    std::vector<const ArtImage*> presetArtSrc_;
+    std::vector<std::unique_ptr<M5Canvas>> thumbs_;  // vignettes décodées (nullptr : aucune)
+    // Zones tactiles des barres, mises à jour à chaque rendu de la vue commandes
+    wr::Rect volHit_, muteHit_, progHit_;
+    uint32_t progDuration_ = 0;
 };

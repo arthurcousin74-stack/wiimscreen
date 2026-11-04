@@ -1,7 +1,7 @@
 #pragma once
 
-// Retours sonores par le buzzer du M5PaperS3 (GPIO21).
-// L'e-ink met ~0,1 s à montrer un appui : le clic confirme tout de suite.
+// Retours sonores par le haut-parleur du Tab5 (M5.Speaker).
+// Le clic confirme l'appui même quand la commande au WiiM prend un instant.
 // Tous les sons sont joués en tâche de fond (non bloquants).
 namespace sound {
 

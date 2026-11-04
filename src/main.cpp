@@ -1,13 +1,18 @@
-// Télécommande WiiM pour M5PaperS3.
+// Télécommande WiiM pour M5Stack Tab5.
 //
 // Démarrage :
 //  - pas encore configuré → portail de configuration (Wi-Fi + QR code à l'écran)
 //  - sinon → connexion Wi-Fi puis interface : pochette et titre en cours,
-//    presets, lecture/pause, piste précédente/suivante, volume
-// Appui long (3 s) sur l'en-tête → portail de configuration.
+//    progression, presets du WiiM avec leurs images, lecture/pause,
+//    piste précédente/suivante, volume
+// Appui long (3 s) sur le bandeau → portail de configuration.
+// Après 30 s sans appui pendant la lecture : vue ambiance (grande pochette).
+// Après 10 min sans appui, l'écran s'atténue ; il s'éteint après 20 min si rien ne joue.
 
 #include <M5Unified.h>
 #include <WiFi.h>
+
+#include <map>
 
 #include "art.h"
 #include "core.h"
@@ -24,23 +29,64 @@ static UiState g_state;
 static ArtFetcher g_artFetcher;
 static ArtImage g_art;           // pochette affichée
 static std::string g_artWanted;  // adresse de la pochette attendue ("" = aucune)
-static int g_metaRefresh = 0;    // getMetaInfo à refaire (la pochette suit parfois le titre avec retard)
+
+static std::vector<wr::Preset> g_presets;              // presets affichés
+static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
+static bool g_presetsFromWiim = false;
+static uint32_t g_lastPresetFetch = 0;
 
 static uint32_t g_lastPoll = 0;
-static uint32_t g_lastFull = 0;
+static uint32_t g_statusAt = 0;  // instant du dernier relevé (pour faire avancer la progression)
+static uint32_t g_lastTick = 0;
 static uint32_t g_messageUntil = 0;
 static uint32_t g_headerPressStart = 0;
 static bool g_headerPressed = false;
 static uint32_t g_lastTouch = 0;
+static bool g_ambient = false;
+static int g_brightness = -1;
 
 static constexpr uint32_t kPollMs = 5000;
-static constexpr uint32_t kFullRefreshMs = 30UL * 60 * 1000;
 static constexpr uint32_t kLongPressMs = 3000;
 static constexpr uint32_t kWifiTimeoutMs = 20000;
+static constexpr uint32_t kPresetRefreshMs = 10UL * 60 * 1000;
+static constexpr uint32_t kPresetRetryMs = 30UL * 1000;
 
+// Vue ambiance après 30 s ; rétroéclairage atténué après 10 min, éteint après 20 min si rien ne joue
+static constexpr uint32_t kAmbientMs = 30UL * 1000;
+static constexpr uint8_t kBrightOn = 200, kBrightDim = 50;
+static constexpr uint32_t kDimMs = 10UL * 60 * 1000;
+static constexpr uint32_t kOffMs = 20UL * 60 * 1000;
+
+// Liaison SDIO entre l'ESP32-P4 et l'ESP32-C6 (Wi-Fi) du Tab5, d'après la documentation M5Stack
+static constexpr int kSdioClk = 12, kSdioCmd = 13, kSdioD0 = 11, kSdioD1 = 10, kSdioD2 = 9,
+                     kSdioD3 = 8, kSdioRst = 15;
+
+// Batterie NP-F550 optionnelle : sans elle, pas d'indicateur
 static int batteryLevel() {
     int b = M5.Power.getBatteryLevel();
-    return b < 0 ? -1 : (b + 2) / 5 * 5;  // arrondi à 5 % : évite de redessiner pour 1 %
+    if (b <= 0 || b > 100) return -1;
+    return (b + 2) / 5 * 5;  // arrondi à 5 % : évite de redessiner pour 1 %
+}
+
+static void setBrightness(int b) {
+    if (b == g_brightness) return;
+    g_brightness = b;
+    M5.Display.setBrightness(b);
+}
+
+// État affiché : la position avance entre deux relevés pendant la lecture
+static UiState displayState() {
+    UiState s = g_state;
+    auto& p = s.player;
+    if (p.playing && p.durationMs > 0)
+        p.positionMs = std::min(p.durationMs, p.positionMs + (millis() - g_statusAt));
+    return s;
+}
+
+static void show(int pressedPreset = -1, int pressedTransport = -1) {
+    g_lastTick = millis();
+    if (g_ambient) g_ui.renderAmbient(displayState());
+    else g_ui.render(displayState(), pressedPreset, pressedTransport);
 }
 
 static void setMessage(const String& m, uint32_t durationMs = 8000) {
@@ -66,9 +112,84 @@ static void afterCommand(WiimError e) {
     if (g_wiim.takeJustPinned()) setMessage("Certificat du WiiM enregistré");
     else setMessage(errorText(e), e == WiimError::PinMismatch ? 600000 : 8000);
     g_state.online = (e == WiimError::None);
-    g_ui.drawHeader(g_state);
-    g_lastPoll = millis() - kPollMs + 1200;  // rafraîchir le titre peu après
+    show();
+    g_lastPoll = millis() - kPollMs + 1200;  // relire l'état peu après
 }
+
+// ------------------------------------------------------------------- presets
+
+static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl) return false;
+    return true;
+}
+
+static void applyPresets(const std::vector<wr::Preset>& list) {
+    g_presets = list;
+    g_ui.setPresets(g_presets);
+    for (size_t i = 0; i < g_presets.size(); ++i) {
+        const std::string& url = g_presets[i].picUrl;
+        if (url.empty()) continue;
+        auto it = g_presetImages.find(url);
+        if (it != g_presetImages.end()) g_ui.setPresetArt((int)i, &it->second);
+        else g_artFetcher.request(url);
+    }
+}
+
+// Presets du WiiM (noms et images), ou liste saisie complétée par les images du WiiM
+static bool refreshPresets() {
+    g_lastPresetFetch = millis();
+    std::vector<wr::Preset> fromWiim;
+    bool ok = g_wiim.presets(fromWiim) == WiimError::None;
+    std::vector<wr::Preset> list;
+    if (g_settings.autoPresets()) {
+        if (ok && !fromWiim.empty()) {
+            list = fromWiim;
+        } else if (!g_presets.empty()) {
+            return false;  // on garde la liste actuelle
+        } else {
+            for (int i = 1; i <= 6; ++i) list.push_back(wr::Preset{i, "Preset " + std::to_string(i), ""});
+        }
+    } else {
+        list = g_settings.presets;
+        if (ok)
+            for (auto& p : list)
+                for (auto& w : fromWiim)
+                    if (w.slot == p.slot) p.picUrl = w.picUrl;
+    }
+    g_presetsFromWiim = ok;
+    if (samePresets(list, g_presets)) return false;
+    applyPresets(list);
+    return true;
+}
+
+// Images téléchargées en tâche de fond : pochette ou image de preset
+static void checkImages() {
+    ArtImage img;
+    bool changed = false;
+    while (g_artFetcher.poll(img)) {
+        if (!g_artWanted.empty() && img.url == g_artWanted) {
+            g_art = std::move(img);
+            g_ui.setArt(&g_art);
+            changed = true;
+            continue;
+        }
+        bool used = false;
+        for (auto& p : g_presets)
+            if (p.picUrl == img.url) used = true;
+        if (!used) continue;  // piste ou liste déjà changée : image périmée
+        std::string url = img.url;
+        ArtImage& stored = g_presetImages[url];
+        stored = std::move(img);
+        for (size_t i = 0; i < g_presets.size(); ++i)
+            if (g_presets[i].picUrl == url) g_ui.setPresetArt((int)i, &stored);
+        changed = true;
+    }
+    if (changed) show();
+}
+
+// --------------------------------------------------------------------- relevé
 
 static void poll() {
     g_lastPoll = millis();
@@ -82,7 +203,6 @@ static void poll() {
     wr::PlayerStatus st;
     WiimError e = g_wiim.status(st);
     next.online = (e == WiimError::None);
-    if (next.online) next.player = st;
     if (g_wiim.takeJustPinned()) {
         next.message = "Certificat du WiiM enregistré";
         g_messageUntil = millis() + 8000;
@@ -91,55 +211,88 @@ static void poll() {
         g_messageUntil = millis() + 600000;
     }
 
-    // Nouvelle piste (ou première réponse) : album, qualité et pochette via getMetaInfo,
-    // redemandés au relevé suivant car le WiiM les met parfois à jour en retard
+    bool artCleared = false;
     if (next.online) {
-        bool trackChanged = !g_state.online || next.player.title != g_state.player.title ||
-                            next.player.artist != g_state.player.artist ||
-                            next.player.album != g_state.player.album;
-        if (trackChanged) g_metaRefresh = 2;
-        if (g_metaRefresh > 0) {
-            --g_metaRefresh;
-            wr::TrackMeta meta;
-            if (g_wiim.metaInfo(meta) == WiimError::None) next.meta = meta;
-            else if (trackChanged) next.meta = wr::TrackMeta();
+        // Titre, artiste, album, pochette et qualité : getMetaInfo (les WiiM ne les
+        // donnent pas dans getPlayerStatus)
+        wr::TrackMeta meta;
+        if (g_wiim.metaInfo(meta) == WiimError::None) {
+            next.meta = meta;
+            if (!meta.title.empty()) st.title = meta.title;
+            if (!meta.artist.empty()) st.artist = meta.artist;
+            if (!meta.album.empty()) st.album = meta.album;
         }
+        next.player = st;
+        g_statusAt = millis();
+
         if (next.meta.artUrl != g_artWanted) {
             g_artWanted = next.meta.artUrl;
             if (g_artWanted.empty()) {
+                g_ui.setArt(nullptr);
                 g_art.reset();
-                g_ui.drawArt(nullptr);
+                artCleared = true;
             } else {
-                g_artFetcher.request(g_artWanted);
+                g_artFetcher.request(g_artWanted, true);
             }
         }
     }
 
-    bool playingChanged = next.player.playing != g_state.player.playing;
-    bool headerChanged = next.player != g_state.player || next.meta != g_state.meta ||
-                         next.online != g_state.online || next.message != g_state.message ||
-                         next.battery != g_state.battery;
+    bool presetsChanged = false;
+    if (next.online) {
+        bool due = millis() - g_lastPresetFetch > (g_presetsFromWiim ? kPresetRefreshMs : kPresetRetryMs);
+        if (due || !g_state.online) presetsChanged = refreshPresets();
+    }
+
+    bool changed = artCleared || presetsChanged || next.player != g_state.player ||
+                   next.meta != g_state.meta || next.online != g_state.online ||
+                   next.message != g_state.message || next.battery != g_state.battery;
     g_state = next;
-    if (headerChanged) g_ui.drawHeader(g_state);
-    if (playingChanged) g_ui.showTransport(wr::kPlayPause, false, g_state.player.playing);
+    if (changed) show();
 }
 
-// Pochette téléchargée en tâche de fond : affichage dès qu'elle est prête
-static void checkArt() {
-    if (g_artWanted.empty()) return;
-    ArtImage img;
-    if (!g_artFetcher.take(g_artWanted, img)) return;
-    g_art = std::move(img);
-    g_ui.drawArt(&g_art);
+// --------------------------------------------------------------------- appuis
+
+// Barres du bandeau (volume, coupure du son, progression) : action immédiate
+static bool handleBars(int x, int y) {
+    int vol;
+    uint32_t pos;
+    if (g_ui.hitVolume(x, y, vol)) {
+        sound::tap();
+        WiimError e = g_wiim.command("setPlayerCmd:vol:" + String(vol));
+        if (e == WiimError::None) {
+            g_state.player.volume = vol;
+            g_state.player.muted = false;
+        }
+        afterCommand(e);
+        return true;
+    }
+    if (g_ui.hitMute(x, y)) {
+        sound::tap();
+        bool mute = !g_state.player.muted;
+        WiimError e = g_wiim.command(String("setPlayerCmd:mute:") + (mute ? "1" : "0"));
+        if (e == WiimError::None) g_state.player.muted = mute;
+        afterCommand(e);
+        return true;
+    }
+    if (g_ui.hitProgress(x, y, pos)) {
+        sound::tap();
+        WiimError e = g_wiim.command("setPlayerCmd:seek:" + String(pos / 1000));  // secondes
+        if (e == WiimError::None) {
+            g_state.player.positionMs = pos;
+            g_statusAt = millis();
+        }
+        afterCommand(e);
+        return true;
+    }
+    return false;
 }
 
 static void handleTap(int x, int y) {
     int p = g_ui.hitPreset(x, y);
     if (p >= 0) {
         sound::tap();
-        g_ui.showPreset(p, true);
-        WiimError e = g_wiim.command("MCUKeyShortClick:" + String(g_settings.presets[p].slot));
-        g_ui.showPreset(p, false);
+        show(p);
+        WiimError e = g_wiim.command("MCUKeyShortClick:" + String(g_presets[p].slot));
         afterCommand(e);
         return;
     }
@@ -147,7 +300,7 @@ static void handleTap(int x, int y) {
     int t = g_ui.hitTransport(x, y);
     if (t < 0) return;
     sound::tap();
-    g_ui.showTransport(t, true, g_state.player.playing);
+    show(-1, t);
     WiimError e = WiimError::None;
     switch (t) {
         case wr::kVolDown:
@@ -155,17 +308,22 @@ static void handleTap(int x, int y) {
             int v = g_state.player.volume + (t == wr::kVolUp ? g_settings.volStep : -g_settings.volStep);
             v = constrain(v, 0, 100);
             e = g_wiim.command("setPlayerCmd:vol:" + String(v));
-            if (e == WiimError::None) g_state.player.volume = v;
+            if (e == WiimError::None) {
+                g_state.player.volume = v;
+                g_state.player.muted = false;
+            }
             break;
         }
         case wr::kPrev: e = g_wiim.command("setPlayerCmd:prev"); break;
         case wr::kNext: e = g_wiim.command("setPlayerCmd:next"); break;
         case wr::kPlayPause:
             e = g_wiim.command("setPlayerCmd:onepause");
-            if (e == WiimError::None) g_state.player.playing = !g_state.player.playing;
+            if (e == WiimError::None) {
+                g_state.player.playing = !g_state.player.playing;
+                g_statusAt = millis();
+            }
             break;
     }
-    g_ui.showTransport(t, false, g_state.player.playing);
     afterCommand(e);
 }
 
@@ -200,6 +358,9 @@ void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
     Serial.begin(115200);
+    // Avant tout appel Wi-Fi (y compris le portail de configuration)
+    WiFi.setPins(kSdioClk, kSdioCmd, kSdioD0, kSdioD1, kSdioD2, kSdioD3, kSdioRst);
+    setBrightness(kBrightOn);
 
     bool presetsOk = loadSettings(g_settings);
     sound::begin(g_settings.beep);
@@ -212,40 +373,60 @@ void setup() {
     g_wiim.configure(g_settings);
     g_artFetcher.begin();
     g_state.battery = batteryLevel();
-    g_ui.drawMain(g_state, nullptr, true);
-    g_lastFull = millis();
+    g_lastTouch = millis();
+    refreshPresets();
     poll();
+    show();
 }
 
 void loop() {
     M5.update();
     auto t = M5.Touch.getDetail();
+    const uint32_t now = millis();
 
     if (t.wasPressed()) {
-        g_lastTouch = millis();
-        if (g_ui.hitHeader(t.x, t.y)) {
-            g_headerPressed = true;
-            g_headerPressStart = millis();
+        g_lastTouch = now;
+        if (g_brightness != kBrightOn) {
+            // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
+            setBrightness(kBrightOn);
+            if (g_ambient) {
+                g_ambient = false;
+                show();
+            }
+        } else if (g_ambient) {
+            g_ambient = false;  // vue ambiance : un appui ramène les commandes
+            sound::tap();
+            show();
+        } else if (handleBars(t.x, t.y)) {
+            // volume, coupure du son ou progression
+        } else if (g_ui.hitHeader(t.x, t.y)) {
+            g_headerPressed = true;  // appui long : configuration
+            g_headerPressStart = now;
         } else {
             handleTap(t.x, t.y);
         }
     }
     if (g_headerPressed) {
         if (!t.isPressed()) g_headerPressed = false;
-        else if (millis() - g_headerPressStart > kLongPressMs) {
+        else if (now - g_headerPressStart > kLongPressMs) {
             sound::confirm();
             runSetupPortal(g_settings, g_ui, "Reconfiguration demandée.");
         }
     }
 
-    if (millis() - g_lastPoll > kPollMs) poll();
-    checkArt();
+    if (now - g_lastPoll > kPollMs) poll();
+    checkImages();
 
-    // Rafraîchissement complet contre les images fantômes de l'e-ink, jamais pendant l'utilisation
-    bool idle = millis() - g_lastTouch > 10000;
-    if (idle && (g_ui.needsDeghost() || millis() - g_lastFull > kFullRefreshMs)) {
-        g_ui.drawMain(g_state, &g_art, true);
-        g_lastFull = millis();
+    // Progression : une image par seconde pendant la lecture (écran allumé)
+    const auto& p = g_state.player;
+    if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) show();
+
+    const uint32_t idle = now - g_lastTouch;
+    if (!g_ambient && g_brightness == kBrightOn && idle > kAmbientMs && p.playing && g_state.online) {
+        g_ambient = true;
+        show();
     }
+    if (idle > kOffMs && !p.playing) setBrightness(0);
+    else if (idle > kDimMs && g_brightness == kBrightOn) setBrightness(kBrightDim);
     delay(10);
 }

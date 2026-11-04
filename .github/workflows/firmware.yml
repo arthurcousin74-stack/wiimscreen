@@ -1,6 +1,6 @@
-# Compile le firmware et produit UN fichier .bin à flasher à l'adresse 0x0
+# Compile le firmware du Tab5 et produit UN fichier .bin à flasher à l'adresse 0x0
 # depuis le navigateur (voir LISEZMOI.md).
-# Résultat : onglet Actions > dernière exécution > artefact "wiim-remote-papers3".
+# Résultat : onglet Actions > dernière exécution > artefact "wiim-remote-tab5".
 name: firmware
 
 on:
@@ -23,30 +23,35 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          key: pio-tab5-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
+      # esptool (fourni avec la plateforme pioarduino) exige click < 8.2
       - name: Installer PlatformIO
-        run: pip install platformio
+        run: pip install platformio "click<8.2"
 
       - name: Tests de la logique (PC)
         run: pio test -e native
 
       - name: Compiler le firmware
-        run: pio run -e papers3
+        run: pio run -e tab5
 
+      # ESP32-P4 : chargeur de démarrage à 0x2000 (et non 0x0 comme l'ESP32-S3).
+      # Mêmes adresses et réglages que « pio run -t upload ».
       - name: Fusionner en un seul .bin (adresse 0x0)
         run: |
-          B=.pio/build/papers3
-          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          B=.pio/build/tab5
+          P=~/.platformio/packages
           mkdir -p dist
-          python ~/.platformio/packages/tool-esptoolpy/esptool.py --chip esp32s3 merge_bin \
-            -o dist/wiim-remote-papers3.bin \
-            --flash_mode keep --flash_freq keep --flash_size keep \
-            0x0 "$B/bootloader.bin" 0x8000 "$B/partitions.bin" 0xe000 "$BOOT_APP0" 0x10000 "$B/firmware.bin"
+          python $P/tool-esptoolpy/esptool.py --chip esp32p4 merge-bin \
+            -o dist/wiim-remote-tab5.bin \
+            --flash-mode dio --flash-freq 80m --flash-size keep \
+            0x2000 "$B/bootloader.bin" 0x8000 "$B/partitions.bin" \
+            0xe000 $P/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 "$B/firmware.bin"
           cp LISEZMOI.md dist/
-          sha256sum dist/wiim-remote-papers3.bin | tee dist/SHA256SUMS.txt
+          sha256sum dist/wiim-remote-tab5.bin | tee dist/SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wiim-remote-papers3
+          name: wiim-remote-tab5
           path: dist/
