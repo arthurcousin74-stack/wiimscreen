@@ -19,6 +19,10 @@ struct Settings {
     int beep = 2;        // bips : 0 désactivés, 1 discrets, 2 normaux, 3 forts
     bool visualizer = true;  // vue ambiance : spectre du son de la pièce (micro, traité sur place)
     bool motionWake = true;  // soulever / déplacer le Tab5 rallume l'écran
+    String openaiKey;        // commande vocale : clé API OpenAI (vide = pas de bouton micro)
+    String sttModel = "gpt-4o-mini-transcribe";  // modèle de transcription OpenAI
+
+    bool voiceEnabled() const { return openaiKey.length() > 20; }
 
     std::vector<wr::Preset> presets;  // déduit de presetsText (vide : repris du WiiM)
 

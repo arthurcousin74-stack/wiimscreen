@@ -9,9 +9,7 @@
 
 #include "core.h"
 
-// Paquet de certificats racines embarqué (board_build.embed_files dans platformio.ini)
-extern const uint8_t ca_bundle_start[] asm("_binary_certs_x509_crt_bundle_bin_start");
-extern const uint8_t ca_bundle_end[] asm("_binary_certs_x509_crt_bundle_bin_end");
+#include "ca_bundle.h"
 
 static constexpr size_t kMaxImage = 768 * 1024;
 
@@ -83,7 +81,7 @@ bool download(const std::string& url, ArtImage& out) {
     WiFiClientSecure secure;
     WiFiClient plain;
     if (https) {
-        secure.setCACertBundle(ca_bundle_start, ca_bundle_end - ca_bundle_start);
+        secure.setCACertBundle(ca_bundle_start, caBundleSize());
         secure.setHandshakeTimeout(8);
     }
     WiFiClient& client = https ? static_cast<WiFiClient&>(secure) : plain;

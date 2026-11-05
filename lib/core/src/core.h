@@ -132,6 +132,7 @@ struct Layout {
     Rect info;      // puces (source, qualité), titre, artiste, album
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
+    Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
     Rect volBar;    // curseur de volume

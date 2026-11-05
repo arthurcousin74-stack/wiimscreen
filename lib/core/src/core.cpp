@@ -515,6 +515,7 @@ Layout computeLayout(int width, int height, int presetCount) {
     L.transport[kPlayPause] = Rect{cx - playD / 2, playCy - playD / 2, playD, playD};
     L.transport[kPrev] = Rect{cx - playD / 2 - sc(30) - sideD, playCy - sideD / 2, sideD, sideD};
     L.transport[kNext] = Rect{cx + playD / 2 + sc(30), playCy - sideD / 2, sideD, sideD};
+    L.mic = Rect{colX + colW - sideD, playCy - sideD / 2, sideD, sideD};
     L.progress = Rect{colX, L.transport[kPlayPause].y - sc(12) - progH, colW, progH};
     L.info = Rect{colX, colY, colW, L.progress.y - sc(6) - colY};
 

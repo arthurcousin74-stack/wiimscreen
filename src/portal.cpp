@@ -24,6 +24,14 @@ static String option(const char* value, const char* label, bool selected) {
            "</option>";
 }
 
+// Clé API / nom de modèle : caractères visibles, sans espace (ils vont dans un en-tête HTTP)
+static bool tokenOk(const String& v, unsigned minLen, unsigned maxLen) {
+    if (v.length() < minLen || v.length() > maxLen) return false;
+    for (unsigned i = 0; i < v.length(); ++i)
+        if (v[i] <= 0x20 || v[i] >= 0x7f) return false;
+    return true;
+}
+
 static String formPage(const Settings& s, const std::vector<String>& ssids, const String& error) {
     String h;
     h.reserve(6000);
@@ -95,6 +103,19 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
            "pour animer un spectre. Le son est analysé sur place, jamais enregistré ni envoyé. "
            "Réveil par mouvement : soulever ou déplacer le Tab5 rallume l'écran.</small>");
 
+    h += F("<label>Commande vocale : clé API OpenAI<input name=oaikey type=password maxlength=200 "
+           "autocomplete=off");
+    if (s.openaiKey.length()) h += F(" placeholder='inchangée si vide'");
+    h += F("><small>Pour parler au Tab5 (« Joue FIP », « Mets France Culture », « Plus fort »). Crée une clé "
+           "sur platform.openai.com (quelques centimes par mois). Pendant que le micro écoute, le son est "
+           "envoyé à OpenAI pour être transcrit ; rien d'autre n'est envoyé. Vide : pas de bouton micro."
+           "</small></label>");
+    if (s.openaiKey.length())
+        h += F("<label><input type=checkbox name=oaidel value=1 style='width:auto'> Supprimer la clé "
+               "(désactive la commande vocale)</label>");
+    h += F("<label>Modèle de transcription<input name=sttmodel maxlength=60 value=\"");
+    h += esc(s.sttModel) + F("\"><small>À changer seulement si OpenAI renomme ce modèle.</small></label>");
+
     if (s.fingerprint.length()) {
         h += F("<label><input type=checkbox name=forgetfp value=1 style='width:auto'> "
                "Oublier le certificat enregistré du WiiM</label><small>Empreinte actuelle : ");
@@ -158,6 +179,13 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.beep = constrain(server.arg("beep").toInt(), 0, 3);
         next.visualizer = server.arg("visu") != "0";
         next.motionWake = server.arg("motion") != "0";
+        String key = server.arg("oaikey");
+        key.trim();
+        if (key.length()) next.openaiKey = key;
+        if (server.hasArg("oaidel")) next.openaiKey = "";
+        next.sttModel = server.arg("sttmodel");
+        next.sttModel.trim();
+        if (!next.sttModel.length()) next.sttModel = "gpt-4o-mini-transcribe";
         bool https = server.arg("scheme") != "http";
         if (https != s.https || next.host != s.host || server.hasArg("forgetfp")) next.fingerprint = "";
         next.https = https;
@@ -168,6 +196,9 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         else if (next.pass.length() && (next.pass.length() < 8 || next.pass.length() > 63))
             err = "Le mot de passe Wi-Fi doit faire entre 8 et 63 caractères.";
         else if (!wr::isValidHost(next.host.c_str())) err = "Adresse du WiiM invalide (exemple : 192.168.1.50).";
+        else if (next.openaiKey.length() && !tokenOk(next.openaiKey, 20, 200))
+            err = "Clé OpenAI invalide : colle-la sans espace ni retour à la ligne.";
+        else if (!tokenOk(next.sttModel, 1, 60)) err = "Nom de modèle de transcription invalide.";
         else if (!presetsTextIsAuto(next.presetsText) &&
                  !wr::parsePresets(next.presetsText.c_str(), next.presets, perr))
             err = String("Presets : ") + perr.c_str();
@@ -176,6 +207,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
             error = err;
             Settings shown = next;
             shown.pass = s.pass;  // ne jamais renvoyer le mot de passe dans la page
+            shown.openaiKey = s.openaiKey;  // ni la clé API (seulement « inchangée si vide »)
             server.send(400, "text/html; charset=utf-8", formPage(shown, ssids, error));
             return;
         }

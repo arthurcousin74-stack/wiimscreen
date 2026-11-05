@@ -8,6 +8,7 @@ Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qu
 - **Couleurs tirées de la pochette** : la lueur du fond, le bouton lecture et les barres prennent la teinte dominante de l'album
 - **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur
 - **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
+- **Commande vocale** (facultative, en français) : bouton micro → « Joue FIP », « Mets France Culture », « Plus fort », « Volume 30 », « Suivant ». Tes presets, les commandes de lecture, et n'importe quelle radio de l'annuaire libre Radio Browser
 - **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
 - **Vue ambiance** : après 30 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
 - **Visualiseur** : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
@@ -53,6 +54,29 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
    ```
 4. **Enregistrer** : la télécommande redémarre, se connecte et affiche l'interface. Le premier échange enregistre le certificat du WiiM (« Certificat du WiiM enregistré »).
 
+## 4. Commande vocale (facultatif)
+
+![Écoute](docs/voix.png)
+
+La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reconnaître du français libre (le moteur hors ligne d'Espressif ne connaît que des commandes en anglais et en chinois).
+
+1. Crée un compte sur https://platform.openai.com, ajoute quelques dollars de crédit, puis crée une clé API (*API keys* > *Create new secret key*).
+2. Ouvre la configuration du Tab5 (appui long 3 s sur la pochette) et colle la clé dans **Commande vocale : clé API OpenAI**.
+3. Un bouton micro apparaît à droite des commandes de lecture.
+
+**Coût** : modèle `gpt-4o-mini-transcribe`, facturé à la durée d'audio (environ 0,3 centime de dollar la minute au moment de l'écriture) ; une phrase dure quelques secondes, soit quelques centimes par mois même en usage quotidien.
+
+**Ce qui est envoyé** : uniquement le son enregistré pendant l'écoute (8 s au plus) et la liste des noms de tes presets (pour aider la transcription), à OpenAI ; puis, pour une radio, le nom cherché à Radio Browser. Le micro est coupé le reste du temps. La clé reste dans la mémoire du Tab5 et n'est jamais réaffichée dans la page de configuration.
+
+**Utilisation** : touche le micro, attends le bip, parle. L'écoute s'arrête toute seule après la phrase (ou touche l'écran) ; « Annuler » abandonne. Pendant l'écoute, la musique est baissée puis remise à son volume.
+
+| Tu dis | Résultat |
+|---|---|
+| « Joue FIP », « Mets Radio Swiss Jazz », « Preset numéro 3 » | Lance le preset (nom approché accepté) |
+| « Mets France Culture », « Je veux écouter Nova » | Cherche la radio dans Radio Browser et la lance sur le WiiM |
+| « Pause », « Reprends », « Suivant », « Précédent » | Commandes de lecture |
+| « Plus fort », « Moins fort », « Volume 30 », « Coupe le son », « Remets le son » | Volume |
+
 **Reconfigurer plus tard** : appui long (3 s) sur la pochette ou le titre.
 
 ## Utilisation
@@ -79,6 +103,9 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 - **Pas de pochette** (deux croches à la place) : la source n'en fournit pas (entrée ligne, Bluetooth, certaines radios), ou l'image est dans un format non pris en charge (WebP, JPEG progressif).
 - **Le visualiseur reste plat** : le micro capte peu de son (Tab5 loin des enceintes, volume bas). La sensibilité s'adapte en quelques secondes.
 - **L'écran se rallume tout seul** : le Tab5 est peut-être posé sur un meuble qui vibre fort ; désactive le réveil par mouvement dans la configuration.
+- **« Clé OpenAI refusée »** : clé mal collée ou supprimée → recolle-la dans la configuration. **« Quota OpenAI dépassé »** : plus de crédit sur le compte OpenAI.
+- **« Je n'ai rien entendu »** : parle plus près du Tab5 ; si la musique est très forte, baisse-la d'abord.
+- **« Aucune radio … »** : la station n'est pas dans Radio Browser sous ce nom ; essaie le nom exact (« RTS Couleur 3 »).
 - **Journal** : moniteur série à 115200 bauds (`pio device monitor`).
 
 ## Développement
@@ -110,9 +137,11 @@ src/wiim_client.*    API WiiM, TLS avec épinglage
 src/portal.*         portail de configuration (point d'accès + DNS + formulaire)
 src/settings.*       réglages en NVS
 src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
+src/voice_service.*  transcription OpenAI, recherche Radio Browser (HTTPS vérifié)
 src/fonts/           polices VLW générées (tools/make_vlw.py)
 lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
-                     spectre (FFT), lissage du visualiseur, détection de mouvement
+                     spectre (FFT), lissage du visualiseur, détection de mouvement,
+                     compréhension des phrases, fin de parole, choix de la radio
 certs/               certificats racines Mozilla (images en HTTPS)
 tools/preview/       aperçu de l'interface sur PC
 ```
@@ -136,6 +165,7 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Le Wi-Fi de configuration est protégé par un mot de passe aléatoire de 10 caractères (générateur matériel), affiché uniquement sur l'écran. Il n'existe que pendant la configuration.
 - Le mot de passe Wi-Fi n'est jamais renvoyé dans la page de configuration.
 - Toutes les valeurs réaffichées dans la page sont échappées (HTML).
-- Micro : actif uniquement en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
+- Clé OpenAI : refusée si elle contient des espaces ou des retours à la ligne (elle va dans un en-tête HTTP) ; jamais réaffichée ni écrite dans le journal.
+- Micro : actif uniquement pendant une commande vocale ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.
 - Images (pochettes, presets) : certificat du serveur vérifié (certificats racines Mozilla) pour les adresses HTTPS ; taille plafonnée à 768 Ko ; seuls JPEG et PNG sont décodés, après vérification de leur signature.

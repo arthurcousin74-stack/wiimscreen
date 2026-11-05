@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "dsp.h"
+#include "voice.h"
 
 #include <cmath>
 
@@ -266,7 +267,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.volume};
+                                L.transport[kNext], L.mic, L.volume};
     if (n > 0) blocks.push_back(L.strip);
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -392,6 +393,104 @@ static void test_motion() {
     TEST_ASSERT_FALSE(m2.feed(0, 0, 1.0f));
 }
 
+static void test_voice_text() {
+    TEST_ASSERT_EQUAL_STRING("joue fip", normalizeText("Joue FIP !").c_str());
+    TEST_ASSERT_EQUAL_STRING("mets france culture", normalizeText("  Mets \xC2\xAB France Culture \xC2\xBB.").c_str());
+    TEST_ASSERT_EQUAL_STRING("ecoute l heure des reves", normalizeText("\xC3\x89""coute l'Heure des r\xC3\xAA""ves").c_str());
+    TEST_ASSERT_EQUAL_STRING("coeur", normalizeText("C\xC5\x93ur").c_str());
+    TEST_ASSERT_TRUE(similarity("radio swiss jazz", "radio swiss jazz") == 1);
+    TEST_ASSERT_TRUE(similarity("radio swiss jaz", "radio swiss jazz") > 0.8f);
+    TEST_ASSERT_TRUE(similarity("nova", "france inter") < 0.3f);
+}
+
+static void test_voice_intents() {
+    std::vector<Preset> p = {{1, "FIP", ""}, {2, "FIP Jazz", ""}, {3, "Radio Swiss Jazz", ""},
+                             {4, "Couleur 3", ""}, {8, "Playlist du dimanche", ""}};
+    auto k = [&](const char* t) { return (int)parseVoice(t, p).kind; };
+    TEST_ASSERT_EQUAL(VoiceIntent::Pause, k("Pause."));
+    TEST_ASSERT_EQUAL(VoiceIntent::Pause, k("Arr\xC3\xAA""te"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Play, k("Reprends"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Play, k("Joue"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Next, k("Chanson suivante"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Prev, k("Pr\xC3\xA9""c\xC3\xA9""dent"));
+    TEST_ASSERT_EQUAL(VoiceIntent::VolUp, k("Plus fort s'il te pla\xC3\xAEt"));
+    TEST_ASSERT_EQUAL(VoiceIntent::VolDown, k("Baisse un peu"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Mute, k("Coupe le son"));
+    TEST_ASSERT_EQUAL(VoiceIntent::Unmute, k("Remets le son"));
+
+    VoiceIntent v = parseVoice("Volume \xC3\xA0 30", p);
+    TEST_ASSERT_EQUAL(VoiceIntent::SetVolume, v.kind);
+    TEST_ASSERT_EQUAL(30, v.volume);
+    TEST_ASSERT_EQUAL(45, parseVoice("volume quarante cinq", p).volume);
+    TEST_ASSERT_EQUAL(17, parseVoice("volume dix-sept", p).volume);
+    TEST_ASSERT_EQUAL(21, parseVoice("volume vingt et un", p).volume);
+    TEST_ASSERT_EQUAL(72, parseVoice("volume soixante-douze", p).volume);
+    TEST_ASSERT_EQUAL(100, parseVoice("volume 150", p).volume);
+
+    v = parseVoice("Joue FIP", p);  // exact : FIP, pas FIP Jazz
+    TEST_ASSERT_EQUAL(VoiceIntent::Preset, v.kind);
+    TEST_ASSERT_EQUAL(0, v.preset);
+    TEST_ASSERT_EQUAL(1, parseVoice("Mets FIP Jazz", p).preset);
+    TEST_ASSERT_EQUAL(2, parseVoice("Joue Radio Swiss Jazz", p).preset);
+    TEST_ASSERT_EQUAL(2, parseVoice("Je veux \xC3\xA9""couter Swiss Jazz", p).preset);
+    TEST_ASSERT_EQUAL(3, parseVoice("Mets la radio Couleur 3", p).preset);
+    TEST_ASSERT_EQUAL(4, parseVoice("Lance la playlist du dimanche", p).preset);
+    TEST_ASSERT_EQUAL(4, parseVoice("Preset num\xC3\xA9ro 8", p).preset);  // numéro du WiiM, pas la position
+
+    v = parseVoice("Mets France Culture", p);
+    TEST_ASSERT_EQUAL(VoiceIntent::Radio, v.kind);
+    TEST_ASSERT_EQUAL_STRING("france culture", v.query.c_str());
+    TEST_ASSERT_EQUAL_STRING("nova", parseVoice("Je voudrais \xC3\xA9""couter la radio Nova", p).query.c_str());
+    TEST_ASSERT_EQUAL(VoiceIntent::None, k(""));
+}
+
+static void test_voice_radio_and_audio() {
+    // Extrait réel de Radio Browser (champs inutiles retirés)
+    const char* json =
+        "[{\"name\":\"France Culture (sans pub)\",\"url\":\"x\",\"url_resolved\":\"https://stream.radiofrance.fr/"
+        "franceculture/franceculture.m3u8\",\"favicon\":\"\",\"hls\":1,\"clickcount\":8},"
+        "{\"name\":\"France Culture\",\"url\":\"http://icecast.radiofrance.fr/franceculture-hifi.aac\","
+        "\"url_resolved\":\"http://icecast.radiofrance.fr/franceculture-hifi.aac\",\"favicon\":"
+        "\"https://www.radiofrance.fr/favicon.png\",\"tags\":\"news,{culture}\",\"hls\":0,\"clickcount\":277},"
+        "{\"name\":\"Cass\xC3\xA9""e\",\"url_resolved\":\"file:///etc/passwd\",\"hls\":0,\"clickcount\":9999}]";
+    auto st = parseRadioBrowser(json);
+    TEST_ASSERT_EQUAL(2, (int)st.size());  // l'adresse non http est écartée
+    TEST_ASSERT_TRUE(st[0].hls);
+    TEST_ASSERT_EQUAL_STRING("https://www.radiofrance.fr/favicon.png", st[1].favicon.c_str());
+    TEST_ASSERT_EQUAL(1, bestStation(st, "france culture"));
+    TEST_ASSERT_EQUAL(-1, bestStation({}, "x"));
+
+    TEST_ASSERT_EQUAL_STRING("france%20culture", urlEncode("france culture").c_str());
+    TEST_ASSERT_EQUAL_STRING("http://a.b/c%3Fd%3D1%26e", urlEncode("http://a.b/c?d=1&e", true).c_str());
+
+    uint8_t h[44];
+    wavHeader(h, 32000, 16000);
+    TEST_ASSERT_EQUAL_MEMORY("RIFF", h, 4);
+    TEST_ASSERT_EQUAL_MEMORY("WAVEfmt ", h + 8, 8);
+    TEST_ASSERT_EQUAL(36 + 32000, h[4] | h[5] << 8 | h[6] << 16 | h[7] << 24);
+    TEST_ASSERT_EQUAL(16000, h[24] | h[25] << 8 | h[26] << 16);
+    TEST_ASSERT_EQUAL(32000, h[40] | h[41] << 8 | h[42] << 16);
+
+    // Fin de parole : bruit, voix, puis silence
+    SpeechEndpoint e;
+    for (int i = 0; i < 20; ++i) TEST_ASSERT_EQUAL(SpeechEndpoint::Waiting, e.feed(0.005f));
+    for (int i = 0; i < 30; ++i) e.feed(0.1f);
+    TEST_ASSERT_EQUAL(SpeechEndpoint::Speaking, e.state());
+    for (int i = 0; i < 20; ++i) e.feed(0.1f * (i % 2));  // pauses courtes entre les mots
+    TEST_ASSERT_EQUAL(SpeechEndpoint::Speaking, e.state());
+    for (int i = 0; i < 40; ++i) e.feed(0.006f);
+    TEST_ASSERT_EQUAL(SpeechEndpoint::Done, e.state());
+    // Rien dit : abandon au bout de 4 s
+    SpeechEndpoint quiet;
+    for (int i = 0; i < 200; ++i) quiet.feed(0.004f);
+    TEST_ASSERT_EQUAL(SpeechEndpoint::NothingHeard, quiet.state());
+    // Parole sans fin : coupée à 7 s
+    SpeechEndpoint talk;
+    talk.feed(0.004f);
+    for (int i = 0; i < 300; ++i) talk.feed(0.2f);
+    TEST_ASSERT_EQUAL(SpeechEndpoint::Done, talk.state());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -412,5 +511,8 @@ int main() {
     RUN_TEST(test_accent);
     RUN_TEST(test_spectrum);
     RUN_TEST(test_motion);
+    RUN_TEST(test_voice_text);
+    RUN_TEST(test_voice_intents);
+    RUN_TEST(test_voice_radio_and_audio);
     return UNITY_END();
 }

@@ -120,8 +120,21 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);
     ui.setArt(&art);
     ui.setActivePreset(1);
+    ui.setVoiceEnabled(true);
     ui.render(st);
     save(out, "1-lecture.ppm");
+
+    // Commande vocale : écoute, puis transcription
+    ui.renderVoice(Ui::VoicePhase::Listening, 1.0f);  // pleine voix : anneaux au maximum
+    save(out, "10-voix-ecoute.ppm");
+    ui.renderVoice(Ui::VoicePhase::Thinking, 0);
+    save(out, "11-voix-reflexion.ppm");
+    {
+        UiState done = st;
+        done.message = "\xC2\xAB Mets France Culture \xC2\xBB \xE2\x80\x94 Radio France Culture";
+        ui.render(done);
+        save(out, "12-voix-resultat.ppm");
+    }
 
     ui.render(st, 3);
     save(out, "2-appui-preset.ppm");

@@ -45,6 +45,7 @@ public:
 
     // Pages de presets
     int page() const { return page_; }
+    int perPage() const { return layout_.perPage; }
     int pageCount() const;
     void setPage(int p);
 
@@ -52,6 +53,12 @@ public:
     void render(const UiState& st, int pressedPreset = -1, int pressedTransport = -1);
     // Vue ambiance
     void renderAmbient(const UiState& st);
+    // Commande vocale : bouton micro (si une clé est configurée) et écran d'écoute
+    enum class VoicePhase { Listening, Thinking };
+    void setVoiceEnabled(bool on) { voiceOn_ = on; }
+    void renderVoice(VoicePhase phase, float level);  // level : 0..1
+    bool hitMic(int x, int y) const;
+    bool hitVoiceCancel(int x, int y) const;
     // Visualiseur de la vue ambiance : réserve sa place si activé
     void setVisualizer(bool enabled) { visEnabled_ = enabled; }
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
@@ -91,6 +98,7 @@ private:
     void pageDots();
     void toast(const String& msg);
     void drawBars();
+    void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -110,6 +118,9 @@ private:
     // Zone tactile de la progression, mise à jour à chaque rendu de la vue commandes
     wr::Rect progHit_;
     uint32_t progDuration_ = 0;
+    // Commande vocale
+    bool voiceOn_ = false;
+    wr::Rect cancelRect_;
     // Visualiseur
     bool visEnabled_ = false;
     bool ambientShown_ = false;

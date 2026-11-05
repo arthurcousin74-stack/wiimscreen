@@ -14,11 +14,16 @@
 #include <M5Unified.h>
 #include <WiFi.h>
 
+#include <esp_heap_caps.h>
+
+#include <cmath>
 #include <map>
 
 #include "art.h"
 #include "core.h"
 #include "dsp.h"
+#include "voice.h"
+#include "voice_service.h"
 #include "portal.h"
 #include "settings.h"
 #include "sound.h"
@@ -111,7 +116,10 @@ static UiState displayState() {
     return s;
 }
 
+static bool g_listening;  // commande vocale en cours d'écoute (voir plus bas)
+
 static void show(int pressedPreset = -1, int pressedTransport = -1) {
+    if (g_listening) return;  // l'écran d'écoute reste affiché
     g_lastTick = millis();
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
@@ -400,6 +408,210 @@ static void playPreset(int p) {
     afterCommand(e);
 }
 
+// ------------------------------------------------------------ commande vocale
+//
+// Bouton micro → écoute (la musique est baissée le temps d'écouter) → fin de parole
+// détectée (ou appui) → transcription OpenAI → commande, preset ou radio.
+
+static int16_t* g_voiceBuf = nullptr;
+static size_t g_voiceLen = 0;
+static constexpr size_t kVoiceMax = kMicRate * 8;  // 8 s au plus
+static wr::SpeechEndpoint g_endpoint;
+static float g_voiceLevel = 0;
+static uint32_t g_voiceFrame = 0;
+static int g_duckedFrom = -1;  // volume d'avant l'écoute, à rétablir
+
+// Noms propres attendus : aident la transcription (« Couleur 3 », « FIP »…)
+static std::string voiceHint() {
+    std::string h =
+        "T\xC3\xA9l\xC3\xA9" "commande de musique. Commandes : joue, mets, pause, reprends, suivant, "
+        "pr\xC3\xA9" "c\xC3\xA9" "dent, plus fort, moins fort, volume, coupe le son. Radios et presets : ";
+    for (size_t i = 0; i < g_presets.size(); ++i) h += (i ? ", " : "") + g_presets[i].label;
+    return h + ".";
+}
+
+static void stopListening() {
+    M5.Mic.end();
+    g_micPending = false;
+    g_listening = false;
+    sound::resume();
+    if (g_duckedFrom >= 0) {
+        g_wiim.command("setPlayerCmd:vol:" + String(g_duckedFrom));
+        g_duckedFrom = -1;
+    }
+}
+
+static void startVoice() {
+    if (!g_settings.voiceEnabled()) return;
+    if (!g_voiceBuf)
+        g_voiceBuf = static_cast<int16_t*>(heap_caps_malloc(kVoiceMax * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!g_voiceBuf) {
+        setMessage("M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter");
+        show();
+        return;
+    }
+    const auto& p = g_state.player;
+    if (g_state.online && p.playing && !p.muted && p.volume > 15 &&
+        g_wiim.command("setPlayerCmd:vol:12") == WiimError::None)
+        g_duckedFrom = p.volume;
+    sound::confirm();
+    delay(200);  // le bip finit avant que le bus audio passe au micro
+    sound::suspend();
+    if (!M5.Mic.begin()) {
+        stopListening();
+        setMessage("Micro indisponible");
+        show();
+        return;
+    }
+    g_listening = true;
+    g_voiceLen = 0;
+    g_voiceLevel = 0;
+    g_endpoint = wr::SpeechEndpoint();
+    g_micPending = false;
+    g_micCur = 0;
+    g_ui.renderVoice(Ui::VoicePhase::Listening, 0);
+}
+
+static void runVoice(const std::string& text) {
+    const wr::VoiceIntent in = wr::parseVoice(text, g_presets);
+    const String heard = String("\xC2\xAB ") + text.c_str() + " \xC2\xBB";
+    const String dash = " \xE2\x80\x94 ";
+    auto& p = g_state.player;
+    WiimError e = WiimError::None;
+    String done;
+    switch (in.kind) {
+        case wr::VoiceIntent::None:
+            sound::error();
+            setMessage("Je n'ai pas compris " + heard);
+            show();
+            return;
+        case wr::VoiceIntent::Play:
+            e = g_wiim.command("setPlayerCmd:resume");
+            if (e == WiimError::None) p.playing = true, g_statusAt = millis();
+            done = "Lecture";
+            break;
+        case wr::VoiceIntent::Pause:
+            e = g_wiim.command("setPlayerCmd:pause");
+            if (e == WiimError::None) p.playing = false;
+            done = "Pause";
+            break;
+        case wr::VoiceIntent::Next:
+            e = g_wiim.command("setPlayerCmd:next");
+            done = "Morceau suivant";
+            break;
+        case wr::VoiceIntent::Prev:
+            e = g_wiim.command("setPlayerCmd:prev");
+            done = "Morceau pr\xC3\xA9" "c\xC3\xA9" "dent";
+            break;
+        case wr::VoiceIntent::VolUp:
+        case wr::VoiceIntent::VolDown:
+        case wr::VoiceIntent::SetVolume: {
+            int v = in.kind == wr::VoiceIntent::SetVolume ? in.volume
+                    : p.volume + (in.kind == wr::VoiceIntent::VolUp ? 2 : -2) * g_settings.volStep;
+            v = constrain(v, 0, 100);
+            e = g_wiim.command("setPlayerCmd:vol:" + String(v));
+            if (e == WiimError::None) p.volume = v, p.muted = false;
+            done = "Volume " + String(v);
+            break;
+        }
+        case wr::VoiceIntent::Mute:
+        case wr::VoiceIntent::Unmute: {
+            bool mute = in.kind == wr::VoiceIntent::Mute;
+            e = g_wiim.command(String("setPlayerCmd:mute:") + (mute ? "1" : "0"));
+            if (e == WiimError::None) p.muted = mute;
+            done = mute ? "Son coup\xC3\xA9" : "Son r\xC3\xA9tabli";
+            break;
+        }
+        case wr::VoiceIntent::Preset:
+            g_ui.setPage(in.preset / std::max(1, g_ui.perPage()));  // montre la tuile du preset
+            playPreset(in.preset);  // gère l'affichage et les erreurs
+            if (g_state.online) {
+                setMessage(heard + dash + g_presets[in.preset].label.c_str());
+                show();
+            }
+            return;
+        case wr::VoiceIntent::Radio: {
+            wr::RadioStation st;
+            String err;
+            if (!findRadio(in.query, st, err)) {
+                sound::error();
+                setMessage(heard + dash + err);
+                show();
+                return;
+            }
+            e = g_wiim.command("setPlayerCmd:play:" + String(wr::urlEncode(st.url, true).c_str()));
+            if (e == WiimError::None) {
+                g_activePreset = -1;
+                g_ui.setActivePreset(-1);
+            }
+            done = String("Radio ") + st.name.c_str();
+            break;
+        }
+    }
+    afterCommand(e);
+    if (e == WiimError::None) {
+        setMessage(heard + dash + done);
+        show();
+    }
+}
+
+static void finishVoice(bool send) {
+    stopListening();
+    if (!send) {
+        show();
+        return;
+    }
+    if (g_voiceLen < kMicRate / 3) {
+        setMessage("Je n'ai rien entendu");
+        show();
+        return;
+    }
+    g_ui.renderVoice(Ui::VoicePhase::Thinking, 0);
+    std::string text;
+    String err;
+    if (!transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, voiceHint(), text,
+                    err)) {
+        sound::error();
+        setMessage(err);
+        show();
+        return;
+    }
+    runVoice(text);
+}
+
+// Micro pendant l'écoute : enregistre, suit le niveau, détecte la fin de la phrase
+static void serviceVoice() {
+    if (!g_listening) return;
+    if (!g_micPending) {
+        g_micPending = M5.Mic.record(g_micBuf[g_micCur], kMicBlock, kMicRate);
+        return;
+    }
+    if (M5.Mic.isRecording()) return;
+    const int done = g_micCur;
+    g_micCur ^= 1;
+    g_micPending = M5.Mic.record(g_micBuf[g_micCur], kMicBlock, kMicRate);
+    const int16_t* b = g_micBuf[done];
+    double sum = 0;
+    for (int i = 0; i < kMicBlock; ++i) sum += double(b[i]) * b[i];
+    const float rms = std::sqrt(sum / kMicBlock) / 32768.0f;
+    const size_t n = std::min<size_t>(kMicBlock, kVoiceMax - g_voiceLen);
+    memcpy(g_voiceBuf + g_voiceLen, b, n * 2);
+    g_voiceLen += n;
+    const auto state = g_endpoint.feed(rms);
+    g_voiceLevel = std::max(std::min(1.0f, rms * 10), g_voiceLevel * 0.8f);
+    if (millis() - g_voiceFrame > 80) {  // ~12 images/s : l'anneau suit la voix
+        g_voiceFrame = millis();
+        g_ui.renderVoice(Ui::VoicePhase::Listening, g_voiceLevel);
+    }
+    if (state == wr::SpeechEndpoint::Done || g_voiceLen >= kVoiceMax) {
+        finishVoice(true);
+    } else if (state == wr::SpeechEndpoint::NothingHeard) {
+        stopListening();
+        setMessage("Je n'ai rien entendu");
+        show();
+    }
+}
+
 // Bande des presets, suivi du doigt : enfoncer, glisser (page), relâcher (lancer)
 static void serviceStrip(const m5::touch_detail_t& t) {
     if (!g_stripTouch) return;
@@ -437,6 +649,11 @@ static void handleTap(int x, int y) {
         g_stripStartX = x;
         g_stripPreset = g_ui.hitPreset(x, y);
         if (g_stripPreset >= 0) show(g_stripPreset);
+        return;
+    }
+
+    if (g_ui.hitMic(x, y)) {
+        startVoice();
         return;
     }
 
@@ -509,6 +726,7 @@ void setup() {
     sound::begin(g_settings.beep);
     g_ui.begin(g_settings);
     g_ui.setVisualizer(g_settings.visualizer);
+    g_ui.setVoiceEnabled(g_settings.voiceEnabled());
 
     if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Première configuration.");
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistrée est invalide.");
@@ -534,6 +752,8 @@ void loop() {
             // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
             setBrightness(kBrightOn);
             if (g_ambient) exitAmbient();
+        } else if (g_listening) {
+            finishVoice(!g_ui.hitVoiceCancel(t.x, t.y));  // Annuler, ou « j'ai fini »
         } else if (g_ambient) {
             exitAmbient();  // vue ambiance : un appui ramène les commandes
             sound::tap();
@@ -555,9 +775,10 @@ void loop() {
         }
     }
 
-    if (now - g_lastPoll > kPollMs) poll();
+    if (!g_listening && now - g_lastPoll > kPollMs) poll();  // pas de pause dans l'écoute
     checkImages();
     serviceMic();
+    serviceVoice();
     serviceMotion(now);
 
     // Progression : une image par seconde pendant la lecture (écran allumé)
@@ -567,7 +788,8 @@ void loop() {
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && g_brightness == kBrightOn && idle > kAmbientMs && p.playing && g_state.online)
+    if (!g_ambient && !g_listening && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
+        g_state.online)
         enterAmbient();
     if (idle > kOffMs && !p.playing) {
         if (g_ambient) exitAmbient();  // micro coupé avec l'écran

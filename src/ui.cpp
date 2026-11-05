@@ -556,6 +556,11 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     info(st);
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
+    if (voiceOn_) {
+        const wr::Rect& m = layout_.mic;
+        canvas_.fillCircle(m.x + m.w / 2, m.y + m.h / 2, m.w / 2, kCard);
+        micIcon(m.x + m.w / 2, m.y + m.h / 2, m.w / 4, st.online ? kText : 0x5A5D66u, kCard);
+    }
     volumePill(st, pressedTransport);
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
         int i = page_ * layout_.perPage + (int)slot;
@@ -684,7 +689,74 @@ void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& 
     D.endWrite();
 }
 
+// Micro : capsule, arceau et pied (s : demi-hauteur de l'icône)
+void Ui::micIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
+    auto& C = canvas_;
+    const int cw = s * 2 / 3, ch = s * 5 / 4, t = std::max(2, s / 6);
+    C.fillRoundRect(cx - cw / 2, cy - s, cw, ch, cw / 2, c);
+    // Arceau : demi-anneau sous la capsule
+    C.fillArc(cx, cy - s + ch - cw / 2, cw / 2 + t * 2, cw / 2 + t, 0, 180, c);
+    C.fillRect(cx - t / 2, cy + s / 2 + t, t, s / 3, c);
+    C.fillRoundRect(cx - cw / 2, cy + s / 2 + t + s / 3 - 1, cw, t, t / 2, c);
+    (void)bg;
+}
+
+// Écran d'écoute : grand micro dont l'anneau suit la voix
+void Ui::renderVoice(VoicePhase phase, float level) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    background();
+    const int W = C.width(), H = C.height();
+    const int cx = W / 2, cy = H * 38 / 100, R = sc(60);
+    const bool listening = phase == VoicePhase::Listening;
+    if (listening) {
+        const float l = std::max(0.0f, std::min(1.0f, level));
+        // Anneaux bornés : à pleine voix, ils restent au-dessus du titre
+        C.fillCircle(cx, cy, R + sc(14) + (int)(l * sc(50)), mix(bgAt(cy), accent_, 0.18f));
+        C.fillCircle(cx, cy, R + sc(8) + (int)(l * sc(28)), mix(bgAt(cy), accent_, 0.40f));
+    } else {
+        const int a = (int)((millis() / 3) % 360);
+        C.fillArc(cx, cy, R + sc(8), R + sc(14), a, a + 120, accent_);
+    }
+    C.fillCircle(cx, cy, R, listening ? accent_ : kCardHi);
+    micIcon(cx, cy, R / 2, listening ? kBg : kText, listening ? accent_ : kCardHi);
+
+    C.setTextDatum(textdatum_t::top_center);
+    C.loadFont(kBig);
+    C.setTextColor(kText);
+    int y = cy + R + sc(70);
+    C.drawString(listening ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6" : "Je r\xC3\xA9" "fl\xC3\xA9" "chis\xE2\x80\xA6", cx, y);
+    y += C.fontHeight() + sc(10);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    if (listening) {
+        C.drawString("\xC2\xAB Joue FIP \xC2\xBB \xC2\xB7 \xC2\xAB Mets France Culture \xC2\xBB \xC2\xB7 "
+                     "\xC2\xAB Plus fort \xC2\xBB \xC2\xB7 \xC2\xAB Suivant \xC2\xBB",
+                     cx, y);
+        y += C.fontHeight() + sc(6);
+        C.drawString("Touche l'\xC3\xA9" "cran quand tu as fini.", cx, y);
+    }
+    // Annuler
+    C.loadFont(kSmall);
+    const int bw = sc(150), bh = sc(44);
+    cancelRect_ = wr::Rect{cx - bw / 2, H - sc(30) - bh, bw, bh};
+    C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Annuler", cx, cancelRect_.y + bh / 2 + 1);
+    present();
+}
+
 // -------------------------------------------------------------------- zones
+
+bool Ui::hitMic(int x, int y) const {
+    if (!voiceOn_) return false;
+    const wr::Rect& m = layout_.mic;
+    const int pad = sc(10);
+    return wr::Rect{m.x - pad, m.y - pad, m.w + 2 * pad, m.h + 2 * pad}.contains(x, y);
+}
+
+bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }
 
 int Ui::hitPreset(int x, int y) const {
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {

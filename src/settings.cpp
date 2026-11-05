@@ -33,6 +33,8 @@ bool loadSettings(Settings& s) {
     s.beep = constrain(p.getInt("beep", 2), 0, 3);
     s.visualizer = p.getBool("visu", true);
     s.motionWake = p.getBool("motion", true);
+    s.openaiKey = p.getString("oaikey", "");
+    s.sttModel = p.getString("sttmodel", "gpt-4o-mini-transcribe");
     p.end();
 
     std::string err;
@@ -58,6 +60,8 @@ void saveSettings(const Settings& s) {
     p.putInt("beep", s.beep);
     p.putBool("visu", s.visualizer);
     p.putBool("motion", s.motionWake);
+    p.putString("oaikey", s.openaiKey);
+    p.putString("sttmodel", s.sttModel);
     p.end();
 }
 
