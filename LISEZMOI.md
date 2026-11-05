@@ -4,9 +4,10 @@ Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qu
 
 ![Écran principal](docs/apercu.png)
 
-- **En cours de lecture** : pochette, titre, artiste, album, source (Spotify, TIDAL, AirPlay…), qualité audio (« 16 bits · 44,1 kHz »), progression avec temps écoulé et durée (« EN DIRECT » pour une radio), volume
+- **En cours de lecture** : grande pochette ; à côté, source et qualité audio en pastilles (« Spotify », « 16 bits · 44,1 kHz », « EN DIRECT » pour une radio), titre, artiste, album, progression, lecture/pause et volume regroupés près de ce qu'ils commandent
 - **Couleurs tirées de la pochette** : la lueur du fond, le bouton lecture et les barres prennent la teinte dominante de l'album
-- **Presets du WiiM** repris automatiquement, avec leurs noms et leurs images (ou une liste saisie à la main)
+- **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur
+- **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
 - **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
 - **Vue ambiance** : après 30 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
 - **Visualiseur** : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
@@ -52,7 +53,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
    ```
 4. **Enregistrer** : la télécommande redémarre, se connecte et affiche l'interface. Le premier échange enregistre le certificat du WiiM (« Certificat du WiiM enregistré »).
 
-**Reconfigurer plus tard** : appui long (3 s) sur le bandeau du haut (pochette ou titre).
+**Reconfigurer plus tard** : appui long (3 s) sur la pochette ou le titre.
 
 ## Utilisation
 
@@ -61,11 +62,12 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 | Barre de progression | Avancer / reculer dans le morceau |
 | Barre de volume | Régler le volume directement |
 | Haut-parleur (à gauche du volume) | Couper / rétablir le son |
-| Boutons du milieu | Lancer le preset |
-| − / + | Volume (pas réglable) |
+| Tuiles du bas | Lancer le preset (au relâcher) |
+| Glisser sur les tuiles, ou toucher les points | Page de presets suivante / précédente |
+| − / + (bouts de la barre de volume) | Volume (pas réglable) |
 | ◀◀ / ▶▶ | Piste précédente / suivante |
 | ▶ / II | Lecture / pause |
-| Bandeau du haut, 3 s | Configuration |
+| Pochette ou titre, 3 s | Configuration |
 | N'importe où, en vue ambiance | Revenir aux commandes |
 | Soulever / déplacer le Tab5 | Rallumer l'écran, revenir aux commandes |
 
@@ -117,6 +119,7 @@ tools/preview/       aperçu de l'interface sur PC
 
 Régénérer les polices :
 ```bash
+python tools/make_vlw.py fonts/DejaVuSans.ttf 24 font_ui_24 src/fonts/font_ui_24.h
 python tools/make_vlw.py fonts/DejaVuSans.ttf 28 font_ui_28 src/fonts/font_ui_28.h
 python tools/make_vlw.py fonts/DejaVuSans.ttf 40 font_ui_40 src/fonts/font_ui_40.h
 python tools/make_vlw.py fonts/DejaVuSans.ttf 56 font_ui_56 src/fonts/font_ui_56.h

@@ -48,6 +48,18 @@ static uint32_t g_lastTouch = 0;
 static bool g_ambient = false;
 static int g_brightness = -1;
 
+// Bande des presets : appui = tuile enfoncée, relâcher = lancer, glisser = changer de page
+static bool g_stripTouch = false;
+static int g_stripPreset = -1;
+static int g_stripStartX = 0;
+static bool g_stripDragged = false;
+static constexpr int kSwipePx = 50;
+
+// Preset en cours : marqué jusqu'à ce que la source change ou que la lecture s'arrête
+static int g_activePreset = -1;
+static uint32_t g_activeSince = 0;
+static int g_activeMode = -1;
+
 // Visualiseur : blocs de 512 échantillons à 16 kHz (32 ms), deux tampons en alternance
 static constexpr int kMicRate = 16000, kMicBlock = 512, kBands = 24;
 static wr::Visualizer g_vis(kBands);
@@ -201,6 +213,7 @@ static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::
 static void applyPresets(const std::vector<wr::Preset>& list) {
     g_presets = list;
     g_ui.setPresets(g_presets);
+    g_activePreset = -1;
     for (size_t i = 0; i < g_presets.size(); ++i) {
         const std::string& url = g_presets[i].picUrl;
         if (url.empty()) continue;
@@ -310,6 +323,20 @@ static void poll() {
         }
     }
 
+    // Preset actif : on retient la source quelques secondes après l'appui (le temps que
+    // le WiiM bascule), puis on l'oublie si la source change ou si la lecture s'arrête
+    if (g_activePreset >= 0 && next.online) {
+        bool stopped = !next.player.playing && next.player.title.empty();
+        if (millis() - g_activeSince > 6000) {
+            if (g_activeMode < 0) g_activeMode = next.player.mode;
+            else if (next.player.mode != g_activeMode) stopped = true;
+        }
+        if (stopped) {
+            g_activePreset = -1;
+            g_ui.setActivePreset(-1);
+        }
+    }
+
     bool presetsChanged = false;
     if (next.online) {
         bool due = millis() - g_lastPresetFetch > (g_presetsFromWiim ? kPresetRefreshMs : kPresetRetryMs);
@@ -360,13 +387,56 @@ static bool handleBars(int x, int y) {
     return false;
 }
 
+static void playPreset(int p) {
+    sound::tap();
+    show(p);
+    WiimError e = g_wiim.command("MCUKeyShortClick:" + String(g_presets[p].slot));
+    if (e == WiimError::None) {
+        g_activePreset = p;
+        g_activeSince = millis();
+        g_activeMode = -1;
+        g_ui.setActivePreset(p);
+    }
+    afterCommand(e);
+}
+
+// Bande des presets, suivi du doigt : enfoncer, glisser (page), relâcher (lancer)
+static void serviceStrip(const m5::touch_detail_t& t) {
+    if (!g_stripTouch) return;
+    if (t.isPressed()) {
+        if (!g_stripDragged && abs(t.x - g_stripStartX) > kSwipePx) {
+            g_stripDragged = true;  // c'est un glissement : la tuile n'est plus enfoncée
+            show();
+        }
+        return;
+    }
+    g_stripTouch = false;
+    if (g_stripDragged) {
+        int dx = t.x - g_stripStartX;
+        int before = g_ui.page();
+        g_ui.setPage(before + (dx < 0 ? 1 : -1));
+        if (g_ui.page() != before) sound::tap();
+        show();
+    } else if (g_stripPreset >= 0) {
+        playPreset(g_stripPreset);
+    } else {
+        show();
+    }
+}
+
 static void handleTap(int x, int y) {
-    int p = g_ui.hitPreset(x, y);
-    if (p >= 0) {
+    if (int dir = g_ui.hitDots(x, y)) {
+        g_ui.setPage(g_ui.page() + dir);
         sound::tap();
-        show(p);
-        WiimError e = g_wiim.command("MCUKeyShortClick:" + String(g_presets[p].slot));
-        afterCommand(e);
+        show();
+        return;
+    }
+    if (g_ui.hitStrip(x, y)) {
+        g_stripTouch = true;
+        g_stripDragged = false;
+        g_stripStartX = x;
+        g_stripPreset = g_ui.hitPreset(x, y);
+        if (g_stripPreset >= 0) show(g_stripPreset);
         return;
     }
 
@@ -476,6 +546,7 @@ void loop() {
             handleTap(t.x, t.y);
         }
     }
+    serviceStrip(t);
     if (g_headerPressed) {
         if (!t.isPressed()) g_headerPressed = false;
         else if (now - g_headerPressStart > kLongPressMs) {
@@ -492,6 +563,8 @@ void loop() {
     // Progression : une image par seconde pendant la lecture (écran allumé)
     const auto& p = g_state.player;
     if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) show();
+    // Chargement : anneau qui tourne autour du bouton lecture (~20 images/s)
+    if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
     if (!g_ambient && g_brightness == kBrightOn && idle > kAmbientMs && p.playing && g_state.online)

@@ -67,14 +67,6 @@ static void save(const std::string& dir, const char* name) {
     printf("%s\n", path.c_str());
 }
 
-static Settings settings(int columns, const char* presets) {
-    Settings s;
-    s.columns = columns;
-    std::string err;
-    wr::parsePresets(presets, s.presets, err);
-    return s;
-}
-
 static bool loadAny(const std::string& base, ArtImage& out) {
     for (const char* ext : {".jpg", ".png"})
         if (loadFile((base + ext).c_str(), out)) return true;
@@ -122,16 +114,16 @@ int main(int argc, char** argv) {
     const char* names[] = {"FIP", "Radio Swiss Jazz", "France Inter", "Couleur 3", "Playlist du dimanche", "Nova"};
     for (int i = 0; i < 6; ++i) six.push_back(wr::Preset{i + 1, names[i], "x"});
     Settings s;
-    s.columns = 3;
     Ui ui;
     ui.begin(s);
     ui.setPresets(six);
     for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);
     ui.setArt(&art);
+    ui.setActivePreset(1);
     ui.render(st);
     save(out, "1-lecture.ppm");
 
-    ui.render(st, 1);
+    ui.render(st, 3);
     save(out, "2-appui-preset.ppm");
 
     // Vue ambiance (après 30 s sans appui), avec le visualiseur
@@ -148,37 +140,75 @@ int main(int argc, char** argv) {
     ui.renderAmbient(st);
     save(out, "3-ambiance.ppm");
 
-    // Radio : flux sans durée, son coupé, sans pochette, message
-    st.player.mode = 10;
-    st.player.durationMs = 0;
-    st.player.muted = true;
-    st.player.title = "Le Temps de l'amour";
-    st.player.artist = "Françoise Hardy";
-    st.player.album = "";
-    st.meta = wr::TrackMeta();
-    st.message = "Certificat du WiiM enregistré";
-    st.battery = -1;
+    // Radio en chargement, sans pochette, son coupé, notification
+    UiState radio = st;
+    radio.player.mode = 10;
+    radio.player.loading = true;
+    radio.player.durationMs = 0;
+    radio.player.muted = true;
+    radio.player.title = "Le Temps de l'amour";
+    radio.player.artist = "Françoise Hardy";
+    radio.player.album = "";
+    radio.meta = wr::TrackMeta();
+    radio.message = "Certificat du WiiM enregistré";
+    radio.battery = -1;
     ui.setArt(nullptr);
-    ui.render(st);
-    save(out, "4-radio-sans-pochette.ppm");
+    ui.setActivePreset(0);
+    ui.render(radio);
+    save(out, "4-radio-chargement.ppm");
 
-    // 12 presets saisis, sans images : bandeau compact
-    st.message = "";
-    st.player.muted = false;
+    // 12 presets saisis à la main (sans images : monogrammes), page 2
     Ui ui12;
     std::string err;
     Settings s12;
-    s12.columns = 3;
     wr::parsePresets("1=FIP\n2=FIP Jazz\n3=FIP Groove\n4=Radio Swiss Jazz\n5=Radio Swiss Classic\n"
                      "6=France Inter\n7=France Culture\n8=Couleur 3\n9=Nova\n10=TSF Jazz\n"
-                     "11=Playlist du dimanche\n12=Découvertes", s12.presets, err);
+                     "11=Playlist du dimanche\n12=Découvertes",
+                     s12.presets, err);
     ui12.begin(s12);
     ui12.setArt(&art);
-    ui12.render(st);
-    save(out, "5-douze-presets.ppm");
+    ui12.setPage(1);
+    UiState paused = st;
+    paused.player.playing = false;
+    ui12.render(paused);
+    save(out, "5-douze-presets-page2.ppm");
+
+    // Rien en lecture
+    UiState idle;
+    idle.online = true;
+    idle.battery = 60;
+    ui12.setArt(nullptr);
+    ui12.setPage(0);
+    ui12.render(idle);
+    save(out, "6-rien-en-lecture.ppm");
+
+    // Hors ligne
+    UiState off = st;
+    off.online = false;
+    off.message = "WiiM injoignable : vérifie qu'il est allumé et son IP";
+    ui.setArt(&art);
+    ui.render(off);
+    save(out, "7-hors-ligne.ppm");
+
+    // Portrait (rotation 0) : même interface, pochette en haut, presets sur deux rangées
+    {
+        D.deleteSprite();
+        D.createSprite(720, 1280);
+        Ui& up = *new Ui();  // jamais détruite (voir la sortie par _exit)
+        Settings sp;
+        up.begin(sp);
+        up.setPresets(six);
+        for (int i = 0; i < 6; ++i) up.setPresetArt(i, &thumbs[i]);
+        up.setArt(&art);
+        up.setActivePreset(1);
+        up.render(st);
+        save(out, "9-portrait.ppm");
+        D.deleteSprite();
+        D.createSprite(1280, 720);
+    }
 
     ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Première configuration.");
-    save(out, "6-configuration.ppm");
+    save(out, "8-configuration.ppm");
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée
     // (sans conséquence sur l'appareil, où l'interface n'est jamais détruite)
     fflush(stdout);

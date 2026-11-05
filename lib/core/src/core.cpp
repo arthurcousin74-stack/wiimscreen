@@ -180,6 +180,7 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     if (!jsonString(json, "status", v)) return st;
     st.ok = true;
     st.playing = (v == "play" || v == "loading");
+    st.loading = (v == "loading");
     if (jsonString(json, "vol", v)) st.volume = std::max(0, std::min(100, std::atoi(v.c_str())));
     if (jsonString(json, "Title", v)) st.title = decodeHexText(v);
     if (jsonString(json, "Artist", v)) st.artist = decodeHexText(v);
@@ -458,38 +459,83 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
     return lines;
 }
 
-Layout computeLayout(int width, int height, int columns, int presetCount) {
+uint32_t hslToRgbPublic(float h, float s, float l);
+
+Layout computeLayout(int width, int height, int presetCount) {
     Layout L;
     const int ref = std::min(width, height);  // 720 sur le Tab5 (référence de mise en page : 540)
     auto sc = [ref](int v) { return v * ref / 540; };
-    const int m = sc(16), gap = sc(12);
-    const int transportH = std::max(sc(90), height / 6);
-    const int minCellH = sc(64);
-    columns = std::max(1, columns);
-    int rows = std::max(1, (presetCount + columns - 1) / columns);
+    const bool landscape = width >= height;
+    const int m = sc(18), gap = sc(12);
 
-    // Bandeau : tout ce qui reste une fois les presets servis, entre 112 et 225 (x échelle)
-    int avail = height - 2 * m - transportH - 2 * gap;
-    int headerH = avail - rows * minCellH - (rows - 1) * gap;
-    headerH = std::max(sc(112), std::min(std::min(sc(225), width / 3), headerH));
-    L.header = Rect{m, m, width - 2 * m, headerH};
-    L.art = Rect{m, m, headerH, headerH};
-    const int artGap = sc(20);
-    L.info = Rect{m + headerH + artGap, m, width - 2 * m - headerH - artGap, headerH};
-
-    int gridTop = m + headerH + gap;
-    int gridBottom = height - m - transportH - gap;
-    int cellW = (width - 2 * m - (columns - 1) * gap) / columns;
-    int cellH = (gridBottom - gridTop - (rows - 1) * gap) / rows;
-    for (int i = 0; i < presetCount; ++i) {
-        int r = i / columns, c = i % columns;
-        L.presets.push_back(Rect{m + c * (cellW + gap), gridTop + r * (cellH + gap), cellW, cellH});
+    // --- Bande des presets : tuiles (image + nom), une ou deux rangées par page
+    const int tileH = sc(136), dotsH = sc(16);
+    const int rows = landscape ? 1 : 2;
+    const int minTileW = sc(130);
+    const int cols = std::max(2, std::min(6, (width - 2 * m + gap) / (minTileW + gap)));
+    L.perPage = presetCount > 0 ? cols * rows : 0;
+    int stripH = 0;
+    if (presetCount > 0) {
+        stripH = rows * tileH + (rows - 1) * gap;
+        const int dotsY = height - m - dotsH;
+        L.dots = Rect{m, dotsY, width - 2 * m, dotsH};
+        L.strip = Rect{m, dotsY - stripH, width - 2 * m, stripH};
+        const int tileW = (width - 2 * m - (cols - 1) * gap) / cols;
+        for (int i = 0; i < std::min(presetCount, L.perPage); ++i) {
+            int r = i / cols, c = i % cols;
+            L.presets.push_back(Rect{m + c * (tileW + gap), L.strip.y + r * (tileH + gap), tileW, tileH});
+        }
     }
+    const int topY = m;
+    const int topBottom = presetCount > 0 ? L.strip.y - gap : height - m;
 
-    int tW = (width - 2 * m - (kTransportCount - 1) * gap) / kTransportCount;
-    for (int i = 0; i < kTransportCount; ++i)
-        L.transport[i] = Rect{m + i * (tW + gap), height - m - transportH, tW, transportH};
+    // --- Pile de droite (paysage) ou du bas (portrait) : hauteurs fixes
+    const int volH = sc(48), playD = sc(76), sideD = sc(60), progH = sc(30);
+    const int infoMinH = sc(150);
+    const int stackH = infoMinH + sc(6) + progH + sc(12) + playD + sc(12) + volH;
+
+    int colX, colW, colY;
+    if (landscape) {
+        int side = std::min(topBottom - topY, width * 42 / 100);
+        L.art = Rect{m, topY + (topBottom - topY - side) / 2, side, side};
+        colX = L.art.right() + sc(28);
+        colW = width - m - colX;
+        colY = topY;
+    } else {
+        int side = std::min(width - 2 * m, topBottom - topY - gap - stackH);
+        L.art = Rect{(width - side) / 2, topY, side, side};
+        colX = m;
+        colW = width - 2 * m;
+        colY = L.art.bottom() + gap;
+    }
+    // Du bas vers le haut : volume, commandes, progression ; le reste pour les textes
+    L.volume = Rect{colX, topBottom - volH, colW, volH};
+    const int playCy = L.volume.y - sc(12) - playD / 2;
+    const int cx = colX + colW / 2;
+    L.transport[kPlayPause] = Rect{cx - playD / 2, playCy - playD / 2, playD, playD};
+    L.transport[kPrev] = Rect{cx - playD / 2 - sc(30) - sideD, playCy - sideD / 2, sideD, sideD};
+    L.transport[kNext] = Rect{cx + playD / 2 + sc(30), playCy - sideD / 2, sideD, sideD};
+    L.progress = Rect{colX, L.transport[kPlayPause].y - sc(12) - progH, colW, progH};
+    L.info = Rect{colX, colY, colW, L.progress.y - sc(6) - colY};
+
+    // Pilule de volume : [ − ] 🔈 ━━━━━●──── 42 [ + ]
+    const int b = volH - sc(8);
+    L.transport[kVolDown] = Rect{L.volume.x + sc(4), L.volume.y + sc(4), b, b};
+    L.transport[kVolUp] = Rect{L.volume.right() - sc(4) - b, L.volume.y + sc(4), b, b};
+    L.mute = Rect{L.transport[kVolDown].right() + sc(6), L.volume.y, sc(40), volH};
+    const int valueW = sc(62);  // « Muet » doit tenir
+    L.volBar = Rect{L.mute.right() + sc(10), L.volume.y,
+                    L.transport[kVolUp].x - sc(10) - valueW - (L.mute.right() + sc(10)), volH};
+
     return L;
+}
+
+uint32_t nameColor(const std::string& name) {
+    uint32_t h = 2166136261u;  // FNV-1a
+    for (unsigned char c : name) h = (h ^ c) * 16777619u;
+    // Teintes saturées mais sombres : texte blanc lisible
+    float hue = (h % 360) / 360.0f;
+    return hslToRgbPublic(hue, 0.50f, 0.40f);
 }
 
 namespace {
@@ -533,6 +579,8 @@ uint32_t hslToRgb(float h, float s, float l) {
 }
 
 }  // namespace
+
+uint32_t hslToRgbPublic(float h, float s, float l) { return hslToRgb(h, s, l); }
 
 uint32_t accentColor(const uint8_t* rgb, size_t n, uint32_t fallback) {
     double sr = 0, sg = 0, sb = 0, sw = 0;

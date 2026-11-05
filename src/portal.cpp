@@ -64,14 +64,12 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
                                 "numéro=nom (12 boutons max), par exemple <code>1=Radio Swiss Jazz</code>."
                                 "</small></label>");
 
-    h += F("<div class=row><div><label>Colonnes<select name=columns>");
-    for (int c = 1; c <= 4; ++c) h += option(String(c).c_str(), String(c).c_str(), s.columns == c);
-    h += F("</select></label></div><div><label>Orientation<select name=rotation>");
+    h += F("<label>Orientation<select name=rotation>");
     h += option("1", "Paysage", s.rotation == 1);
     h += option("3", "Paysage inversé", s.rotation == 3);
     h += option("0", "Portrait", s.rotation == 0);
     h += option("2", "Portrait inversé", s.rotation == 2);
-    h += F("</select></label></div></div>");
+    h += F("</select></label>");
 
     h += F("<div class=row><div><label>Pas du volume<input name=volstep type=number min=1 max=20 value=");
     h += String(s.volStep) + F("></label></div><div><label>Connexion<select name=scheme>");
@@ -155,7 +153,6 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.host.trim();
         next.presetsText = server.arg("presets");
         next.presetsText.replace("\r", "");
-        next.columns = constrain(server.arg("columns").toInt(), 1, 4);
         next.rotation = constrain(server.arg("rotation").toInt(), 0, 3);
         next.volStep = constrain(server.arg("volstep").toInt(), 1, 20);
         next.beep = constrain(server.arg("beep").toInt(), 0, 3);

@@ -27,6 +27,7 @@ std::string decodeHexText(const std::string& s);
 struct PlayerStatus {
     bool ok = false;
     bool playing = false;
+    bool loading = false;  // "loading" : le WiiM prépare la lecture (après un preset)
     int volume = 0;
     bool muted = false;
     int mode = 0;            // source : 1 AirPlay, 2 DLNA, 31 Spotify, 41 Bluetooth…
@@ -37,7 +38,8 @@ struct PlayerStatus {
     std::string artist;
     std::string album;
     bool operator==(const PlayerStatus& o) const {
-        return ok == o.ok && playing == o.playing && volume == o.volume && muted == o.muted &&
+        return ok == o.ok && playing == o.playing && loading == o.loading && volume == o.volume &&
+               muted == o.muted &&
                mode == o.mode && positionMs == o.positionMs && durationMs == o.durationMs &&
                title == o.title && artist == o.artist && album == o.album;
     }
@@ -110,21 +112,40 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
 struct Rect {
     int x = 0, y = 0, w = 0, h = 0;
     bool contains(int px, int py) const { return px >= x && px < x + w && py >= y && py < y + h; }
+    int right() const { return x + w; }
+    int bottom() const { return y + h; }
+    bool intersects(const Rect& o) const {
+        return w > 0 && h > 0 && o.w > 0 && o.h > 0 && x < o.right() && o.x < right() && y < o.bottom() &&
+               o.y < bottom();
+    }
 };
 
 enum Transport { kVolDown = 0, kPrev, kPlayPause, kNext, kVolUp, kTransportCount };
 
+// Mise en page de la vue commandes.
+// Paysage : grande pochette à gauche ; à droite, de haut en bas, les textes, la
+// progression, les commandes de lecture et le volume ; les presets en tuiles
+// (pochette + nom) sur une bande en bas, par pages.
+// Portrait : la même pile, pochette en haut, presets sur deux rangées.
 struct Layout {
-    Rect header;  // bandeau « en cours de lecture » (pochette + infos), appui long = configuration
-    Rect art;     // pochette, carrée, à gauche du bandeau
-    Rect info;    // titre, artiste, volume…
-    std::vector<Rect> presets;
-    Rect transport[kTransportCount];
+    Rect art;       // pochette, carrée (appui long sur elle ou les textes : configuration)
+    Rect info;      // puces (source, qualité), titre, artiste, album
+    Rect progress;  // temps écoulé, barre, durée
+    Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
+    Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
+    Rect mute;      // icône du haut-parleur (coupe le son)
+    Rect volBar;    // curseur de volume
+    Rect strip;     // bande des presets (glisser pour changer de page)
+    std::vector<Rect> presets;  // emplacements d'une page
+    int perPage = 0;
+    Rect dots;      // indicateur de pages
 };
 
-// Le bandeau grandit tant que les boutons de presets gardent une hauteur confortable.
 // Les dimensions suivent la taille de l'écran (référence : 540 px sur le petit côté).
-Layout computeLayout(int width, int height, int columns, int presetCount);
+Layout computeLayout(int width, int height, int presetCount);
+
+// Couleur stable tirée d'un nom (fond des presets sans image), lisible avec du texte blanc.
+uint32_t nameColor(const std::string& name);
 
 // Couleur d'accent tirée d'une pochette (pixels RGB888 à la suite) : moyenne des
 // couleurs vives, ramenée à une luminosité lisible sur fond sombre.

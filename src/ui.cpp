@@ -1,8 +1,10 @@
 #include "ui.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 
+#include "fonts/font_ui_24.h"
 #include "fonts/font_ui_28.h"
 #include "fonts/font_ui_40.h"
 #include "fonts/font_ui_56.h"
@@ -18,6 +20,7 @@ static constexpr uint32_t kText = 0xFFFFFFu;
 static constexpr uint32_t kText2 = 0xA6A9B2u;   // texte secondaire
 static constexpr uint32_t kAccent = 0xE8A33Du;  // accent par défaut (ambre)
 
+static const uint8_t* const kTiny = font_ui_24;  // noms de presets sur deux lignes
 static const uint8_t* const kSmall = font_ui_28;
 static const uint8_t* const kMid = font_ui_40;
 static const uint8_t* const kBig = font_ui_56;
@@ -39,7 +42,6 @@ static bool endsWithEllipsis(const std::vector<std::string>& lines) {
 void Ui::begin(const Settings& s) {
     D.setRotation(s.rotation);
     ref_ = std::min(D.width(), D.height());
-    columns_ = s.columns;
     accent_ = kAccent;
     for (M5Canvas* c : {&canvas_, &bg_}) {
         c->setPsram(true);
@@ -54,7 +56,7 @@ void Ui::begin(const Settings& s) {
 }
 
 void Ui::relayout() {
-    layout_ = wr::computeLayout(D.width(), D.height(), columns_, (int)presets_.size());
+    layout_ = wr::computeLayout(D.width(), D.height(), (int)presets_.size());
     if (art_.width() != layout_.art.w || art_.height() != layout_.art.h) {
         art_.deleteSprite();
         art_.createSprite(layout_.art.w, layout_.art.h);
@@ -67,8 +69,17 @@ void Ui::setPresets(const std::vector<wr::Preset>& presets) {
     presetArtSrc_.assign(presets_.size(), nullptr);
     thumbs_.clear();
     thumbs_.resize(presets_.size());
+    page_ = 0;
+    active_ = -1;
     relayout();
 }
+
+int Ui::pageCount() const {
+    if (layout_.perPage <= 0) return 0;
+    return ((int)presets_.size() + layout_.perPage - 1) / layout_.perPage;
+}
+
+void Ui::setPage(int p) { page_ = std::max(0, std::min(pageCount() - 1, p)); }
 
 void Ui::present() {
     D.startWrite();
@@ -185,14 +196,20 @@ void Ui::setArt(const ArtImage* img) {
     accent_ = wr::accentColor(px.data(), px.size() / 3, kAccent);
 }
 
+// Côté de l'image dans une tuile de preset (sous l'image : le nom)
+int Ui::thumbSide() const {
+    if (layout_.presets.empty()) return 0;
+    const wr::Rect& r = layout_.presets[0];
+    return std::min(r.w - 2 * sc(10), r.h - sc(10) - sc(46));  // dessous : nom sur 1 ou 2 lignes
+}
+
 void Ui::setPresetArt(int i, const ArtImage* img) {
     if (i < 0 || i >= (int)presets_.size()) return;
     presetArtSrc_[i] = img;
     thumbs_[i].reset();
     if (!img || !img->ok()) return;
-    const wr::Rect& r = layout_.presets[i];
-    const int side = r.h - 2 * sc(9);
-    if (side < sc(32)) return;  // bouton trop petit pour une image lisible
+    const int side = thumbSide();
+    if (side < sc(32)) return;
     auto t = std::unique_ptr<M5Canvas>(new M5Canvas());
     t->setPsram(true);
     t->setColorDepth(16);
@@ -202,255 +219,330 @@ void Ui::setPresetArt(int i, const ArtImage* img) {
 
 // --------------------------------------------------------------------- éléments
 
-// Bouton de preset : carte sombre ; avec image à gauche et nom aligné à gauche,
-// sinon trait d'accent et nom centré. Appuyé : rempli de la couleur d'accent.
-void Ui::button(int index, bool pressed) {
+static constexpr uint32_t kRed = 0xE5484Du;
+
+// Puce : petite pilule (point coloré facultatif + texte)
+void Ui::chip(int& x, int y, const std::string& text, uint32_t dot, uint32_t textColor) {
     auto& C = canvas_;
-    const wr::Rect& r = layout_.presets[index];
-    const std::string& label = presets_[index].label;
-    const int R = sc(14);
-    const uint32_t card = pressed ? accent_ : kCard;
-    C.fillRoundRect(r.x, r.y, r.w, r.h, R, card);
-
-    M5Canvas* thumb = thumbs_[index].get();
-    int textX = r.x + sc(28), textW = r.w - sc(44);
-    if (thumb) {
-        const int pad = sc(9);
-        roundedPush(*thumb, r.x + pad, r.y + pad, sc(8), false, card);
-        textX = r.x + pad + thumb->width() + sc(14);
-        textW = r.x + r.w - sc(14) - textX;
-    } else if (!pressed) {
-        int bh = std::max(sc(20), r.h * 2 / 5);
-        C.fillRoundRect(r.x + sc(10), r.y + (r.h - bh) / 2, sc(5), bh, sc(3), accent_);
-    }
-
-    // Grande police si le nom tient en entier, sinon plus petite sur deux lignes
-    C.setTextColor(pressed ? kBg : kText);
-    C.setTextDatum(thumb ? textdatum_t::middle_left : textdatum_t::middle_center);
-    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
-    std::vector<std::string> lines;
-    int lineH = 0;
-    for (const uint8_t* font : {kMid, kSmall}) {
-        C.loadFont(font);
-        lineH = C.fontHeight() + sc(4);
-        int maxLines = std::max(1, std::min(2, (r.h - sc(12)) / lineH));
-        lines = wr::wrapText(label, textW, maxLines, measure);
-        if (!endsWithEllipsis(lines)) break;
-    }
-    int y = r.y + r.h / 2 - (int)(lines.size() - 1) * lineH / 2;
-    const int x = thumb ? textX : textX + textW / 2;
-    for (auto& l : lines) {
-        C.drawString(l.c_str(), x, y);
-        y += lineH;
-    }
-}
-
-void Ui::transportIcon(int which, const wr::Rect& r, bool pressed, bool playing) {
-    auto& C = canvas_;
-    const int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-    uint32_t fg = kText;
-    if (which == wr::kPlayPause) {
-        // Bouton principal : disque de la couleur d'accent
-        int d = std::min(r.w, r.h);
-        C.fillCircle(cx, cy, d / 2, pressed ? kText : accent_);
-        fg = kBg;
-    } else {
-        C.fillRoundRect(r.x, r.y, r.w, r.h, r.h / 2, pressed ? kCardHi : kCard);
-    }
-
-    const int s = std::min(r.w, r.h) / 5;  // demi-taille de l'icône
-    const int t = std::max(4, s / 4);      // épaisseur des traits
-    switch (which) {
-        case wr::kVolDown:
-            C.fillRoundRect(cx - s, cy - t / 2, 2 * s, t, t / 2, fg);
-            break;
-        case wr::kVolUp:
-            C.fillRoundRect(cx - s, cy - t / 2, 2 * s, t, t / 2, fg);
-            C.fillRoundRect(cx - t / 2, cy - s, t, 2 * s, t / 2, fg);
-            break;
-        case wr::kPrev:
-            C.fillRect(cx - s - t, cy - s, t, 2 * s, fg);
-            C.fillTriangle(cx + s / 4, cy - s, cx + s / 4, cy + s, cx - s, cy, fg);
-            C.fillTriangle(cx + s + s / 4, cy - s, cx + s + s / 4, cy + s, cx, cy, fg);
-            break;
-        case wr::kNext:
-            C.fillRect(cx + s, cy - s, t, 2 * s, fg);
-            C.fillTriangle(cx - s / 4, cy - s, cx - s / 4, cy + s, cx + s, cy, fg);
-            C.fillTriangle(cx - s - s / 4, cy - s, cx - s - s / 4, cy + s, cx, cy, fg);
-            break;
-        case wr::kPlayPause:
-            if (playing) {  // pause
-                C.fillRoundRect(cx - s * 2 / 3, cy - s, s / 2, 2 * s, 3, fg);
-                C.fillRoundRect(cx + s / 6, cy - s, s / 2, 2 * s, 3, fg);
-            } else {        // lecture, légèrement décalée pour paraître centrée
-                C.fillTriangle(cx - s / 2, cy - s, cx - s / 2, cy + s, cx + s, cy, fg);
-            }
-            break;
-    }
-}
-
-// Progression : « 1:23 ━━━━━━━━──── 4:56 », ou « ● EN DIRECT » pour un flux sans durée
-void Ui::progressRow(const UiState& st, int x, int w, int cy, wr::Rect* hit) {
-    auto& C = canvas_;
-    if (hit) *hit = wr::Rect{};
-    if (!st.online || (!st.player.playing && st.player.title.empty())) return;
     C.loadFont(kSmall);
-    if (st.player.durationMs == 0) {
-        if (!st.player.playing) return;
-        C.fillCircle(x + sc(6), cy, sc(6), accent_);
-        C.setTextDatum(textdatum_t::middle_left);
-        C.setTextColor(kText2);
-        C.drawString("EN DIRECT", x + sc(20), cy);
-        return;
-    }
-    const uint32_t pos = std::min(st.player.positionMs, st.player.durationMs);
-    const int gutter = sc(64);
-    C.setTextColor(kText2);
+    const int h = sc(28), padX = sc(12), dotD = dot ? sc(10) : 0, dotGap = dot ? sc(8) : 0;
+    const int w = padX * 2 + dotD + dotGap + (int)C.textWidth(text.c_str());
+    if (x + w > layout_.info.right()) return;
+    C.fillRoundRect(x, y, w, h, h / 2, kCard);
+    if (dot) C.fillCircle(x + padX + dotD / 2, y + h / 2, dotD / 2, dot);
     C.setTextDatum(textdatum_t::middle_left);
-    C.drawString(wr::formatTime(pos).c_str(), x, cy);
-    C.setTextDatum(textdatum_t::middle_right);
-    C.drawString(wr::formatTime(st.player.durationMs).c_str(), x + w, cy);
-    const int bx = x + gutter, bw = w - 2 * gutter, bh = sc(6);
-    C.fillRoundRect(bx, cy - bh / 2, bw, bh, bh / 2, kTrack);
-    int fill = (int)((uint64_t)bw * pos / st.player.durationMs);
-    if (fill > 0) C.fillRoundRect(bx, cy - bh / 2, std::max(bh, fill), bh, bh / 2, accent_);
-    if (hit) *hit = wr::Rect{bx, cy - sc(26), bw, sc(48)};
+    C.setTextColor(textColor);
+    C.drawString(text.c_str(), x + padX + dotD + dotGap, y + h / 2 + 1);
+    x += w + sc(8);
 }
 
-// Infos de lecture : état, titre, artiste, album (ou message), progression, volume
+// Textes : puces (état, source, qualité), titre, artiste (couleur d'accent), album
 void Ui::info(const UiState& st) {
     auto& C = canvas_;
     const wr::Rect& r = layout_.info;
-    const bool roomy = r.h >= sc(160);  // assez de place pour l'album et les barres
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     auto fit = [&](const std::string& s, int width) {
         auto l = wr::wrapText(s, width, 1, measure);
         return l.empty() ? std::string() : l[0];
     };
-    volHit_ = muteHit_ = progHit_ = wr::Rect{};
-    progDuration_ = st.player.durationMs;
 
-    // --- Ligne d'état : ▶ EN LECTURE · Spotify · 16 bits · 44,1 kHz        85 % [■■■ ]
-    C.loadFont(kSmall);
-    C.setTextDatum(textdatum_t::top_right);
-    const int lineH = C.fontHeight();
-    int right = r.x + r.w;
+    // --- Puces ; batterie à droite
+    int right = r.right();
     if (st.battery >= 0) {
-        const int bw = sc(36), bh = sc(18), by = r.y + (lineH - bh) / 2;
+        C.loadFont(kSmall);
+        const int bw = sc(34), bh = sc(17), by = r.y + (sc(28) - bh) / 2;
         int bx = right - bw - sc(4);
         C.drawRoundRect(bx, by, bw, bh, sc(4), kText2);
         C.drawRoundRect(bx + 1, by + 1, bw - 2, bh - 2, sc(4) - 1, kText2);
         C.fillRect(bx + bw, by + bh / 2 - sc(4), sc(4), sc(8), kText2);
         int inner = (bw - sc(8)) * std::max(0, std::min(100, st.battery)) / 100;
-        if (inner > 0) C.fillRect(bx + sc(4), by + sc(4), inner, bh - sc(8), st.battery <= 15 ? 0xE5484Du : kText);
-        right = bx - sc(10);
+        if (inner > 0) C.fillRect(bx + sc(4), by + sc(4), inner, bh - sc(8), st.battery <= 15 ? kRed : kText);
+        C.setTextDatum(textdatum_t::middle_right);
         C.setTextColor(kText2);
-        String b = String(st.battery) + " %";
-        C.drawString(b.c_str(), right, r.y);
-        right -= C.textWidth(b.c_str()) + sc(16);
+        C.drawString((String(st.battery) + " %").c_str(), bx - sc(10), r.y + sc(14) + 1);
     }
-    if (!roomy && st.online) {  // bandeau compact : volume en texte
-        C.setTextColor(kText);
-        String v = st.player.muted ? String("Muet") : "Vol " + String(st.player.volume);
-        C.drawString(v.c_str(), right, r.y);
-        right -= C.textWidth(v.c_str()) + sc(16);
-    }
-
     int x = r.x;
-    const int iconH = sc(16), iconY = r.y + (lineH - iconH) / 2;
-    std::string state;
+    const int chipY = r.y;
     if (!st.online) {
-        state = "HORS LIGNE";
-    } else if (st.player.playing) {
-        state = "EN LECTURE";
-        C.fillTriangle(x, iconY, x, iconY + iconH, x + sc(13), iconY + iconH / 2, accent_);
-        x += sc(24);
-    } else if (!st.player.title.empty()) {
-        state = "EN PAUSE";
-        C.fillRect(x, iconY, sc(5), iconH, accent_);
-        C.fillRect(x + sc(9), iconY, sc(5), iconH, accent_);
-        x += sc(24);
+        chip(x, chipY, "Hors ligne", kRed, kText);
     } else {
-        state = "À L'ARRÊT";
-    }
-    if (st.online) {
-        const std::string dot = " \xC2\xB7 ";
+        if (st.player.loading) chip(x, chipY, "Chargement\xE2\x80\xA6", accent_, kText);
+        else if (st.player.playing && st.player.durationMs == 0 && !st.player.title.empty())
+            chip(x, chipY, "EN DIRECT", accent_, kText);
         std::string src = wr::sourceName(st.player.mode);
+        if (!src.empty()) chip(x, chipY, src, 0, kText2);
         std::string q = wr::formatQuality(st.meta.sampleRate, st.meta.bitDepth);
-        if (!src.empty()) state += dot + src;
-        if (!q.empty()) state += dot + q;
+        if (!q.empty()) chip(x, chipY, q, 0, kText2);
     }
+
+    // --- Titre (deux lignes si la place le permet), artiste, album
+    int y = chipY + sc(28) + sc(8);
+    const bool empty = st.player.title.empty();
+    std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
     C.setTextDatum(textdatum_t::top_left);
-    C.setTextColor(kText2);
-    C.drawString(fit(state, right - x).c_str(), x, r.y);
+    C.loadFont(kBig);
+    const int titleH = C.fontHeight() + sc(2);
+    C.loadFont(kMid);
+    const int artistH = C.fontHeight() + sc(4);
+    C.loadFont(kSmall);
+    const int albumH = C.fontHeight();
+    const int needOne = titleH + artistH + albumH;
+    const int titleLines = (r.bottom() - y >= needOne + titleH) ? 2 : 1;
 
-    // --- Barres (bas du bandeau) : progression puis volume
-    const int volCy = r.y + r.h - sc(12);
-    const int progCy = volCy - sc(34);
-    const int textBottom = roomy ? progCy - sc(16) : r.y + r.h;
-
-    // --- Titre, artiste, album (ou message)
-    int y = r.y + lineH + sc(8);
-    C.loadFont(roomy ? kBig : kMid);
-    std::string title = st.player.title.empty() ? (st.online ? "Rien en lecture" : "\xE2\x80\x94")
-                                                : st.player.title;
-    C.setTextColor(st.player.title.empty() ? kText2 : kText);
-    C.drawString(fit(title, r.w).c_str(), r.x, y);
-    y += C.fontHeight() + sc(2);
-
-    C.loadFont(roomy ? kMid : kSmall);
-    const int artistH = C.fontHeight() + sc(2);
-    if (!st.player.artist.empty() && y + artistH <= textBottom + sc(4)) {
-        C.setTextColor(kText);
-        C.drawString(fit(st.player.artist, r.w).c_str(), r.x, y);
+    C.loadFont(kBig);
+    if (empty) {
+        C.setTextColor(kText2);
+        C.drawString(st.online ? "Rien en lecture" : "WiiM injoignable", r.x, y);
+        y += titleH;
+        C.loadFont(kSmall);
+        C.drawString(fit(presets_.empty() ? "Lance la musique depuis l'app WiiM Home."
+                                          : "Choisis un preset ci-dessous.",
+                         r.w)
+                         .c_str(),
+                     r.x, y + sc(6));
+        return;
+    }
+    C.setTextColor(kText);
+    for (auto& l : wr::wrapText(st.player.title, r.w, titleLines, measure)) {
+        C.drawString(l.c_str(), r.x, y);
+        y += titleH;
+    }
+    if (!st.player.artist.empty() && y + artistH <= r.bottom()) {
+        C.loadFont(kMid);
+        C.setTextColor(accent_);
+        C.drawString(fit(st.player.artist, r.w).c_str(), r.x, y + sc(2));
         y += artistH;
     }
-    C.loadFont(kSmall);
-    const int lh = C.fontHeight() + sc(2);
-    std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
-    if (y + lh <= textBottom + sc(4)) {
-        if (st.message.length()) {
-            C.setTextColor(accent_);  // message prioritaire, à la place de l'album
-            C.drawString(fit(st.message.c_str(), r.w).c_str(), r.x, y);
-        } else if (!album.empty()) {
-            C.setTextColor(kText2);
-            C.drawString(fit(album, r.w).c_str(), r.x, y);
-        }
+    if (!album.empty() && y + albumH <= r.bottom()) {
+        C.loadFont(kSmall);
+        C.setTextColor(kText2);
+        C.drawString(fit(album, r.w).c_str(), r.x, y + sc(4));
     }
-    if (!roomy) return;
+}
 
-    progressRow(st, r.x, r.w, progCy, &progHit_);
+// Progression : « 1:23 ━━━━━━●──── 4:56 », ou « ● EN DIRECT » pour un flux sans durée
+void Ui::progressRow(const UiState& st, const wr::Rect& r, wr::Rect* hit) {
+    auto& C = canvas_;
+    if (hit) *hit = wr::Rect{};
+    if (!st.online || st.player.title.empty()) return;
+    const int cy = r.y + r.h / 2;
+    if (st.player.durationMs == 0) {
+        // Flux sans durée : « EN DIRECT » est dans les puces ; ici seulement en vue ambiance
+        if (!st.player.playing || hit) return;
+        int x = r.x;
+        chip(x, cy - sc(14), "EN DIRECT", accent_, kText2);
+        return;
+    }
+    C.loadFont(kSmall);
+    const uint32_t pos = std::min(st.player.positionMs, st.player.durationMs);
+    const int gutter = sc(68);
+    C.setTextColor(kText2);
+    C.setTextDatum(textdatum_t::middle_left);
+    C.drawString(wr::formatTime(pos).c_str(), r.x, cy);
+    C.setTextDatum(textdatum_t::middle_right);
+    C.drawString(wr::formatTime(st.player.durationMs).c_str(), r.right(), cy);
+    const int bx = r.x + gutter, bw = r.w - 2 * gutter, bh = sc(6);
+    C.fillRoundRect(bx, cy - bh / 2, bw, bh, bh / 2, kTrack);
+    int fill = (int)((uint64_t)bw * pos / st.player.durationMs);
+    if (fill > 0) C.fillRoundRect(bx, cy - bh / 2, std::max(bh, fill), bh, bh / 2, accent_);
+    C.fillCircle(bx + fill, cy, sc(7), kText);
+    if (hit) *hit = wr::Rect{bx - sc(10), r.y - sc(10), bw + sc(20), r.h + sc(20)};
+}
 
-    // Volume : 🔈 ━━━━━━●──── 42 (l'icône coupe/rétablit le son)
-    const int gutter = sc(64);
-    const uint32_t c = st.online ? kText2 : kTrack;
-    const int sx = r.x + sc(8);
-    C.fillRect(sx, volCy - sc(5), sc(7), sc(10), c);
-    C.fillTriangle(sx + sc(4), volCy, sx + sc(15), volCy - sc(11), sx + sc(15), volCy + sc(11), c);
+static void prevIcon(M5Canvas& C, int cx, int cy, int s, uint32_t c) {
+    const int t = std::max(3, s / 4);
+    C.fillRect(cx - s - t, cy - s, t, 2 * s, c);
+    C.fillTriangle(cx + s / 4, cy - s, cx + s / 4, cy + s, cx - s, cy, c);
+    C.fillTriangle(cx + s + s / 4, cy - s, cx + s + s / 4, cy + s, cx, cy, c);
+}
+
+static void nextIcon(M5Canvas& C, int cx, int cy, int s, uint32_t c) {
+    const int t = std::max(3, s / 4);
+    C.fillRect(cx + s, cy - s, t, 2 * s, c);
+    C.fillTriangle(cx - s / 4, cy - s, cx - s / 4, cy + s, cx + s, cy, c);
+    C.fillTriangle(cx - s - s / 4, cy - s, cx - s - s / 4, cy + s, cx, cy, c);
+}
+
+// Précédent / lecture-pause / suivant ; anneau tournant pendant le chargement
+void Ui::transport(const UiState& st, int pressed) {
+    auto& C = canvas_;
+    const uint32_t icon = st.online ? kText : 0x5A5D66u;
+    for (int which : {wr::kPrev, wr::kNext}) {
+        const wr::Rect& r = layout_.transport[which];
+        const int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+        C.fillCircle(cx, cy, r.w / 2, pressed == which ? kCardHi : kCard);
+        if (which == wr::kPrev) prevIcon(C, cx, cy, r.w / 6, icon);
+        else nextIcon(C, cx, cy, r.w / 6, icon);
+    }
+    const wr::Rect& r = layout_.transport[wr::kPlayPause];
+    const int cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = r.w / 2;
+    C.fillCircle(cx, cy, R + sc(7), mix(bgAt(cy), accent_, 0.25f));  // halo
+    C.fillCircle(cx, cy, R, pressed == wr::kPlayPause ? kText : (st.online ? accent_ : kCardHi));
+    if (st.player.loading) {
+        const int a = (int)((millis() / 4) % 360);
+        C.fillArc(cx, cy, R + sc(3), R + sc(7), a, a + 100, kText);
+    }
+    const int s = r.w / 5;
+    const uint32_t fg = kBg;
+    if (st.player.playing && !st.player.loading) {
+        C.fillRoundRect(cx - s * 2 / 3, cy - s, s / 2, 2 * s, 3, fg);
+        C.fillRoundRect(cx + s / 6, cy - s, s / 2, 2 * s, 3, fg);
+    } else {
+        C.fillTriangle(cx - s / 2, cy - s, cx - s / 2, cy + s, cx + s, cy, fg);
+    }
+}
+
+// Pilule de volume : [ − ] 🔈 ━━━━━●──── 42 [ + ]
+void Ui::volumePill(const UiState& st, int pressed) {
+    auto& C = canvas_;
+    const wr::Rect& v = layout_.volume;
+    C.fillRoundRect(v.x, v.y, v.w, v.h, v.h / 2, kCard);
+    const uint32_t ink = st.online ? kText : 0x5A5D66u;
+    for (int which : {wr::kVolDown, wr::kVolUp}) {
+        const wr::Rect& r = layout_.transport[which];
+        const int cx = r.x + r.w / 2, cy = r.y + r.h / 2, s = r.w / 5, t = std::max(3, s / 3);
+        C.fillCircle(cx, cy, r.w / 2, pressed == which ? accent_ : kCardHi);
+        C.fillRoundRect(cx - s, cy - t / 2, 2 * s, t, t / 2, ink);
+        if (which == wr::kVolUp) C.fillRoundRect(cx - t / 2, cy - s, t, 2 * s, t / 2, ink);
+    }
+    // Haut-parleur (barré si le son est coupé)
+    const wr::Rect& m = layout_.mute;
+    const int sx = m.x + sc(6), cy = m.y + m.h / 2;
+    const uint32_t c = st.online ? kText2 : 0x5A5D66u;
+    C.fillRect(sx, cy - sc(5), sc(7), sc(10), c);
+    C.fillTriangle(sx + sc(4), cy, sx + sc(15), cy - sc(11), sx + sc(15), cy + sc(11), c);
     if (st.player.muted) {
-        const int mx = sx + sc(22);
+        const int mx = sx + sc(20);
         for (int k = -1; k <= 1; ++k) {
-            C.drawLine(mx, volCy - sc(6) + k, mx + sc(12), volCy + sc(6) + k, c);
-            C.drawLine(mx, volCy + sc(6) + k, mx + sc(12), volCy - sc(6) + k, c);
+            C.drawLine(mx, cy - sc(6) + k, mx + sc(11), cy + sc(6) + k, c);
+            C.drawLine(mx, cy + sc(6) + k, mx + sc(11), cy - sc(6) + k, c);
         }
     } else {
-        C.fillArc(sx + sc(15), volCy, sc(7), sc(9), -50, 50, c);
-        C.fillArc(sx + sc(15), volCy, sc(13), sc(15), -50, 50, c);
+        C.fillArc(sx + sc(15), cy, sc(6), sc(8), -50, 50, c);
+        C.fillArc(sx + sc(15), cy, sc(12), sc(14), -50, 50, c);
     }
+    // Curseur
+    const wr::Rect& b = layout_.volBar;
+    const int bh = sc(6), bx = b.x + sc(8), bw = b.w - sc(16);
+    C.fillRoundRect(bx, cy - bh / 2, bw, bh, bh / 2, kTrack);
+    const int vol = std::max(0, std::min(100, st.player.volume));
+    const int fill = bw * vol / 100;
+    if (st.online && !st.player.muted && fill > 0) C.fillRoundRect(bx, cy - bh / 2, std::max(bh, fill), bh, bh / 2, kText);
+    if (st.online) C.fillCircle(bx + fill, cy, sc(9), st.player.muted ? kText2 : kText);
+    // Valeur
+    C.loadFont(kSmall);
     C.setTextDatum(textdatum_t::middle_right);
     C.setTextColor(st.online ? kText : kText2);
-    String v = !st.online ? String("\xE2\x80\x94") : st.player.muted ? String("Muet") : String(st.player.volume);
-    C.drawString(v.c_str(), r.x + r.w, volCy);
-    const int bx = r.x + gutter, bw = r.w - 2 * gutter, bh = sc(6);
-    C.fillRoundRect(bx, volCy - bh / 2, bw, bh, bh / 2, kTrack);
-    int fill = bw * std::max(0, std::min(100, st.player.volume)) / 100;
-    if (st.online) {
-        uint32_t fc = st.player.muted ? kTrack : kText;
-        if (fill > 0) C.fillRoundRect(bx, volCy - bh / 2, std::max(bh, fill), bh, bh / 2, fc);
-        C.fillCircle(bx + fill, volCy, sc(9), st.player.muted ? kText2 : kText);  // curseur
-        // Zones tactiles généreuses (un doigt couvre ~8 mm)
-        volHit_ = wr::Rect{bx - sc(12), progCy + sc(17), bw + sc(24), r.y + r.h + sc(10) - (progCy + sc(17))};
-        muteHit_ = wr::Rect{r.x, volHit_.y, gutter - sc(12), volHit_.h};
+    String t = !st.online ? String("\xE2\x80\x94") : st.player.muted ? String("Muet") : String(vol);
+    C.drawString(t.c_str(), layout_.transport[wr::kVolUp].x - sc(10), cy + 1);
+}
+
+// Tuile de preset : image (ou monogramme coloré) et nom ; le preset en cours a un
+// contour et une petite icône d'égaliseur de la couleur d'accent
+void Ui::tile(int slot, int index, bool pressed) {
+    auto& C = canvas_;
+    const wr::Rect& r = layout_.presets[slot];
+    const std::string& label = presets_[index].label;
+    const bool active = index == active_;
+    const uint32_t card = pressed ? accent_ : kCard;
+    const int R = sc(14);
+    C.fillRoundRect(r.x, r.y, r.w, r.h, R, card);
+    if (active && !pressed)
+        for (int k = 0; k < sc(3); ++k) C.drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, R - k, accent_);
+
+    const int side = thumbSide();
+    const int ax = r.x + (r.w - side) / 2, ay = r.y + sc(10);
+    if (M5Canvas* t = thumbs_[index].get()) {
+        roundedPush(*t, ax, ay, sc(10), false, card);
+    } else {
+        // Monogramme : initiales sur une couleur tirée du nom
+        C.fillRoundRect(ax, ay, side, side, sc(10), wr::nameColor(label));
+        // Initiales du premier et du dernier mot : « Radio Swiss Jazz » → RJ, « Couleur 3 » → C3
+        std::vector<char> firsts;
+        bool start = true;
+        for (unsigned char ch : label) {
+            if (ch == ' ') {
+                start = true;
+                continue;
+            }
+            if (start && ch < 0x80 && std::isalnum(ch)) firsts.push_back((char)std::toupper(ch));
+            start = false;
+        }
+        std::string ini;
+        if (!firsts.empty()) ini += firsts.front();
+        if (firsts.size() > 1) ini += firsts.back();
+        if (ini.empty()) ini = "\xE2\x99\xAA";
+        C.loadFont(kMid);
+        C.setTextDatum(textdatum_t::middle_center);
+        C.setTextColor(kText);
+        C.drawString(ini.c_str(), ax + side / 2, ay + side / 2 + 1);
+    }
+    if (active) {  // petite icône d'égaliseur dans le coin de l'image
+        const int d = sc(30), ex = ax + side - d - sc(4), ey = ay + sc(4);
+        C.fillRoundRect(ex, ey, d, d, sc(8), kBg);
+        const int bw = sc(4), gap = sc(3), base = ey + d - sc(7);
+        const int hs[3] = {sc(10), sc(16), sc(7)};
+        for (int k = 0; k < 3; ++k)
+            C.fillRect(ex + (d - 3 * bw - 2 * gap) / 2 + k * (bw + gap), base - hs[k], bw, hs[k], accent_);
+    }
+    // Nom : une ligne en police normale, sinon deux lignes plus petites
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    std::vector<std::string> lines;
+    C.loadFont(kSmall);
+    lines = wr::wrapText(label, r.w - sc(16), 1, measure);
+    if (endsWithEllipsis(lines)) {
+        C.loadFont(kTiny);
+        lines = wr::wrapText(label, r.w - sc(16), 2, measure);
+    }
+    const int lh = C.fontHeight() + sc(1);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(pressed ? kBg : kText);
+    int ly = ay + side + (r.bottom() - ay - side) / 2 - (int)(lines.size() - 1) * lh / 2;
+    for (auto& l : lines) {
+        C.drawString(l.c_str(), r.x + r.w / 2, ly);
+        ly += lh;
+    }
+}
+
+void Ui::pageDots() {
+    const int n = pageCount();
+    if (n < 2) return;
+    auto& C = canvas_;
+    const wr::Rect& d = layout_.dots;
+    const int dot = sc(8), activeW = sc(22), gap = sc(8);
+    const int total = (n - 1) * (dot + gap) + activeW;
+    int x = d.x + (d.w - total) / 2;
+    const int cy = d.y + d.h / 2;
+    for (int i = 0; i < n; ++i) {
+        const int w = i == page_ ? activeW : dot;
+        C.fillRoundRect(x, cy - dot / 2, w, dot, dot / 2, i == page_ ? accent_ : kTrack);
+        x += w + gap;
+    }
+}
+
+// Notification : carte posée en bas de la pochette (décorative), pour ne cacher ni
+// le titre ni les commandes
+void Ui::toast(const String& msg) {
+    if (!msg.length()) return;
+    auto& C = canvas_;
+    const wr::Rect& a = layout_.art;
+    C.loadFont(kSmall);
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    const int pad = sc(14), dotW = sc(26);
+    const int w = a.w - 2 * sc(12);
+    auto lines = wr::wrapText(msg.c_str(), w - 2 * pad - dotW, 3, measure);
+    const int lh = C.fontHeight() + sc(3);
+    const int h = (int)lines.size() * lh + 2 * pad;
+    const int x = a.x + sc(12), y = a.bottom() - sc(12) - h;
+    C.fillRoundRect(x, y, w, h, sc(14), mix(kBg, 0x000000u, 0.3f));
+    C.drawRoundRect(x, y, w, h, sc(14), kCardHi);
+    C.fillCircle(x + pad + sc(6), y + pad + lh / 2, sc(6), accent_);
+    C.setTextDatum(textdatum_t::top_left);
+    C.setTextColor(kText);
+    int ty = y + pad;
+    for (auto& l : lines) {
+        C.drawString(l.c_str(), x + pad + dotW, ty);
+        ty += lh;
     }
 }
 
@@ -458,12 +550,19 @@ void Ui::info(const UiState& st) {
 
 void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     ambientShown_ = false;
+    progDuration_ = st.player.durationMs;
     background();
     roundedPush(art_, layout_.art.x, layout_.art.y, sc(16), true, 0);
     info(st);
-    for (size_t i = 0; i < presets_.size(); ++i) button((int)i, (int)i == pressedPreset);
-    for (int i = 0; i < wr::kTransportCount; ++i)
-        transportIcon(i, layout_.transport[i], i == pressedTransport, st.player.playing);
+    progressRow(st, layout_.progress, &progHit_);
+    transport(st, pressedTransport);
+    volumePill(st, pressedTransport);
+    for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
+        int i = page_ * layout_.perPage + (int)slot;
+        if (i < (int)presets_.size()) tile((int)slot, i, i == pressedPreset);
+    }
+    pageDots();
+    toast(st.message);
     present();
 }
 
@@ -541,7 +640,7 @@ void Ui::renderAmbient(const UiState& st) {
         C.drawString(wr::wrapText(detail, tw, 1, measure)[0].c_str(), tx, y);
         y += smallH;
     }
-    progressRow(st, tx, tw, y + sc(44), nullptr);
+    progressRow(st, wr::Rect{tx, y + sc(28), tw, sc(30)}, nullptr);
     if (visEnabled_) drawBars();
     ambientShown_ = true;
     present();
@@ -588,33 +687,51 @@ void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& 
 // -------------------------------------------------------------------- zones
 
 int Ui::hitPreset(int x, int y) const {
-    for (size_t i = 0; i < layout_.presets.size(); ++i)
-        if (layout_.presets[i].contains(x, y)) return (int)i;
+    for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
+        int i = page_ * layout_.perPage + (int)slot;
+        if (i < (int)presets_.size() && layout_.presets[slot].contains(x, y)) return i;
+    }
     return -1;
 }
 
 int Ui::hitTransport(int x, int y) const {
-    for (int i = 0; i < wr::kTransportCount; ++i)
-        if (layout_.transport[i].contains(x, y)) return i;
+    // Cercles un peu agrandis : le doigt touche souvent à côté
+    const int pad = sc(10);
+    for (int i = 0; i < wr::kTransportCount; ++i) {
+        const wr::Rect& r = layout_.transport[i];
+        wr::Rect big{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad};
+        if (i == wr::kVolDown || i == wr::kVolUp) big = r;  // collés au curseur : zone exacte
+        if (big.contains(x, y)) return i;
+    }
     return -1;
 }
 
-bool Ui::hitHeader(int x, int y) const { return layout_.header.contains(x, y); }
+bool Ui::hitHeader(int x, int y) const { return layout_.art.contains(x, y) || layout_.info.contains(x, y); }
 
 bool Ui::hitVolume(int x, int y, int& volume) const {
-    if (!volHit_.contains(x, y)) return false;
-    const int bx = volHit_.x + sc(12), bw = volHit_.w - sc(24);
-    volume = std::max(0, std::min(100, (x - bx) * 100 / std::max(1, bw)));
+    const wr::Rect& b = layout_.volBar;
+    if (!b.contains(x, y)) return false;
+    volume = std::max(0, std::min(100, (x - b.x) * 100 / std::max(1, b.w)));
     return true;
 }
 
-bool Ui::hitMute(int x, int y) const { return muteHit_.contains(x, y); }
+bool Ui::hitMute(int x, int y) const { return layout_.mute.contains(x, y); }
 
 bool Ui::hitProgress(int x, int y, uint32_t& posMs) const {
     if (!progHit_.contains(x, y) || progDuration_ == 0) return false;
     int dx = std::max(0, std::min(progHit_.w, x - progHit_.x));
     posMs = (uint32_t)((uint64_t)progDuration_ * dx / std::max(1, progHit_.w));
     return true;
+}
+
+bool Ui::hitStrip(int x, int y) const { return layout_.strip.contains(x, y); }
+
+int Ui::hitDots(int x, int y) const {
+    if (pageCount() < 2) return 0;
+    const wr::Rect& d = layout_.dots;
+    wr::Rect zone{d.x, d.y - sc(6), d.w, d.h + sc(12)};
+    if (!zone.contains(x, y)) return 0;
+    return x < d.x + d.w / 2 ? -1 : 1;
 }
 
 // -------------------------------------------------------------- plein écran

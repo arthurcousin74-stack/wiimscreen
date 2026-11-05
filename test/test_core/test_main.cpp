@@ -260,44 +260,62 @@ static void test_wrap() {
     TEST_ASSERT_TRUE(fakeMeasure(l[0]) <= 60);
 }
 
-static void test_layout() {
-    Layout L = computeLayout(960, 540, 3, 6);
-    TEST_ASSERT_EQUAL(6, (int)L.presets.size());
-    // Pas de chevauchement entre la grille, l'en-tête et la barre de transport
-    TEST_ASSERT_TRUE(L.presets[0].y >= L.header.y + L.header.h);
-    TEST_ASSERT_TRUE(L.presets[5].y + L.presets[5].h <= L.transport[0].y);
-    TEST_ASSERT_TRUE(L.transport[kVolUp].x + L.transport[kVolUp].w <= 960);
-    TEST_ASSERT_TRUE(L.presets[2].x + L.presets[2].w <= 960);
-    TEST_ASSERT_TRUE(L.presets[4].contains(L.presets[4].x + 1, L.presets[4].y + 1));
-    TEST_ASSERT_FALSE(L.presets[4].contains(L.presets[5].x + 1, L.presets[5].y + 1));
-    // Portrait, 2 colonnes, 5 presets
-    L = computeLayout(540, 960, 2, 5);
-    TEST_ASSERT_EQUAL(5, (int)L.presets.size());
-    TEST_ASSERT_TRUE(L.presets[4].y + L.presets[4].h <= L.transport[0].y);
-
-    // Bandeau : pochette carrée à gauche, infos à droite, sans chevauchement
-    L = computeLayout(960, 540, 3, 6);
+static void checkLayout(int W, int H, int n) {
+    Layout L = computeLayout(W, H, n);
+    const Rect screen{0, 0, W, H};
+    auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
+    // Blocs principaux : dans l'écran, sans chevauchement
+    std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
+                                L.transport[kNext], L.volume};
+    if (n > 0) blocks.push_back(L.strip);
+    for (size_t i = 0; i < blocks.size(); ++i) {
+        TEST_ASSERT_TRUE(inside(blocks[i]));
+        TEST_ASSERT_TRUE(blocks[i].w > 0 && blocks[i].h > 0);
+        for (size_t j = i + 1; j < blocks.size(); ++j) TEST_ASSERT_FALSE(blocks[i].intersects(blocks[j]));
+    }
     TEST_ASSERT_EQUAL(L.art.w, L.art.h);
-    TEST_ASSERT_EQUAL(L.header.h, L.art.h);
-    TEST_ASSERT_TRUE(L.art.h >= 160);  // peu de presets : grande pochette
-    TEST_ASSERT_TRUE(L.info.x >= L.art.x + L.art.w);
-    TEST_ASSERT_TRUE(L.info.x + L.info.w <= L.header.x + L.header.w);
-    TEST_ASSERT_TRUE(L.presets[0].h >= 64);
-    // Tab5 1280x720 : mêmes proportions, à plus grande échelle
-    L = computeLayout(1280, 720, 3, 6);
-    TEST_ASSERT_TRUE(L.art.h >= 210);
-    TEST_ASSERT_TRUE(L.presets[0].h >= 85);
-    TEST_ASSERT_TRUE(L.presets[5].y + L.presets[5].h <= L.transport[0].y);
-    TEST_ASSERT_TRUE(L.transport[kVolUp].x + L.transport[kVolUp].w <= 1280);
-    // 12 presets : le bandeau rétrécit, les boutons restent utilisables
-    L = computeLayout(960, 540, 3, 12);
-    TEST_ASSERT_EQUAL(12, (int)L.presets.size());
-    TEST_ASSERT_TRUE(L.header.h >= 112);
-    TEST_ASSERT_TRUE(L.presets[0].h >= 56);
-    TEST_ASSERT_TRUE(L.presets[11].y + L.presets[11].h <= L.transport[0].y);
-    L = computeLayout(540, 960, 2, 12);
-    TEST_ASSERT_TRUE(L.presets[11].y + L.presets[11].h <= L.transport[0].y);
-    TEST_ASSERT_TRUE(L.info.w >= 200);
+    // Éléments de la pilule de volume : dedans, dans l'ordre, sans chevauchement
+    for (const Rect& r : {L.transport[kVolDown], L.mute, L.volBar, L.transport[kVolUp]}) {
+        TEST_ASSERT_TRUE(r.x >= L.volume.x && r.right() <= L.volume.right());
+        TEST_ASSERT_TRUE(r.y >= L.volume.y && r.bottom() <= L.volume.bottom());
+    }
+    TEST_ASSERT_TRUE(L.transport[kVolDown].right() <= L.mute.x);
+    TEST_ASSERT_TRUE(L.mute.right() <= L.volBar.x);
+    TEST_ASSERT_TRUE(L.volBar.right() <= L.transport[kVolUp].x);
+    TEST_ASSERT_TRUE(L.volBar.w > W / 6);
+    // Cibles tactiles : au moins 44 px à l'échelle 540 (≈ 7 mm sur le Tab5)
+    const int minTouch = 44 * std::min(W, H) / 540;
+    for (int t = 0; t < kTransportCount; ++t) TEST_ASSERT_TRUE(L.transport[t].h >= minTouch * 9 / 10);
+    TEST_ASSERT_TRUE(L.transport[kPlayPause].w >= L.transport[kPrev].w);  // lecture mise en avant
+    // Presets : une page de tuiles dans la bande, sans chevauchement
+    TEST_ASSERT_EQUAL(std::min(n, L.perPage), (int)L.presets.size());
+    for (size_t i = 0; i < L.presets.size(); ++i) {
+        const Rect& r = L.presets[i];
+        TEST_ASSERT_TRUE(r.x >= L.strip.x && r.right() <= L.strip.right() && r.y >= L.strip.y &&
+                         r.bottom() <= L.strip.bottom());
+        TEST_ASSERT_TRUE(r.h >= minTouch * 2);
+        for (size_t j = i + 1; j < L.presets.size(); ++j) TEST_ASSERT_FALSE(r.intersects(L.presets[j]));
+    }
+    // Textes : assez de place pour puces + titre + artiste
+    TEST_ASSERT_TRUE(L.info.h >= 140 * std::min(W, H) / 540);
+}
+
+static void test_layout() {
+    for (int n : {0, 1, 6, 12}) {
+        checkLayout(1280, 720, n);  // Tab5 paysage
+        checkLayout(720, 1280, n);  // Tab5 portrait
+        checkLayout(960, 540, n);
+    }
+    Layout L = computeLayout(1280, 720, 12);
+    TEST_ASSERT_EQUAL(6, L.perPage);  // 12 presets : 2 pages de 6
+    TEST_ASSERT_TRUE(L.art.w >= 400);  // la pochette domine
+    L = computeLayout(720, 1280, 12);
+    TEST_ASSERT_EQUAL(6, L.perPage);  // portrait : 2 rangées de 3
+    TEST_ASSERT_TRUE(nameColor("FIP") == nameColor("FIP"));
+    TEST_ASSERT_TRUE(nameColor("FIP") != nameColor("Nova"));
+    // Statut "loading" : en lecture et en chargement
+    PlayerStatus s = parsePlayerStatus("{\"status\":\"loading\"}");
+    TEST_ASSERT_TRUE(s.playing && s.loading);
 }
 
 static void test_accent() {

@@ -28,7 +28,6 @@ bool loadSettings(Settings& s) {
     s.https = p.getBool("https", true);
     s.fingerprint = p.getString("fp", "");
     s.presetsText = p.getString("presets", "");
-    s.columns = constrain(p.getInt("columns", 3), 1, 4);
     s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
     s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
     s.beep = constrain(p.getInt("beep", 2), 0, 3);
@@ -54,7 +53,6 @@ void saveSettings(const Settings& s) {
     p.putBool("https", s.https);
     p.putString("fp", s.fingerprint);
     p.putString("presets", s.presetsText);
-    p.putInt("columns", s.columns);
     p.putInt("rotation", s.rotation);
     p.putInt("volstep", s.volStep);
     p.putInt("beep", s.beep);

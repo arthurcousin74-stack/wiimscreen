@@ -13,7 +13,7 @@ struct UiState {
     wr::PlayerStatus player;  // titre/artiste/album déjà complétés par getMetaInfo
     wr::TrackMeta meta;
     bool online = false;
-    String message;    // message temporaire (erreur, info), prioritaire sur l'album
+    String message;    // notification temporaire (erreur, info), affichée en haut
     int battery = -1;  // % ou -1 si inconnu / pas de batterie
 };
 
@@ -22,26 +22,33 @@ struct UiState {
 // Chaque image est entièrement dessinée hors écran (canevas en PSRAM), puis
 // affichée d'un coup : pas de scintillement, et un appui s'affiche en quelques
 // millisecondes. La couleur d'accent (lueur de fond, bouton lecture, barres,
-// bouton appuyé) est tirée de la pochette en cours.
+// preset actif) est tirée de la pochette en cours.
 //
 // Deux vues :
-//  - commandes : bandeau « en cours » (pochette, titre, progression, volume),
-//    presets avec leurs images, lecture/pause, piste précédente/suivante, volume
-//  - ambiance (après un moment sans appui) : grande pochette et grands textes,
-//    lisibles de loin ; un appui revient aux commandes
+//  - commandes : grande pochette ; à côté, textes, progression, lecture, volume ;
+//    en bas, les presets en tuiles (image + nom), par pages de 6
+//  - ambiance (après un moment sans appui) : grande pochette, grands textes,
+//    visualiseur ; un appui revient aux commandes
 class Ui {
 public:
     void begin(const Settings& s);
 
-    // Liste des presets (change la mise en page si leur nombre change)
+    // Liste des presets (revient à la première page)
     void setPresets(const std::vector<wr::Preset>& presets);
     // Image du preset i (nullptr : pas d'image). L'image doit rester valide.
     void setPresetArt(int index, const ArtImage* img);
+    // Preset en cours de lecture (-1 : aucun), marqué d'un contour et d'une icône
+    void setActivePreset(int index) { active_ = index; }
     // Nouvelle pochette (nullptr : illustration par défaut) ; recalcule l'accent.
     // L'image doit rester valide (elle est redécodée si la mise en page change).
     void setArt(const ArtImage* img);
 
-    // Vue commandes ; pressedPreset / pressedTransport : bouton montré enfoncé.
+    // Pages de presets
+    int page() const { return page_; }
+    int pageCount() const;
+    void setPage(int p);
+
+    // Vue commandes ; pressedPreset (indice global) / pressedTransport : bouton enfoncé.
     void render(const UiState& st, int pressedPreset = -1, int pressedTransport = -1);
     // Vue ambiance
     void renderAmbient(const UiState& st);
@@ -50,12 +57,14 @@ public:
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
     void showLevels(const std::vector<float>& levels, const std::vector<float>& peaks);
 
-    int hitPreset(int x, int y) const;
+    int hitPreset(int x, int y) const;  // indice global du preset, ou -1
     int hitTransport(int x, int y) const;
-    bool hitHeader(int x, int y) const;
-    bool hitVolume(int x, int y, int& volume) const;       // barre de volume : niveau visé
+    bool hitHeader(int x, int y) const;                    // pochette ou textes
+    bool hitVolume(int x, int y, int& volume) const;       // curseur de volume : niveau visé
     bool hitMute(int x, int y) const;                      // icône du haut-parleur
     bool hitProgress(int x, int y, uint32_t& posMs) const;  // barre de progression
+    bool hitStrip(int x, int y) const;                     // bande des presets (glisser)
+    int hitDots(int x, int y) const;                       // -1 / +1 : page précédente / suivante
 
     // Écrans plein page
     void showInfo(const char* title, const String& body, const char* footer = nullptr);
@@ -68,32 +77,38 @@ private:
     void background();
     void present();
     void relayout();
+    int thumbSide() const;
 
     bool decode(M5Canvas& dst, const ArtImage* img, uint32_t bg);
     void roundedPush(M5Canvas& src, int x, int y, int radius, bool bgIsGradient, uint32_t bg);
     void placeholderArt(M5Canvas& dst);
     void info(const UiState& st);
-    void progressRow(const UiState& st, int x, int w, int cy, wr::Rect* hit);
-    void button(int index, bool pressed);
-    void transportIcon(int which, const wr::Rect& r, bool pressed, bool playing);
+    void chip(int& x, int y, const std::string& text, uint32_t dot, uint32_t textColor);
+    void progressRow(const UiState& st, const wr::Rect& r, wr::Rect* hit);
+    void transport(const UiState& st, int pressed);
+    void volumePill(const UiState& st, int pressed);
+    void tile(int slot, int index, bool pressed);
+    void pageDots();
+    void toast(const String& msg);
     void drawBars();
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
     uint32_t bgAccent_ = 0xFFFFFFFFu;
-    M5Canvas art_;     // pochette à la taille du bandeau
+    M5Canvas art_;     // pochette à la taille de la vue commandes
     M5Canvas artBig_;  // pochette à la taille de la vue ambiance (décodée à la demande)
     const ArtImage* artSrc_ = nullptr;
     bool artBigValid_ = false;
     uint32_t accent_ = 0;
     int ref_ = 540;
-    int columns_ = 3;
     wr::Layout layout_;
     std::vector<wr::Preset> presets_;
     std::vector<const ArtImage*> presetArtSrc_;
     std::vector<std::unique_ptr<M5Canvas>> thumbs_;  // vignettes décodées (nullptr : aucune)
-    // Zones tactiles des barres, mises à jour à chaque rendu de la vue commandes
-    wr::Rect volHit_, muteHit_, progHit_;
+    int page_ = 0;
+    int active_ = -1;
+    // Zone tactile de la progression, mise à jour à chaque rendu de la vue commandes
+    wr::Rect progHit_;
     uint32_t progDuration_ = 0;
     // Visualiseur
     bool visEnabled_ = false;
