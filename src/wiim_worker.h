@@ -8,6 +8,7 @@
 #include "core.h"
 #include "settings.h"
 #include "upnp.h"
+#include "voice.h"
 #include "wiim_client.h"
 
 // Tout le réseau avec le WiiM passe par une tâche de fond (cœur du Wi-Fi) : chaque
@@ -59,9 +60,10 @@ public:
     void playFavorite(const String& id);
     // Essai (journal) : files Qobuz des favoris (morceaux, albums) chargées par le WiiM, sans lecture
     void testQobuzSearch(const String& query);
-    // Recherche Qobuz par le WiiM (évènement SearchDone avec les morceaux trouvés), puis lecture d'un
-    // résultat (0 pour le premier). Non bloquant.
-    void searchQobuz(const String& query);
+    // Recherche (évènement SearchDone avec les morceaux trouvés), puis lecture d'un résultat (0 pour le
+    // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
+    // joué par le WiiM (album du morceau, par sa passerelle airable). Non bloquant.
+    void search(const String& query, int source);
     void playSearchResult(int index);
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
@@ -89,6 +91,9 @@ private:
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
     bool qobuzModel(const std::string& control, std::string& templ);
+    bool deezerModel(const std::string& control, std::string& templ);
+    void runDeezerSearch(const String& query);
+    void runPlayDeezer(int index);
     void push(WiimEvent&& e);
     void notePinning(WiimError e);
     bool commandsWaiting();
@@ -109,6 +114,9 @@ private:
     String search_;
     int searchPlay_ = 0;
     int searchCount_ = 0;
+    int searchSourceReq_ = 0;  // source de la recherche demandée
+    int searchSource_ = 0;     // source des derniers résultats
+    std::vector<wr::DeezerTrack> deezerResults_;
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;

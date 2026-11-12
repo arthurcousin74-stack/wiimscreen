@@ -28,5 +28,6 @@ bool qobuzTemplate(std::string& out);
 // Same for another source (Deezer…): /fav/model_<source>.xml, without tracks
 bool saveSourceModel(const std::string& source, const std::string& queueContext);
 bool sourceModel(const std::string& source, std::string& out);
+bool hasDeezerModel();  // a Deezer queue was seen on the WiiM (search can offer Deezer)
 
 }  // namespace fav

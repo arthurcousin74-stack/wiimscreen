@@ -141,6 +141,11 @@ bool sourceModel(const std::string& source, std::string& out) {
     return g_ok && readFile(modelPath(source).c_str(), out) && !out.empty();
 }
 
+bool hasDeezerModel() {
+    Guard g;
+    return g_ok && (LittleFS.exists(modelPath("Deezer2").c_str()) || LittleFS.exists(modelPath("Deezer").c_str()));
+}
+
 bool qobuzTemplate(std::string& out) {
     Guard g;
     return g_ok && readFile("/fav/qobuz_template.xml", out) && !out.empty();

@@ -53,6 +53,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   on-screen keyboard. The device gives the search to your WiiM. The WiiM does the search with its own Qobuz access
   and loads the results. The device shows the results (title, artist, album). Touch a result to play it. Before
   the first search, play one Qobuz album from the WiiM Home app. Refer to [Search Qobuz](#search-qobuz).
+- **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
+  key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
+  search, play one Deezer album from the WiiM Home app.
 - **Presets as tiles** with their images. The device gets the presets from the WiiM, or you can write your own list.
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.

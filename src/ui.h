@@ -105,7 +105,10 @@ public:
 
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
-    void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1);
+    // source 0 Qobuz, 1 Deezer ; sources : afficher le choix Qobuz | Deezer
+    void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1, int source = 0,
+                      bool sources = false);
+    int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, -1 ailleurs
     int hitKey(int x, int y) const;      // indice dans keys(), ou -1
     const std::vector<wr::Key>& keys() const { return keys_; }
     void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
@@ -194,6 +197,7 @@ private:
     std::vector<wr::Rect> resultRects_;   // lignes de résultats affichées
     int resultsFirst_ = 0, resultsPerPage_ = 1;
     wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
+    wr::Rect srcRects_[2];  // choix Qobuz | Deezer du clavier
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

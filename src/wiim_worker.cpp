@@ -257,6 +257,7 @@ void WiimWorker::run() {
         searchTest_ = "";
         String search = search_;
         search_ = "";
+        const int searchSource = searchSourceReq_;
         int searchPlay = searchPlay_;
         searchPlay_ = 0;
         xSemaphoreGive(lock_);
@@ -272,7 +273,10 @@ void WiimWorker::run() {
         if (queue) runQueueCheck();
         if (play.length()) runPlayFavorite(play);
         if (searchTest.length()) runSearchTest(searchTest);
-        if (search.length()) runSearch(search);
+        if (search.length()) {
+            if (searchSource == 1) runDeezerSearch(search);
+            else runSearch(search);
+        }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (save.wanted) runSaveFavorite(save);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
@@ -558,6 +562,27 @@ static int sendQueue(const std::string& control, const std::string& ctx, const s
 
 static bool readQueueStable(const std::string& control, const std::string& name, int seconds, wr::QueueInfo& out);
 
+// Recherche publique Deezer (api.deezer.com, sans clé, HTTPS vérifié) : morceaux avec leur album
+static std::vector<wr::DeezerTrack> deezerSearch(const std::string& query, int limit, int& code) {
+    std::vector<wr::DeezerTrack> found;
+    WiFiClientSecure tls;
+    tls.setCACertBundle(ca_bundle_start, caBundleSize());
+    tls.setHandshakeTimeout(8);
+    HTTPClient http;
+    http.setConnectTimeout(6000);
+    http.setTimeout(10000);
+    http.setReuse(false);
+    const std::string url =
+        "https://api.deezer.com/search?q=" + wr::urlQueryEncode(query) + "&limit=" + std::to_string(limit);
+    code = -1;
+    if (http.begin(tls, url.c_str())) {
+        code = http.GET();
+        if (code == 200 && http.getSize() < 512 * 1024) found = wr::parseDeezerTracks(http.getString().c_str());
+        http.end();
+    }
+    return found;
+}
+
 // Crée une file sans demander à la lire : QueuePolicy 0, puis 1 (exemple connu), puis sans l'argument
 // si le WiiM refuse. `policy` reçoit la valeur acceptée.
 static int createQueueQuiet(const std::string& control, const std::string& ctx, const char*& policy) {
@@ -640,26 +665,11 @@ void WiimWorker::runDeezerTest(const std::string& control, const String& query) 
              base.empty() ? "?" : "airable");
     if (base.empty()) return;
     // Recherche publique Deezer : morceaux, avec leur album
-    std::vector<wr::DeezerTrack> found;
-    {
-        WiFiClientSecure tls;
-        tls.setCACertBundle(ca_bundle_start, caBundleSize());
-        tls.setHandshakeTimeout(8);
-        HTTPClient http;
-        http.setConnectTimeout(6000);
-        http.setTimeout(10000);
-        http.setReuse(false);
-        const std::string url = "https://api.deezer.com/search?q=" + wr::urlQueryEncode(query.c_str()) + "&limit=10";
-        int code = -1;
-        if (http.begin(tls, url.c_str())) {
-            code = http.GET();
-            if (code == 200 && http.getSize() < 512 * 1024) found = wr::parseDeezerTracks(http.getString().c_str());
-            http.end();
-        }
-        logEvent("  api.deezer.com : %d, %u morceau(x)", code, (unsigned)found.size());
-        for (size_t i = 0; i < found.size() && i < 2; ++i)
-            logLong("  - ", found[i].title + " \xE2\x80\x94 " + found[i].artist + " (album " + found[i].album + ")");
-    }
+    int code = -1;
+    std::vector<wr::DeezerTrack> found = deezerSearch(query.c_str(), 10, code);
+    logEvent("  api.deezer.com : %d, %u morceau(x)", code, (unsigned)found.size());
+    for (size_t i = 0; i < found.size() && i < 2; ++i)
+        logLong("  - ", found[i].title + " \xE2\x80\x94 " + found[i].artist + " (album " + found[i].album + ")");
     std::vector<std::pair<std::string, std::string>> variants;
     if (!found.empty()) {
         variants.push_back({"album Deezer", base + "/deezer/album/" + std::to_string(found[0].albumId)});
@@ -714,9 +724,10 @@ static bool readQueueStable(const std::string& control, const std::string& name,
     return out.tracks > 0;
 }
 
-void WiimWorker::searchQobuz(const String& query) {
+void WiimWorker::search(const String& query, int source) {
     xSemaphoreTake(lock_, portMAX_DELAY);
     search_ = query;
+    searchSourceReq_ = source;
     xSemaphoreGive(lock_);
     xTaskNotifyGive(task_);
 }
@@ -726,6 +737,98 @@ void WiimWorker::playSearchResult(int index) {
     searchPlay_ = index + 1;  // 1 pour le premier résultat
     xSemaphoreGive(lock_);
     xTaskNotifyGive(task_);
+}
+
+// Modèle de file Deezer (« Deezer2 », passerelle airable) : celui gardé, sinon une file Deezer du WiiM
+bool WiimWorker::deezerModel(const std::string& control, std::string& templ) {
+    if (fav::sourceModel("Deezer2", templ) || fav::sourceModel("Deezer", templ)) return true;
+    for (auto& n : queueNames(control, false)) {
+        std::string ctx;
+        if (browseQueue(control, n, ctx) != 200) continue;
+        const wr::QueueInfo q = wr::parseQueueContext(ctx);
+        if (q.sourceName.rfind("Deezer", 0) == 0 && !wr::urlOrigin(q.searchUrl).empty()) {
+            fav::saveSourceModel(q.sourceName, ctx);
+            templ = ctx;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Recherche Deezer : le Tab5 cherche (api.deezer.com), le WiiM jouera l'album du morceau choisi
+void WiimWorker::runDeezerSearch(const String& query) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = query;
+    std::string control, templ;
+    if (!findPlayQueue(control, false) || !deezerModel(control, templ)) {
+        ev.text = "lance d'abord un album Deezer depuis l'app WiiM Home (une seule fois)";
+        push(std::move(ev));
+        return;
+    }
+    int code = -1;
+    const uint32_t t0 = millis();
+    deezerResults_ = deezerSearch(query.c_str(), 40, code);
+    logEvent("Recherche Deezer \xC2\xAB %s \xC2\xBB : %d, %u morceau(x) (%lu ms)", query.c_str(), code,
+             (unsigned)deezerResults_.size(), (unsigned long)(millis() - t0));
+    if (code != 200) {
+        ev.text = "Deezer ne r\xC3\xA9pond pas";
+        push(std::move(ev));
+        return;
+    }
+    searchSource_ = 1;
+    ev.ok = true;
+    for (auto& t : deezerResults_) ev.tracks.push_back(wr::QueueTrack{t.title, t.artist, t.album, t.cover});
+    push(std::move(ev));
+}
+
+// Morceau Deezer choisi : file de son album (le WiiM lit les pistes par airable), puis lecture à sa place
+void WiimWorker::runPlayDeezer(int i) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ, resp;
+    if (i < 0 || i >= (int)deezerResults_.size() || !findPlayQueue(control, false) || !deezerModel(control, templ)) {
+        ev.text = "morceau Deezer introuvable";
+        push(std::move(ev));
+        return;
+    }
+    const wr::DeezerTrack& t = deezerResults_[i];
+    const std::string base = wr::urlOrigin(wr::parseQueueContext(templ).searchUrl);
+    const std::string name = std::string("wiimscreen-deezer-") + std::to_string(++searchCount_ % 2);
+    upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    const char* policy = "0";
+    const int create = createQueueQuiet(control, wr::queueFromTemplate(templ, name, base + "/deezer/album/" +
+                                                                               std::to_string(t.albumId)),
+                                        policy);
+    // Place du morceau dans l'album : relu dans la file dès qu'il y apparaît
+    int index = 0;
+    const uint32_t t0 = millis();
+    if (create == 200) {
+        const std::string want = wr::normalizeText(t.title);
+        while (index == 0 && millis() - t0 < 12000) {
+            vTaskDelay(pdMS_TO_TICKS(700));
+            std::string back;
+            if (browseQueue(control, name, back) != 200 || back.empty()) continue;
+            const wr::QueueInfo q = wr::parseQueueContext(back);
+            for (size_t k = 0; k < q.items.size(); ++k)
+                if (wr::normalizeText(q.items[k].title) == want) {
+                    index = (int)k + 1;
+                    break;
+                }
+            if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
+        }
+    }
+    const int play = index > 0 ? upnpRequest(control, "PlayQueueWithIndex",
+                                             wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
+                                                          {{"QueueName", name}, {"Index", std::to_string(index)}}),
+                                             resp)
+                               : -1;
+    logEvent("Deezer \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (album %ld, piste %d) : CreateQueue %d, Play %d (%lu ms)", t.title.c_str(),
+             t.albumId, index, create, play, (unsigned long)(millis() - t0));
+    ev.ok = play == 200;
+    if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 ce morceau Deezer";
+    push(std::move(ev));
+    nextPoll_ = millis() + 800;
 }
 
 // Modèle de file Qobuz : celui gardé, sinon une file Qobuz du WiiM, sinon un favori Qobuz
@@ -745,6 +848,7 @@ bool WiimWorker::qobuzModel(const std::string& control, std::string& templ) {
 }
 
 void WiimWorker::runSearch(const String& query) {
+    searchSource_ = 0;
     WiimEvent ev;
     ev.kind = WiimEvent::SearchDone;
     ev.name = query;
@@ -816,6 +920,10 @@ void WiimWorker::runSearch(const String& query) {
 }
 
 void WiimWorker::runPlaySearchResult(int index) {
+    if (searchSource_ == 1) {
+        runPlayDeezer(index - 1);
+        return;
+    }
     std::string control, resp;
     int code = -1;
     if (findPlayQueue(control, false))

@@ -164,8 +164,11 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   `SearchUrl` **`https://<id>.airable.io/deezer/album/<Deezer album id>`** (airable: the music-service gateway the
   WiiM uses; `<id>` looks specific to the device or account, do not publish it). 11 tracks, read with `BrowseQueue`.
 - Deezer's public search `https://api.deezer.com/search?q=…` needs no key (`wr::parseDeezerTracks`).
-- Journal › *Essais* tries, on the same gateway: `/deezer/album/<id>` and `/deezer/track/<id>` from a public
-  search, and two guesses of an airable search path. Outcome: not known yet.
+- **Verified on a real WiiM (2026-11):** a `Deezer2` queue with `SearchUrl` `https://<id>.airable.io/deezer/album/<id>`
+  (no tracks) is filled by the WiiM (127 tracks for a large album); `/deezer/track/<id>` and the guessed airable
+  search paths (`/deezer/search?q=`, `/deezer/search/tracks?q=`) load nothing.
+- wiimscreen's Deezer search: the remote searches `api.deezer.com`, then plays the album of the chosen track and
+  starts it at that track (index found by title in the loaded queue).
 - *File du WiiM* also keeps a model of queues from other sources (`/fav/model_<source>.xml`, e.g. Deezer) for
   later work.
 

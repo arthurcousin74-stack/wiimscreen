@@ -75,6 +75,8 @@ static std::string g_searchQuery;
 static String g_searchStatus;
 static std::vector<wr::QueueTrack> g_searchResults;
 static int g_resultsPage = 0;
+static int g_searchSource = 0;       // 0 Qobuz, 1 Deezer
+static bool g_deezerOk = false;      // une file Deezer a été vue sur le WiiM
 static uint32_t g_logFrame = 0;
 static int g_touchCount = 0;
 static uint32_t g_touchFrame = 0;
@@ -1031,14 +1033,21 @@ void setup() {
 
 // ------------------------------------------------------------ recherche Qobuz
 
+static void renderSearch(int pressedKey = -1) {
+    g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy, pressedKey, g_searchSource, g_deezerOk);
+}
+
 static void openSearch() {
     g_searchOpen = true;
+    g_deezerOk = g_favOk && fav::hasDeezerModel();
+    if (!g_deezerOk) g_searchSource = 0;
     g_searchStatus = g_searchBusy ? String("Recherche en cours\xE2\x80\xA6") : String();
-    g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy);
+    renderSearch();
 }
 
 static void onSearchKey(int k) {
     if (k < 0) return;
+    if (g_searchBusy && g_ui.keys()[k].kind == wr::Key::Enter) return;
     const wr::Key key = g_ui.keys()[k];
     sound::tap();
     switch (key.kind) {
@@ -1056,13 +1065,14 @@ static void onSearchKey(int k) {
             if (q.empty() || g_searchBusy) break;
             logEvent("Recherche Qobuz : %s", q.c_str());
             g_searchBusy = true;
-            g_searchStatus = "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6 (jusqu'\xC3\xA0 une minute)";
-            g_worker.searchQobuz(q.c_str());
+            g_searchStatus = g_searchSource == 1 ? String("Recherche sur Deezer\xE2\x80\xA6")
+                                                 : String("Recherche sur Qobuz par ton WiiM\xE2\x80\xA6");
+            g_worker.search(q.c_str(), g_searchSource);
             break;
         }
     }
     if (key.kind != wr::Key::Enter) g_searchStatus = g_searchBusy ? g_searchStatus : String();
-    g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy, k);
+    renderSearch(k);
 }
 
 // Résultats arrivés (tâche WiiM)
@@ -1087,7 +1097,7 @@ static void onSearchDone(const WiimEvent& ev) {
         if (ev.played) g_worker.pollSoon();
         return;
     }
-    if (g_searchOpen) g_ui.renderSearch(g_searchQuery, g_searchStatus, false);
+    if (g_searchOpen) renderSearch();
 }
 
 void loop() {
@@ -1168,6 +1178,11 @@ void loop() {
                 g_searchOpen = g_resultsOpen = false;
                 g_menuOpen = true;
                 g_ui.renderMenu(FW_VERSION);
+            } else if (g_searchOpen && g_ui.hitSource(t.x, t.y) >= 0) {
+                sound::tap();
+                g_searchSource = g_ui.hitSource(t.x, t.y);
+                g_searchStatus = "";
+                renderSearch();
             } else if (g_searchOpen) {
                 onSearchKey(g_ui.hitKey(t.x, t.y));
             } else {
@@ -1178,7 +1193,10 @@ void loop() {
                     logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
                     g_worker.playSearchResult(r);
                     markPending(wr::kPlayPause, Await::Music, true);
-                    setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title).c_str(), 4000);
+                    setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title +
+                                (g_searchSource == 1 ? " (chargement de l'album\xE2\x80\xA6)" : ""))
+                                   .c_str(),
+                               g_searchSource == 1 ? 9000 : 4000);
                     g_resultsOpen = false;
                     show();
                 } else if (pg) {

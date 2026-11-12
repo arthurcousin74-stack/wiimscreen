@@ -837,7 +837,8 @@ bool Ui::hitSearch(int x, int y) const {
 }
 
 // Clavier de recherche : champ de texte, état, touches
-void Ui::renderSearch(const std::string& query, const String& status, bool busy, int pressedKey) {
+void Ui::renderSearch(const std::string& query, const String& status, bool busy, int pressedKey, int source,
+                      bool sources) {
     ambientShown_ = false;
     view_ = View::Other;
     railShown_ = false;
@@ -865,12 +866,31 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
         C.drawString(shown.c_str(), tx, fy + fh / 2 + 1);
         if (!busy) C.fillRect(tx + measure(shown) + sc(3), fy + sc(14), sc(3), fh - sc(28), accent_);  // curseur
     }
-    // État (recherche en cours, aucun résultat, erreur) et source
+    // Choix de la source (à droite), puis état (recherche en cours, aucun résultat, erreur)
     C.loadFont(kSmall);
+    int lineW = W;
+    srcRects_[0] = srcRects_[1] = wr::Rect{};
+    if (sources) {
+        const int ch = sc(40), cw = sc(130), cy = fy + fh + sc(6);
+        const char* names[] = {"Qobuz", "Deezer"};
+        for (int i = 1; i >= 0; --i) {
+            srcRects_[i] = wr::Rect{X + W - (2 - i) * cw - (1 - i) * sc(8), cy, cw, ch};
+            const wr::Rect& r = srcRects_[i];
+            const bool on = i == source;
+            C.fillRoundRect(r.x, r.y, r.w, r.h, ch / 2, on ? accent_ : kCard);
+            C.setTextDatum(textdatum_t::middle_center);
+            C.setTextColor(on ? kBg : kText2);
+            C.drawString(names[i], r.x + r.w / 2, r.y + r.h / 2 + 1);
+        }
+        lineW = srcRects_[0].x - X - sc(16);
+    }
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(busy ? accent_ : kText2);
-    const String line = status.length() ? status : String("Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
-    C.drawString(wr::wrapText(line.c_str(), W, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
+    const String line = status.length()
+                            ? status
+                            : String(source == 1 ? "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM"
+                                                 : "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
+    C.drawString(wr::wrapText(line.c_str(), lineW, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
     // Touches
     const int ky = fy + fh + sc(10) + C.fontHeight() + sc(14);
     keys_ = wr::keyboardLayout(wr::Rect{X, ky, W, A.bottom() - m - ky});
@@ -894,6 +914,12 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
         C.drawString(enter && busy ? "\xE2\x80\xA6" : k.label.c_str(), cx, cy + 1);
     }
     present();
+}
+
+int Ui::hitSource(int x, int y) const {
+    for (int i = 0; i < 2; ++i)
+        if (srcRects_[i].contains(x, y)) return i;
+    return -1;
 }
 
 int Ui::hitKey(int x, int y) const {

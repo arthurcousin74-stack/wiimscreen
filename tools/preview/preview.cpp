@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
             {"Chain of Fools", "Aretha Franklin", "Lady Soul", ""},
             {"I Say a Little Prayer", "Aretha Franklin", "Aretha Now", ""},
             {"Day Dreaming", "Aretha Franklin", "Young, Gifted and Black", ""}};
-        ui.renderSearch("aretha frank", "", false, 20);
+        ui.renderSearch("aretha frank", "", false, 20, 1, true);
         save(out, "24-recherche.ppm");
         ui.renderResults("aretha franklin", found, 0, "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer");
         save(out, "25-resultats.ppm");
