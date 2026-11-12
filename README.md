@@ -48,6 +48,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
 - **Qobuz favorites**: the favorite albums of your Qobuz account show as tiles with their album art. One touch plays
   the album. The **Favoris Qobuz** tile plays your favorite tracks.
+- **Deezer favorites** (experimental): if your WiiM gives a Deezer access, the favorite albums of your Deezer account
+  also show as tiles. One touch plays the album.
 - **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button at the left
   of the playback buttons. The device keeps a copy of the WiiM play queue. The album then shows as a tile with its
   album art, and one touch plays it again. Touch the heart again to remove the album. You do not need a key for
@@ -178,6 +180,19 @@ The WiiM must have your Deezer account (WiiM Home app › Deezer). The Tab5 does
 3. Type an artist or a track, then touch **Chercher**. The Tab5 searches the public Deezer catalog.
 4. Touch a result. The WiiM loads the album of this track and plays it from this track (wait some seconds).
 
+### Favorites from Qobuz and Deezer
+
+The WiiM must have your accounts (WiiM Home app). The Tab5 gets the favorites with the access that your WiiM gives.
+
+1. Play one Qobuz album and one Deezer album from the WiiM Home app. Do this one time only.
+2. For Deezer, on the Tab5, touch ⚙ › *Journal* › **File du WiiM** while the Deezer album plays.
+3. Go back to the main screen (🏠). Swipe the tiles to see the favorite albums. The Tab5 updates the list when it
+   updates the presets.
+4. Touch an album. The WiiM plays it.
+
+Note: the Deezer favorites are experimental. If they do not show, look at the Journal: the lines that start with
+"Deezer :" tell which step failed.
+
 ### Voice search (optional)
 
 1. Make an API key at <https://platform.openai.com>.
@@ -205,6 +220,7 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 │ favorites     queue copies (LittleFS)        │  port 49152  │ (queues)     │
 │ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────┬───────┘
 │ wiim_worker   Qobuz search and favorites     │ ──▶ qobuz.com (access from the WiiM)
+│               Deezer favorites               │ ──▶ api.deezer.com (access from the WiiM)
 │                                              │                     │ WiiM's own
 │                                              │                     ▼ access
 │                                              │          qobuz.com, airable.io (Deezer)
@@ -247,6 +263,9 @@ with its own Qobuz access and loads the tracks. The same service gives the Qobuz
 
 The Tab5 never has your Qobuz password. The favorite albums come from the same access
 (`favorite/getUserFavorites`).
+
+For Deezer, the Tab5 asks the WiiM for a Deezer access (`GetUserInfo`). If it gets one, it reads the favorite albums
+from the Deezer API (`user/me/albums`). An album plays through the airable gateway of the WiiM, as for the search.
 
 ### How the Deezer search operates
 

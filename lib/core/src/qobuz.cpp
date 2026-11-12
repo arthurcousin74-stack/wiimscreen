@@ -164,6 +164,43 @@ std::vector<QobuzAlbum> parseQobuzAlbums(const std::string& json) {
     return out;
 }
 
+std::vector<QobuzAlbum> parseDeezerAlbums(const std::string& json) {
+    std::vector<QobuzAlbum> out;
+    for (const std::string& it : jsonArray(jsonTop(json, "data"))) {
+        QobuzAlbum a;
+        a.id = jsonText(jsonTop(it, "id"));
+        a.title = jsonText(jsonTop(it, "title"));
+        a.artist = jsonText(jsonTop(jsonTop(it, "artist"), "name"));
+        a.image = jsonText(jsonTop(it, "cover_medium"));
+        if (a.image.empty()) a.image = jsonText(jsonTop(it, "cover"));
+        a.tracks = std::atoi(jsonText(jsonTop(it, "nb_tracks")).c_str());
+        if (!a.id.empty() && !a.title.empty()) out.push_back(a);
+        if (out.size() >= 100) break;
+    }
+    return out;
+}
+
+std::string parseAccessToken(const std::string& json) {
+    std::string t = jsonText(jsonTop(json, "accessToken"));
+    if (t.empty()) t = jsonText(jsonTop(json, "access_token"));
+    return headerSafe(t) ? t : "";
+}
+
+std::vector<std::string> jsonValuesOf(const std::string& json, const std::string& key) {
+    std::vector<std::string> out;
+    const std::string k = "\"" + key + "\"";
+    size_t p = 0;
+    while ((p = json.find(k, p)) != std::string::npos) {
+        size_t c = json.find(':', p + k.size());
+        if (c == std::string::npos) break;
+        size_t v = skipSpace(json, c + 1);
+        size_t e = valueEnd(json, v);
+        out.push_back(jsonText(json.substr(v, e - v)));
+        p = e;
+    }
+    return out;
+}
+
 bool parseQobuzAccess(const std::string& json, QobuzAccess& out) {
     QobuzAccess a;
     a.appId = jsonText(jsonTop(json, "clientId"));

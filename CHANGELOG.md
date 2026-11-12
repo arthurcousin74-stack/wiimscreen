@@ -8,6 +8,8 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Deezer favorite albums as tiles (experimental): Deezer token asked to the WiiM (`GetUserInfo`), albums from
+  `api.deezer.com/user/me/albums`, played through the WiiM's airable gateway. *File du WiiM* lists the linked services.
 - Qobuz favorite albums as tiles (with covers) and a "Favoris Qobuz" tile for favorite tracks.
 - Qobuz search without playback: the remote searches Qobuz with the access the WiiM gives on the LAN (UPnP
   `GetUserInfo`, found by a session on the user's network); the music only changes when a result is chosen.

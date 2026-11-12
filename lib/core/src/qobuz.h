@@ -32,6 +32,14 @@ std::vector<QobuzTrack> parseQobuzTracks(const std::string& json);
 // album/search, favorite/getUserFavorites?type=albums : {"albums":{"items":[…]}}
 std::vector<QobuzAlbum> parseQobuzAlbums(const std::string& json);
 
+// Deezer API (api.deezer.com/user/me/albums?access_token=…): {"data":[{id,title,cover_medium,nb_tracks,
+// artist{name}}]}. Same structure as QobuzAlbum (id, title, artist, image, tracks).
+std::vector<QobuzAlbum> parseDeezerAlbums(const std::string& json);
+// Access token alone ("accessToken", or "access_token") from a GetUserInfo Result; empty if absent or unsafe.
+std::string parseAccessToken(const std::string& json);
+// Values of every "showName" key in a GetBasicUserInfo Result (linked services), in order.
+std::vector<std::string> jsonValuesOf(const std::string& json, const std::string& key);
+
 // GetUserInfo (WiiM UPnP) Result: {"clientId":…,"accessToken":…,"userName":…} — false if a field is missing
 // or not usable in an HTTP header (printable ASCII only, no spaces).
 struct QobuzAccess {

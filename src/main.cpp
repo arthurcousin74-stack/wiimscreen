@@ -52,6 +52,7 @@ static std::vector<wr::Preset> g_wiimPresets;          // presets du WiiM (ou sa
 static bool g_favOk = false;                            // mémoire des favoris disponible
 static bool g_favBusy = false;                          // enregistrement d'un favori en cours
 static std::vector<wr::Favorite> g_favs;
+static std::vector<wr::QobuzAlbum> g_deezerAlbums;  // albums favoris du compte Deezer
 static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Qobuz (lus par l'accès du WiiM)
 static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » (file chargée par le WiiM)
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
@@ -358,6 +359,15 @@ static void refreshTiles() {
         p.favId = "qobuz-album:" + g_qobuzAlbums[i].id;
         list.push_back(p);
     }
+    // Albums favoris Deezer
+    for (size_t i = 0; i < g_deezerAlbums.size() && i < 36; ++i) {
+        wr::Preset p;
+        p.slot = 300 + (int)i;
+        p.label = g_deezerAlbums[i].title;
+        p.picUrl = g_deezerAlbums[i].image;
+        p.favId = "deezer-album:" + g_deezerAlbums[i].id;
+        list.push_back(p);
+    }
     if (samePresets(list, g_presets)) return;
     applyPresets(list);
     show();
@@ -534,6 +544,12 @@ static void serviceWiim() {
                 show();
                 break;
             case WiimEvent::SearchDone: onSearchDone(ev); break;
+            case WiimEvent::DeezerFavorites:
+                if (ev.ok) {
+                    g_deezerAlbums = ev.albums;
+                    refreshTiles();
+                }
+                break;
             case WiimEvent::QobuzFavorites:
                 if (ev.ok) {
                     g_qobuzAlbums = ev.albums;

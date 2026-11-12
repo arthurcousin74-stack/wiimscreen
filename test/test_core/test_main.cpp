@@ -822,6 +822,22 @@ static void test_qobuz_json() {
     TEST_ASSERT_TRUE(parseQobuzAlbums("{\"status\":\"error\"}").empty());
     TEST_ASSERT_EQUAL_STRING("\xC3\xA9t\xC3\xA9", jsonText("\"\\u00e9t\\u00e9\"").c_str());
 
+    auto dz = parseDeezerAlbums(
+        "{\"data\":[{\"id\":302127,\"title\":\"Discovery\",\"cover_medium\":\"https:\\/\\/e-cdns\\/c.jpg\","
+        "\"nb_tracks\":14,\"artist\":{\"id\":27,\"name\":\"Daft Punk\"},\"type\":\"album\"}],\"total\":1}");
+    TEST_ASSERT_EQUAL(1, (int)dz.size());
+    TEST_ASSERT_EQUAL_STRING("302127", dz[0].id.c_str());
+    TEST_ASSERT_EQUAL_STRING("Daft Punk", dz[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://e-cdns/c.jpg", dz[0].image.c_str());
+    TEST_ASSERT_EQUAL(14, dz[0].tracks);
+    TEST_ASSERT_EQUAL_STRING("frXyz12", parseAccessToken("{\"access_token\":\"frXyz12\",\"expires\":0}").c_str());
+    TEST_ASSERT_EQUAL_STRING("", parseAccessToken("{\"accessToken\":\"a b\"}").c_str());
+    auto names = jsonValuesOf("[{\"source\":\"Qobuz\",\"showName\":\"Qobuz\"},{\"showName\":\"Deezer\"}]", "showName");
+    TEST_ASSERT_EQUAL(2, (int)names.size());
+    TEST_ASSERT_EQUAL_STRING("Deezer", names[1].c_str());
+    TEST_ASSERT_EQUAL_STRING("https://api.deezer.com/user/me/albums?access_token=***&limit=50",
+                             maskSecrets("https://api.deezer.com/user/me/albums?access_token=SECRET&limit=50").c_str());
+
     QobuzAccess acc;
     TEST_ASSERT_TRUE(parseQobuzAccess("{\"userName\":\"x\",\"clientId\":\"123456789\",\"accessToken\":\"abc-DEF_9\"}", acc));
     TEST_ASSERT_EQUAL_STRING("123456789", acc.appId.c_str());

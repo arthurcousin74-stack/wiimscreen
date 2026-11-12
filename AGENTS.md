@@ -54,8 +54,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - UI changes: render them with `tools/preview` and look at the PNGs before committing; `docs/*.png` come from it.
 - Layout dimensions scale with `sc(v) = v * min(width, height) / 540`; `checkLayout` tests guard overlaps and
   touch-target sizes for 1280×720, 720×1280 and 960×540.
-- Never log or echo secrets (Wi-Fi password, OpenAI key, the Qobuz token from `GetUserInfo`). Validate anything that
-  ends up in an HTTP header. The Qobuz token stays in RAM (`WiimWorker::qobuz_`): never in NVS, LittleFS or logs.
+- Never log or echo secrets (Wi-Fi password, OpenAI key, the Qobuz/Deezer tokens from `GetUserInfo`). Validate anything that
+  ends up in an HTTP header. These tokens stay in RAM (`WiimWorker::qobuz_`, `deezerToken_`): never in NVS, LittleFS
+  or logs.
 
 ## Pitfalls already solved (don't reintroduce)
 

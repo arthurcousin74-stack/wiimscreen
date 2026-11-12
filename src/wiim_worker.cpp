@@ -272,7 +272,10 @@ void WiimWorker::run() {
             push(std::move(ev));
         }
         if (queue) runQueueCheck();
-        if (qfavs) runQobuzFavorites();
+        if (qfavs) {
+            runQobuzFavorites();
+            runDeezerFavorites();
+        }
         if (play.length()) runPlayFavorite(play);
         if (searchTest.length()) runSearchTest(searchTest);
         if (search.length()) {
@@ -463,6 +466,14 @@ void WiimWorker::runQueueCheck() {
     logEvent("File du WiiM : recherche du service UPnP\xE2\x80\xA6");
     std::string control;
     if (!findPlayQueue(control, true)) return;
+    {  // Services liés au WiiM (noms à donner à GetUserInfo), sans jeton
+        std::string resp, result, list;
+        const int c = upnpRequest(control, "GetBasicUserInfo", wr::soapBody(kPlayQueue, "GetBasicUserInfo", {}), resp);
+        if (c == 200 && wr::xmlElement(resp, "Result", result))
+            for (auto& n : wr::jsonValuesOf(wr::xmlUnescape(result), "showName")) list += (list.empty() ? "" : ", ") + n;
+        logEvent("File : services li\xC3\xA9s (GetBasicUserInfo %d)", c);
+        if (!list.empty()) logLong("", list);
+    }
     auto names = queueNames(control, true);
     std::vector<std::string> seen;  // une même file peut répondre sous plusieurs noms
     for (auto& n : names) {
@@ -1005,6 +1016,63 @@ void WiimWorker::runQobuzFavorites() {
     push(std::move(ev));
 }
 
+// Favoris Deezer : le WiiM donne-t-il un jeton Deezer (GetUserInfo, nom du compte à deviner) ? Si oui, l'API
+// publique Deezer donne les albums favoris (user/me/albums). Le jeton reste en mémoire, jamais journalisé.
+void WiimWorker::runDeezerFavorites() {
+    std::string control;
+    if (!findPlayQueue(control, false)) return;
+    if (deezerToken_.empty()) {
+        for (const char* src : {"Deezer", "Deezer2", "deezer"}) {
+            std::string resp, result;
+            const int c = upnpRequest(control, "GetUserInfo",
+                                      wr::soapBody(kPlayQueue, "GetUserInfo", {{"AccountSource", src}, {"RefreshToken", "0"}}),
+                                      resp);
+            if (c == 200 && wr::xmlElement(resp, "Result", result)) deezerToken_ = wr::parseAccessToken(wr::xmlUnescape(result));
+            logEvent("Deezer : GetUserInfo(%s) %d, jeton %s", src, c, deezerToken_.empty() ? "absent" : "obtenu");
+            if (!deezerToken_.empty()) break;
+        }
+    }
+    WiimEvent ev;
+    ev.kind = WiimEvent::DeezerFavorites;
+    if (!deezerToken_.empty()) {
+        WiFiClientSecure tls;
+        tls.setCACertBundle(ca_bundle_start, caBundleSize());
+        tls.setHandshakeTimeout(8);
+        HTTPClient http;
+        http.setConnectTimeout(6000);
+        http.setTimeout(10000);
+        http.setReuse(false);
+        int code = -1;
+        if (http.begin(tls, ("https://api.deezer.com/user/me/albums?limit=50&access_token=" + deezerToken_).c_str())) {
+            code = http.GET();
+            CapStream s(kMaxBody);
+            if (code == 200) http.writeToStream(&s);
+            http.end();
+            ev.albums = wr::parseDeezerAlbums(s.data);
+            // Jeton refusé : Deezer répond 200 avec {"error":…} ; on le redemandera au prochain rafraîchissement
+            if (code == 200 && ev.albums.empty() && s.data.find("\"error\"") != std::string::npos) deezerToken_.clear();
+        }
+        ev.ok = code == 200 && !deezerToken_.empty();
+        logEvent("Deezer : albums favoris %d, %u", code, (unsigned)ev.albums.size());
+    }
+    push(std::move(ev));
+}
+
+void WiimWorker::runPlayDeezerAlbum(const std::string& albumId) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ;
+    if (!findPlayQueue(control, false) || !deezerModel(control, templ)) {
+        ev.text = "lance d'abord un album Deezer depuis l'app WiiM Home";
+        push(std::move(ev));
+        return;
+    }
+    const std::string base = wr::urlOrigin(wr::parseQueueContext(templ).searchUrl);
+    ev.ok = playAlbumAt(control, templ, base + "/deezer/album/" + albumId, "", "Album Deezer");
+    if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 cet album";
+    push(std::move(ev));
+}
+
 // Album favori Qobuz : file de l'album lancée au premier morceau
 void WiimWorker::runPlayQobuzAlbum(const std::string& albumId) {
     WiimEvent ev;
@@ -1279,6 +1347,10 @@ void WiimWorker::runPlayFavorite(const String& id) {
     }
     if (id.startsWith("qobuz-album:")) {
         runPlayQobuzAlbum(id.substring(12).c_str());
+        return;
+    }
+    if (id.startsWith("deezer-album:")) {
+        runPlayDeezerAlbum(id.substring(13).c_str());
         return;
     }
     WiimEvent ev;

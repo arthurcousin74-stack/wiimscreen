@@ -31,7 +31,7 @@ struct WiimReport {
 };
 
 struct WiimEvent {
-    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone, QobuzFavorites };
+    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone, QobuzFavorites, DeezerFavorites };
     Kind kind = CommandDone;
     WiimError error = WiimError::None;
     String text;  // commande ; empreinte vue (PinMismatch) ; nouvelle adresse (Moved) ; favori ou erreur
@@ -40,7 +40,7 @@ struct WiimEvent {
     String uuid, name;  // Identity ; name : texte cherché (SearchDone)
     std::vector<wr::QueueTrack> tracks;  // SearchDone : résultats
     bool played = false;                 // SearchDone : la lecture du premier résultat a été lancée
-    std::vector<wr::QobuzAlbum> albums;  // QobuzFavorites : albums favoris du compte Qobuz
+    std::vector<wr::QobuzAlbum> albums;  // QobuzFavorites / DeezerFavorites : albums favoris du compte
 };
 
 class WiimWorker {
@@ -97,6 +97,8 @@ private:
     int qobuzGet(const std::string& control, const std::string& path, std::string& out);
     void runQobuzFavorites();
     void runPlayQobuzAlbum(const std::string& albumId);
+    void runDeezerFavorites();
+    void runPlayDeezerAlbum(const std::string& albumId);
     void runSearchTest(const String& query);
     void runDeezerTest(const std::string& control, const String& query);
     void runNoPlayTest(const String& query);
@@ -142,6 +144,7 @@ private:
     wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
     bool haveQobuz_ = false;
     bool qobuzFavsWanted_ = false;
+    std::string deezerToken_;  // jeton Deezer donné par le WiiM (mémoire seulement), vide si inconnu
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
