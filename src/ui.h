@@ -131,6 +131,7 @@ private:
     void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
     void navRail(int active);  // 0 Accueil, 1 Réglages
+    void emptyStrip();         // bande des presets sans preset
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change

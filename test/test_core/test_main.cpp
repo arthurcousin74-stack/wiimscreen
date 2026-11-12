@@ -324,7 +324,7 @@ static void checkLayout(int W, int H, int n) {
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
                                 L.transport[kNext], L.mic, L.volume, L.navHome, L.navSettings};
-    if (n > 0) blocks.push_back(L.strip);
+    blocks.push_back(L.strip);  // toujours là, même sans preset
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
         TEST_ASSERT_TRUE(blocks[i].w > 0 && blocks[i].h > 0);

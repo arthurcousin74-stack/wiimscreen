@@ -551,18 +551,19 @@ Layout computeLayout(int width, int height, int presetCount) {
     const int Y0 = L.content.y;
     const int W = width - X0;
 
-    // --- Bande des presets : tuiles (image + nom), une ou deux rangées par page
+    // --- Bande des presets : tuiles (image + nom), une ou deux rangées par page.
+    // Toujours réservée, même sans preset (l'écran y explique comment en ajouter) : sinon
+    // l'écran principal ressemble à la vue ambiance.
     const int tileH = sc(136), dotsH = sc(16);
-    const int rows = landscape ? 1 : 2;
+    const int rows = landscape || presetCount <= 0 ? 1 : 2;
     const int minTileW = sc(130);
     const int cols = std::max(2, std::min(6, (W - 2 * m + gap) / (minTileW + gap)));
     L.perPage = presetCount > 0 ? cols * rows : 0;
-    int stripH = 0;
+    const int stripH = rows * tileH + (rows - 1) * gap;
+    const int dotsY = height - m - dotsH;
+    L.strip = Rect{X0 + m, dotsY - stripH, W - 2 * m, stripH};
     if (presetCount > 0) {
-        stripH = rows * tileH + (rows - 1) * gap;
-        const int dotsY = height - m - dotsH;
         L.dots = Rect{X0 + m, dotsY, W - 2 * m, dotsH};
-        L.strip = Rect{X0 + m, dotsY - stripH, W - 2 * m, stripH};
         const int tileW = (W - 2 * m - (cols - 1) * gap) / cols;
         for (int i = 0; i < std::min(presetCount, L.perPage); ++i) {
             int r = i / cols, c = i % cols;
@@ -570,7 +571,7 @@ Layout computeLayout(int width, int height, int presetCount) {
         }
     }
     const int topY = Y0 + m;
-    const int topBottom = presetCount > 0 ? L.strip.y - gap : height - m;
+    const int topBottom = L.strip.y - gap;
 
     // --- Pile de droite (paysage) ou du bas (portrait) : hauteurs fixes
     const int infoMinH = sc(150);

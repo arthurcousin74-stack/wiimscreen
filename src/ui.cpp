@@ -319,15 +319,7 @@ void Ui::info(const UiState& st) {
         y += titleH;
         C.loadFont(kSmall);
         if (presets_.empty()) {
-            // Aucun preset sur le WiiM : expliquer comment en ajouter
-            int ly = y + sc(6);
-            for (auto& l : wr::wrapText("Aucun preset : ajoute tes radios et playlists favorites dans l'app "
-                                        "WiiM Home, elles appara\xC3\xAEtront ici. En attendant, lance la musique "
-                                        "depuis ton t\xC3\xA9l\xC3\xA9phone.",
-                                        r.w, 4, measure)) {
-                C.drawString(l.c_str(), r.x, ly);
-                ly += C.fontHeight() + sc(4);
-            }
+            C.drawString(fit("Lance la musique depuis ton t\xC3\xA9l\xC3\xA9phone.", r.w).c_str(), r.x, y + sc(6));
         } else {
             C.drawString(fit("Choisis un preset ci-dessous.", r.w).c_str(), r.x, y + sc(6));
         }
@@ -600,9 +592,42 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
         int i = page_ * layout_.perPage + (int)slot;
         if (i < (int)presets_.size()) tile((int)slot, i, i == pressedPreset);
     }
+    if (presets_.empty()) emptyStrip();
     pageDots();
     toast(st.message);
     present();
+}
+
+// Bande des presets vide : dire pourquoi, et comment la remplir
+void Ui::emptyStrip() {
+    auto& C = canvas_;
+    const wr::Rect& r = layout_.strip;
+    C.fillRoundRect(r.x, r.y, r.w, r.h, sc(14), kCard);
+    // Étoile en pointillé : une place pour les favoris
+    const int d = std::min(r.h - sc(40), sc(88)), ix = r.x + sc(24), iy = r.y + (r.h - d) / 2;
+    C.drawRoundRect(ix, iy, d, d, sc(12), kTrack);
+    C.drawRoundRect(ix + 1, iy + 1, d - 2, d - 2, sc(11), kTrack);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.loadFont(kBig);
+    C.setTextColor(kTrack);
+    C.drawString("+", ix + d / 2, iy + d / 2);
+    const int tx = ix + d + sc(22), tw = r.right() - sc(20) - tx;
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    C.setTextDatum(textdatum_t::top_left);
+    C.loadFont(kMid);
+    C.setTextColor(kText);
+    int y = r.y + sc(22);
+    C.drawString(wr::wrapText("Aucun favori sur ce WiiM", tw, 1, measure)[0].c_str(), tx, y);
+    y += C.fontHeight() + sc(8);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    for (auto& l : wr::wrapText("Dans l'app WiiM Home, enregistre tes albums, playlists et radios en presets "
+                                "(12 au plus) : ils appara\xC3\xAEtront ici avec leur pochette.",
+                                tw, 3, measure)) {
+        if (y + C.fontHeight() > r.bottom() - sc(10)) break;
+        C.drawString(l.c_str(), tx, y);
+        y += C.fontHeight() + sc(4);
+    }
 }
 
 void Ui::renderAmbient(const UiState& st) {
@@ -893,7 +918,7 @@ bool Ui::hitProgress(int x, int y, uint32_t& posMs) const {
     return true;
 }
 
-bool Ui::hitStrip(int x, int y) const { return layout_.strip.contains(x, y); }
+bool Ui::hitStrip(int x, int y) const { return !presets_.empty() && layout_.strip.contains(x, y); }
 
 int Ui::hitDots(int x, int y) const {
     if (pageCount() < 2) return 0;

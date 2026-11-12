@@ -27,6 +27,8 @@ Hardware testing in progress.
   advanced sections, file name and progress on the update page.
 
 ### Changed
+- The main screen always keeps its preset row. Without presets on the WiiM, the row explains how to add them
+  (before, the screen looked like the ambient view, so the home button seemed to do nothing).
 - All WiiM networking runs in a background task; the screen never waits for the network.
 - Kept-alive TLS connection to the WiiM: commands and polls no longer pay a TLS handshake each time; faster
   polling (1.5 s while playing). Redraws are coalesced to one per loop, and the 1 Hz progress tick redraws only
