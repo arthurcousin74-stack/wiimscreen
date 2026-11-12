@@ -18,7 +18,8 @@ Hardware testing in progress.
   Radio Browser station search).
 - Over-the-air updates from a browser (6-digit code), firmware version display.
 - PC preview tool rendering the real UI to PNG; native unit tests for all hardware-free logic.
-- Gear button next to the playback controls (settings menu) and home button in the ambient view.
+- Home button next to the playback controls (back to the first preset page) and in the ambient view (back to
+  the main screen). Settings stay on a 3 s press on the album art.
 - Settings menu: touch test and event log (for hardware bug reports).
 - Dark, phone-friendly setup and update pages: Wi-Fi list with signal strength, show-password toggle, folded
   advanced sections, file name and progress on the update page.

@@ -77,7 +77,7 @@ see [Other ESP32 boards](#other-esp32-boards).
 3. **Configure from your phone**: scan the QR code on the screen, pick your Wi-Fi, type its password, save.
    Leave the WiiM address empty: the Tab5 finds it.
 
-Later updates go over Wi-Fi: gear button (left of the playback controls) → *Mise à jour*, then open the address shown on a computer.
+Later updates go over Wi-Fi: hold the album art 3 s → *Mise à jour*, then open the address shown on a computer.
 Full step-by-step guide in French: [LISEZMOI.md](LISEZMOI.md).
 
 **Voice commands** (optional): create an API key at <https://platform.openai.com>, paste it in the setup page.
@@ -168,7 +168,7 @@ the WiiM, CA-verified HTTPS elsewhere, setup and update modes only reachable aft
 
 ## Contributing
 
-Bug reports with your WiiM model, your board and the firmware version (shown in the *Réglages* menu, gear button)
+Bug reports with your WiiM model, your board and the firmware version (shown in the *Réglages* menu: hold the album art 3 s)
 are very welcome, as are hardware test reports, ports to other ESP32 boards, translations and UI improvements. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

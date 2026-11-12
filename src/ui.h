@@ -58,8 +58,7 @@ public:
     void setVoiceEnabled(bool on) { voiceOn_ = on; }
     void renderVoice(VoicePhase phase, float level);  // level : 0..1
     bool hitMic(int x, int y) const;
-    bool hitSettings(int x, int y) const;  // bouton Réglages (engrenage) de la vue commandes
-    bool hitHome(int x, int y) const;      // bouton Accueil de la vue ambiance
+    bool hitHome(int x, int y) const;  // bouton Accueil (vue commandes ou vue ambiance)
     bool hitVoiceCancel(int x, int y) const;
     // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
     // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
@@ -127,7 +126,6 @@ private:
     void toast(const String& msg);
     void drawBars();
     void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
-    void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
     void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
 
     M5Canvas canvas_;  // image complète, en PSRAM

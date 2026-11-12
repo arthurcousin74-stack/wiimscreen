@@ -764,11 +764,11 @@ static void handleTap(int x, int y) {
         startVoice();
         return;
     }
-    if (g_ui.hitSettings(x, y)) {
-        logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
+    if (g_ui.hitHome(x, y)) {  // Accueil : retour à la première page de presets
+        logEvent("Appui Accueil (%d,%d)", x, y);
         sound::tap();
-        g_menuOpen = true;
-        g_ui.renderMenu(FW_VERSION);
+        g_ui.setPage(0);
+        show();
         return;
     }
 

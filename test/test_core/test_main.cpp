@@ -322,7 +322,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.settings, L.volume};
+                                L.transport[kNext], L.mic, L.home, L.volume};
     if (n > 0) blocks.push_back(L.strip);
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));

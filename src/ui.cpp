@@ -588,10 +588,10 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     info(st);
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
-    {  // Réglages : engrenage au bout gauche de la rangée (le micro est au bout droit)
-        const wr::Rect& g = layout_.settings;
+    {  // Accueil : maison au bout gauche de la rangée (le micro est au bout droit)
+        const wr::Rect& g = layout_.home;
         canvas_.fillCircle(g.x + g.w / 2, g.y + g.h / 2, g.w / 2, kCard);
-        gearIcon(g.x + g.w / 2, g.y + g.h / 2, g.w / 4, kText2, kCard);
+        homeIcon(g.x + g.w / 2, g.y + g.h / 2, g.w / 4, kText2, kCard);
     }
     if (voiceOn_) {
         const wr::Rect& m = layout_.mic;
@@ -743,18 +743,6 @@ void Ui::micIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     (void)bg;
 }
 
-// Engrenage : dents en couronne, disque, trou central
-void Ui::gearIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
-    auto& C = canvas_;
-    const int teeth = 8, tr = std::max(2, r / 4);
-    for (int k = 0; k < teeth; ++k) {
-        float a = k * 2 * 3.14159265f / teeth;
-        C.fillCircle(cx + (int)std::lround(std::cos(a) * r), cy + (int)std::lround(std::sin(a) * r), tr, c);
-    }
-    C.fillCircle(cx, cy, r * 85 / 100, c);
-    C.fillCircle(cx, cy, r * 38 / 100, bg);
-}
-
 // Maison : toit, corps, porte
 void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     auto& C = canvas_;
@@ -821,13 +809,12 @@ bool Ui::hitMic(int x, int y) const {
 
 bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }
 
-bool Ui::hitSettings(int x, int y) const {
-    const wr::Rect& g = layout_.settings;
+bool Ui::hitHome(int x, int y) const {
+    if (view_ == View::Ambient) return homeRect_.contains(x, y);
+    const wr::Rect& g = layout_.home;
     const int pad = sc(10);
-    return wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
+    return view_ == View::Controls && wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
 }
-
-bool Ui::hitHome(int x, int y) const { return view_ == View::Ambient && homeRect_.contains(x, y); }
 
 int Ui::hitPreset(int x, int y) const {
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {

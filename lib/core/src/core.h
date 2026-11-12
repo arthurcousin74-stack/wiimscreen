@@ -155,7 +155,7 @@ struct Layout {
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
     Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
-    Rect settings;  // bouton Réglages, à l'autre bout de la rangée
+    Rect home;      // bouton Accueil, à l'autre bout de la rangée
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
     Rect volBar;    // curseur de volume

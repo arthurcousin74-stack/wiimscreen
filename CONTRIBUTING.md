@@ -9,7 +9,7 @@ Open an issue with:
 
 - your **board** (only the M5Stack Tab5 is tested so far),
 - your **WiiM model** and its firmware version (WiiM Home app),
-- the **wiimscreen version** (bottom of the *Réglages* menu: gear button left of the playback controls),
+- the **wiimscreen version** (bottom of the *Réglages* menu: hold the album art 3 s),
 - what you did, what you expected, what happened — a photo of the screen helps,
 - if possible, the serial log (`pio device monitor`, 115200 baud).
 
