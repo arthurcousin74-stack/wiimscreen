@@ -45,6 +45,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   `src/` stays thin glue around hardware and network.
 - **Code comments and UI strings are in French** (the original author's language). Keep it consistent within a
   file; English is fine for new files. Non-ASCII UI text is written as UTF-8 escapes in C strings when needed.
+- **README.md is written in ASD-STE100 Simplified Technical English** (short sentences, active voice, one
+  instruction per numbered step). Keep that style when you edit it.
 - Colors are RGB888 `uint32_t` (an `uint16_t` would be read as RGB565 by M5GFX).
 - UI changes: render them with `tools/preview` and look at the PNGs before committing; `docs/*.png` come from it.
 - Layout dimensions scale with `sc(v) = v * min(width, height) / 540`; `checkLayout` tests guard overlaps and
