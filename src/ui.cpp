@@ -1228,7 +1228,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
     C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
     C.drawString("File du WiiM", logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
-    // Essai sans clé de la recherche Qobuz par le WiiM (fait jouer de la musique)
+    // Essai : favoris Qobuz lus par le WiiM (sans lancer la lecture)
     const int tw = sc(190);
     logTest_ = wr::Rect{logQueue_.x - sc(12) - tw, Y, tw, bh};
     C.loadFont(kMid);
@@ -1237,7 +1237,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     if (logTest_.x < titleRight) logTest_.y = Y + bh + sc(10), logTest_.x = logClose_.right() - tw;  // portrait : dessous
     C.fillRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kCard);
     C.drawRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kTrack);
-    C.drawString("Essai recherche", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
+    C.drawString("Essai favoris", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     C.loadFont(kTiny);

@@ -25,5 +25,7 @@ uint32_t revision();                            // changes after each add/remove
 // kept from the last Qobuz queue read on the WiiM, used to build search queues.
 bool saveQobuzTemplate(const std::string& queueContext);
 bool qobuzTemplate(std::string& out);
+// Same for another source (Deezer…): /fav/model_<source>.xml, without tracks
+bool saveSourceModel(const std::string& source, const std::string& queueContext);
 
 }  // namespace fav

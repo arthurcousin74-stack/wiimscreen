@@ -148,6 +148,12 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty.
 
+- Journal › *Essai favoris*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums` (the
+  user's Qobuz favorites, if the WiiM adds its user token to the request), read back without playing. Outcome:
+  not known yet.
+- *File du WiiM* also keeps a model of queues from other sources (`/fav/model_<source>.xml`, e.g. Deezer) for
+  later work.
+
 ## What the local API does not do
 
 - **No catalog search** (Qobuz, Spotify, TIDAL…): search the service's own API, then play a URL or use Connect

@@ -26,8 +26,8 @@ Hardware testing in progress.
 - Qobuz search without any key (verified on a WiiM; results are read back until their number is stable): the search button in the left bar opens an on-screen keyboard; the WiiM runs
   the track search with its own Qobuz access, the remote reads the results back and lists them (title, artist,
   album); a tap plays a track. Needs one Qobuz album played from the WiiM Home app once (as a model).
-- Journal › *Essai recherche*: key-free experiment that asks the WiiM to play a Qobuz queue made only of an
-  album address, then of a track search (no Qobuz key on the remote).
+- Journal › *Essai favoris*: asks the WiiM to load the user's Qobuz favorite tracks, then albums, into a queue
+  (no playback) and logs what it loaded.
 - Settings menu: touch test and event log (for hardware bug reports). The log wraps long lines and has a
   *File du WiiM* button: a read-only check of the WiiM's undocumented UPnP PlayQueue service (first step towards
   Qobuz favorites).

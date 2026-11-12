@@ -4,6 +4,7 @@
 #include <LittleFS.h>
 
 #include <algorithm>
+#include <cctype>
 
 namespace fav {
 
@@ -120,6 +121,15 @@ bool saveQobuzTemplate(const std::string& queueContext) {
     const std::string small = wr::queueFromTemplate(queueContext, q.listName, q.searchUrl);  // sans les pistes
     Guard g;
     return g_ok && !small.empty() && writeFile("/fav/qobuz_template.xml", small);
+}
+
+bool saveSourceModel(const std::string& source, const std::string& queueContext) {
+    std::string safe;
+    for (char c : source) safe += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    wr::QueueInfo q = wr::parseQueueContext(queueContext);
+    const std::string small = wr::queueFromTemplate(queueContext, q.listName, q.searchUrl);
+    Guard g;
+    return g_ok && !safe.empty() && !small.empty() && writeFile(("/fav/model_" + safe.substr(0, 24) + ".xml").c_str(), small);
 }
 
 bool qobuzTemplate(std::string& out) {

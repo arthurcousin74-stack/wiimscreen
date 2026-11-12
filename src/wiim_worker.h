@@ -57,7 +57,7 @@ public:
     // rejoue un favori enregistré (évènement FavPlayed). Non bloquant.
     void saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl);
     void playFavorite(const String& id);
-    // Essai (journal) : files Qobuz sans pistes — album, puis recherche de `query` — envoyées au WiiM
+    // Essai (journal) : files Qobuz des favoris (morceaux, albums) chargées par le WiiM, sans lecture
     void testQobuzSearch(const String& query);
     // Recherche Qobuz par le WiiM (évènement SearchDone avec les morceaux trouvés), puis lecture d'un
     // résultat (0 pour le premier). Non bloquant.
