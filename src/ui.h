@@ -99,6 +99,7 @@ public:
     void renderLog(const std::vector<String>& lines, const char* version);
     bool hitLogClose(int x, int y) const { return logClose_.contains(x, y); }
     bool hitLogQueue(int x, int y) const { return logQueue_.contains(x, y); }
+    bool hitLogTest(int x, int y) const { return logTest_.contains(x, y); }
 
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
@@ -161,6 +162,7 @@ private:
     wr::Rect menuRects_[5];
     wr::Rect logClose_;
     wr::Rect logQueue_;  // Journal : bouton « File du WiiM »
+    wr::Rect logTest_;   // Journal : bouton « Essai recherche »
     std::vector<wr::Rect> pickRects_;
     wr::Rect touchClose_;
     wr::Rect pickRetry_, pickConfig_;

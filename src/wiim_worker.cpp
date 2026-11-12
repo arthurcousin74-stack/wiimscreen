@@ -251,6 +251,8 @@ void WiimWorker::run() {
         favSave_.wanted = false;
         String play = favPlay_;
         favPlay_ = "";
+        String searchTest = searchTest_;
+        searchTest_ = "";
         xSemaphoreGive(lock_);
         if (presets) {
             WiimEvent ev;
@@ -263,6 +265,7 @@ void WiimWorker::run() {
         }
         if (queue) runQueueCheck();
         if (play.length()) runPlayFavorite(play);
+        if (searchTest.length()) runSearchTest(searchTest);
         if (save.wanted) runSaveFavorite(save);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
     }
@@ -528,6 +531,91 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
     push(std::move(ev));
 }
 
+// Envoie une file au WiiM puis la lance ; renvoie le code HTTP de PlayQueueWithIndex (-1 si non tenté)
+static int sendQueue(const std::string& control, const std::string& ctx, const std::string& listName, int& create) {
+    std::string resp;
+    // QueuePolicy 1 comme dans l'exemple connu ; sans l'argument si le WiiM le refuse
+    create = upnpRequest(control, "CreateQueue",
+                         wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
+    if (create != 200)
+        create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
+                             resp);
+    if (create != 200) return -1;
+    return upnpRequest(control, "PlayQueueWithIndex",
+                       wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", listName}, {"Index", "1"}}), resp);
+}
+
+void WiimWorker::testQobuzSearch(const String& query) {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    searchTest_ = query.length() ? query : String("Miles Davis");
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
+// Essai sans clé : le WiiM lit-il lui-même les pistes d'une file Qobuz qui n'a qu'une adresse
+// (album, puis recherche de morceaux) ? Fait jouer de la musique : lancé seulement depuis le journal.
+void WiimWorker::runSearchTest(const String& query) {
+    logEvent("Essai Qobuz sans cl\xC3\xA9 (\xC2\xAB %s \xC2\xBB) : la musique va changer", query.c_str());
+    std::string control;
+    if (!findPlayQueue(control, false)) return;
+    // Modèle : une vraie file Qobuz (en cours sur le WiiM, sinon un favori)
+    std::string templ;
+    for (auto& n : queueNames(control, false)) {
+        std::string ctx;
+        if (browseQueue(control, n, ctx) == 200 && wr::parseQueueContext(ctx).sourceName == "Qobuz") {
+            templ = ctx;
+            break;
+        }
+    }
+    if (templ.empty())
+        for (auto& f : fav::list())
+            if (f.source == "Qobuz" && fav::context(f.id, templ)) break;
+    if (templ.empty()) {
+        logEvent("Essai : aucune file Qobuz comme mod\xC3\xA8le (lance un album Qobuz depuis l'app, puis r\xC3\xA9" "essaie)");
+        return;
+    }
+    const wr::QueueInfo model = wr::parseQueueContext(templ);
+    logEvent("Essai : mod\xC3\xA8le \xC2\xAB %s \xC2\xBB, compte %s, qualit\xC3\xA9 %s", model.listName.c_str(),
+             wr::maskAccount(model.user).c_str(), model.quality.c_str());
+
+    struct Variant {
+        const char* label;
+        std::string name, url;
+    };
+    std::vector<Variant> variants;
+    if (model.searchUrl.find("/get?") != std::string::npos)
+        variants.push_back({"A (album sans pistes)", "wiimscreen-album", model.searchUrl});
+    variants.push_back({"B (recherche de morceaux)", "wiimscreen-recherche",
+                        "https://www.qobuz.com/api.json/0.2/track/search?query=" + wr::urlQueryEncode(query.c_str()) +
+                            "&offset=0&limit=50"});
+    for (auto& v : variants) {
+        const std::string ctx = wr::queueFromTemplate(templ, v.name, v.url);
+        int create = 0;
+        const int play = sendQueue(control, ctx, v.name, create);
+        logEvent("Essai %s : CreateQueue %d, PlayQueueWithIndex %d", v.label, create, play);
+        if (play != 200) continue;
+        vTaskDelay(pdMS_TO_TICKS(6000));  // le temps que le WiiM lise les pistes et démarre
+        std::string back;
+        if (browseQueue(control, v.name, back) == 200 && !back.empty()) {
+            wr::QueueInfo q = wr::parseQueueContext(back);
+            logEvent("  file relue : %d piste(s), source %s", q.tracks, q.sourceName.c_str());
+            for (size_t i = 0; i < q.titles.size() && i < 3; ++i) logLong("  - ", q.titles[i]);
+        } else {
+            logEvent("  file relue : rien");
+        }
+        wr::PlayerStatus st;
+        wr::TrackMeta m;
+        WiimError e = client_.status(st);
+        if (e == WiimError::None && client_.metaInfo(m) == WiimError::None)
+            logEvent("  le WiiM %s : %s \xE2\x80\x94 %s", st.playing ? "joue" : "ne joue pas", m.title.c_str(),
+                     m.artist.c_str());
+        else
+            logEvent("  \xC3\xA9tat du WiiM : %s", wiimErrorName(e));
+    }
+    logEvent("Essai Qobuz sans cl\xC3\xA9 : termin\xC3\xA9");
+    nextPoll_ = millis();
+}
+
 void WiimWorker::runPlayFavorite(const String& id) {
     WiimEvent ev;
     ev.kind = WiimEvent::FavPlayed;
@@ -538,19 +626,9 @@ void WiimWorker::runPlayFavorite(const String& id) {
         ev.text = "le WiiM n'accepte pas de file de lecture";
     } else {
         wr::QueueInfo q = wr::parseQueueContext(ctx);
-        std::string resp;
         const uint32_t t0 = millis();
-        // QueuePolicy 1 comme dans l'exemple connu ; sans l'argument si le WiiM le refuse
-        int c = upnpRequest(control, "CreateQueue",
-                            wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
-        if (c != 200)
-            c = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
-                            resp);
-        int p = -1;
-        if (c == 200)
-            p = upnpRequest(control, "PlayQueueWithIndex",
-                            wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", q.listName}, {"Index", "1"}}),
-                            resp);
+        int c = 0;
+        const int p = sendQueue(control, ctx, q.listName, c);
         logEvent("Favori \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB : CreateQueue %d, PlayQueueWithIndex %d (%lu ms)", q.listName.c_str(), c,
                  p, (unsigned long)(millis() - t0));
         ev.ok = c == 200 && p == 200;

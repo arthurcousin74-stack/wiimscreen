@@ -54,6 +54,8 @@ public:
     // rejoue un favori enregistré (évènement FavPlayed). Non bloquant.
     void saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl);
     void playFavorite(const String& id);
+    // Essai (journal) : files Qobuz sans pistes — album, puis recherche de `query` — envoyées au WiiM
+    void testQobuzSearch(const String& query);
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
     bool takeReport(WiimReport& out);
@@ -75,6 +77,7 @@ private:
     bool findPlayQueue(std::string& control, bool verbose);
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
+    void runSearchTest(const String& query);
     void push(WiimEvent&& e);
     void notePinning(WiimError e);
     bool commandsWaiting();
@@ -91,6 +94,7 @@ private:
     bool queueWanted_ = false;
     FavRequest favSave_;
     String favPlay_;
+    String searchTest_;
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;

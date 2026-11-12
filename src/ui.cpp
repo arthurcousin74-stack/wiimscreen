@@ -1030,7 +1030,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.loadFont(kSmall);
     C.setTextColor(kText2);
     const String ver = String("Version ") + version;
-    if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(24) - qw)  // sinon : version dans Réglages
+    if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(36) - qw - sc(190))  // sinon : version dans Réglages
         C.drawString(ver.c_str(), X + sc(150), Y + sc(6));
     logClose_ = wr::Rect{W - bw - m, Y, bw, bh};
     C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
@@ -1042,11 +1042,21 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
     C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
     C.drawString("File du WiiM", logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
+    // Essai sans clé de la recherche Qobuz par le WiiM (fait jouer de la musique)
+    const int tw = sc(190);
+    logTest_ = wr::Rect{logQueue_.x - sc(12) - tw, Y, tw, bh};
+    C.loadFont(kMid);
+    const int titleRight = X + C.textWidth("Journal") + sc(16);
+    C.loadFont(kSmall);
+    if (logTest_.x < titleRight) logTest_.y = Y + bh + sc(10), logTest_.x = logClose_.right() - tw;  // portrait : dessous
+    C.fillRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kCard);
+    C.drawRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kTrack);
+    C.drawString("Essai recherche", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     C.loadFont(kTiny);
     C.setTextDatum(textdatum_t::top_left);
-    const int top = Y + bh + sc(14), lh = C.fontHeight() + sc(2);
+    const int top = std::max(Y + bh, logTest_.bottom()) + sc(14), lh = C.fontHeight() + sc(2);
     const int rowsFit = std::max(1, (H - top - m) / lh), textW = W - X - m;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     std::vector<std::pair<std::string, bool>> rows;  // texte, dernière entrée

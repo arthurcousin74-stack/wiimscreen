@@ -998,6 +998,11 @@ void loop() {
             logEvent("Appui File du WiiM");
             g_worker.checkQueue();  // résultat dans le journal (tâche de fond)
             g_logFrame = 0;
+        } else if (t.wasPressed() && g_ui.hitLogTest(t.x, t.y)) {
+            sound::tap();
+            logEvent("Appui Essai recherche");
+            g_worker.testQobuzSearch(g_state.player.artist.c_str());  // artiste en cours, sinon Miles Davis
+            g_logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
             sound::tap();
             g_logOpen = false;

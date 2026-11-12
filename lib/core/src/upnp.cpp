@@ -272,6 +272,57 @@ std::vector<Favorite> favoritesFromText(const std::string& text) {
     return out;
 }
 
+// Remplace le contenu du premier <tag>…</tag> (ou l'ajoute à la fin de `parentTag`)
+static void setElement(std::string& xml, const std::string& tag, const std::string& escapedValue,
+                       const std::string& parentTag) {
+    const std::string open = "<" + tag + ">", close = "</" + tag + ">";
+    size_t a = xml.find(open);
+    if (a != std::string::npos) {
+        size_t b = xml.find(close, a);
+        if (b != std::string::npos) {
+            xml.replace(a + open.size(), b - a - open.size(), escapedValue);
+            return;
+        }
+    }
+    size_t e = xml.find("</" + parentTag + ">");
+    if (e != std::string::npos) xml.insert(e, open + escapedValue + close);
+}
+
+std::string queueFromTemplate(const std::string& templ, const std::string& listName, const std::string& searchUrl) {
+    size_t a = templ.find("<PlayList>");
+    size_t b = templ.find("</PlayList>");
+    if (a == std::string::npos || b == std::string::npos || b < a) return "";
+    std::string x = templ.substr(a, b + 11 - a);
+    // Pistes retirées : le lecteur les lit lui-même depuis SearchUrl
+    size_t t = x.find("<Tracks>");
+    size_t te = x.find("</Tracks>");
+    if (t != std::string::npos && te != std::string::npos && te > t) x.erase(t, te + 9 - t);
+    else if ((t = x.find("<Tracks/>")) != std::string::npos) x.erase(t, 9);
+    setElement(x, "ListName", xmlEscape(listName), "PlayList");
+    if (x.find("<ListInfo>") == std::string::npos) x.insert(x.find("</PlayList>"), "<ListInfo></ListInfo>");
+    setElement(x, "SearchUrl", xmlEscape(searchUrl), "ListInfo");
+    size_t n = x.find("<TrackNumber>");
+    if (n != std::string::npos) {
+        size_t ne = x.find("</TrackNumber>", n);
+        if (ne != std::string::npos) x.erase(n, ne + 14 - n);
+    }
+    return "<?xml version=\"1.0\"?>" + x;
+}
+
+std::string urlQueryEncode(const std::string& s) {
+    static const char* hex = "0123456789ABCDEF";
+    std::string o;
+    for (unsigned char c : s) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') o += static_cast<char>(c);
+        else {
+            o += '%';
+            o += hex[c >> 4];
+            o += hex[c & 15];
+        }
+    }
+    return o;
+}
+
 std::string maskSecrets(const std::string& text) {
     static const char* kKeys[] = {"user_auth_token", "token", "secret", "password", "request_sig", "sig"};
     std::string o = text;

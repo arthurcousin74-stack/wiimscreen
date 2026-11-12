@@ -699,6 +699,30 @@ static void test_favorites() {
     TEST_ASSERT_EQUAL_STRING("k2", back[1].key.c_str());
 }
 
+static void test_queue_template() {
+    const std::string templ =
+        "<?xml version=\"1.0\"?><PlayList><ListName>Babylon</ListName><ListInfo><Radio>0</Radio>"
+        "<SourceName>Qobuz</SourceName><TrackNumber>40</TrackNumber><requestQuality>6</requestQuality>"
+        "<SearchUrl>https://www.qobuz.com/api.json/0.2/album/get?album_id=a1&amp;offset=0&amp;limit=50</SearchUrl>"
+        "<Login_username>someone@example.com</Login_username></ListInfo><Tracks><Track1><URL>u</URL></Track1>"
+        "</Tracks></PlayList>";
+    std::string q = queueFromTemplate(templ, "wiimscreen-recherche",
+                                      "https://www.qobuz.com/api.json/0.2/track/search?query=miles%20davis&limit=50");
+    QueueInfo i = parseQueueContext(q);
+    TEST_ASSERT_TRUE(i.ok);
+    TEST_ASSERT_EQUAL_STRING("wiimscreen-recherche", i.listName.c_str());
+    TEST_ASSERT_EQUAL_STRING("Qobuz", i.sourceName.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/track/search?query=miles%20davis&limit=50",
+                             i.searchUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("someone@example.com", i.user.c_str());  // compte et qualité gardés
+    TEST_ASSERT_EQUAL_STRING("6", i.quality.c_str());
+    TEST_ASSERT_EQUAL(0, i.tracks);                // pistes retirées
+    TEST_ASSERT_EQUAL(-1, i.declaredTracks);       // TrackNumber retiré
+    TEST_ASSERT_TRUE(q.find("&amp;limit=50") != std::string::npos || q.find("limit=50") != std::string::npos);
+    TEST_ASSERT_EQUAL_STRING("", queueFromTemplate("<nothing/>", "x", "y").c_str());
+    TEST_ASSERT_EQUAL_STRING("Miles%20Davis%20%C3%A9", urlQueryEncode("Miles Davis \xC3\xA9").c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -712,6 +736,7 @@ int main() {
     RUN_TEST(test_upnp_description);
     RUN_TEST(test_upnp_queue);
     RUN_TEST(test_favorites);
+    RUN_TEST(test_queue_template);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

@@ -128,6 +128,18 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
 [linkplay-console PR 35](https://github.com/laozhudu/linkplay-console/pull/35),
 [wiimplay (Go)](https://pkg.go.dev/github.com/shumatech/wiimplay/upnp).
 
+### Searching Qobuz
+
+- The WiiM offers no search. Qobuz's own API is partner-only. Open-source clients take the app ID from the web
+  player's `bundle.js` (`production:{api:{appId:"…"`, about 1.5 MB into a 9.5 MB file in 2026-11).
+- **As of 2026-11, `album/search` and `catalog/search` answer `401 User authentication is required`** with the
+  app ID alone: searching needs a logged-in Qobuz user (`user_auth_token`), i.e. the user's Qobuz credentials on
+  the device. wiimscreen does not do this.
+- Key-free experiment (Journal › *Essai recherche*, plays music): a queue built from a real Qobuz queue
+  (`wr::queueFromTemplate`) with no tracks and (A) the album `SearchUrl`, (B) a
+  `track/search?query=…` `SearchUrl`, to see whether the WiiM fetches the tracks itself with its own Qobuz
+  access. Result on real hardware: not known yet.
+
 ## What the local API does not do
 
 - **No catalog search** (Qobuz, Spotify, TIDAL…): search the service's own API, then play a URL or use Connect
