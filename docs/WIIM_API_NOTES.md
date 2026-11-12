@@ -112,10 +112,12 @@ read-only check and logs what the device answers.
 - Header `SOAPACTION: "urn:schemas-wiimu-com:service:PlayQueue:1#<Action>"`. Actions reported: `CreateQueue`,
   `PlayQueueWithIndex`, `BrowseQueue`, `AppendTracksInQueue`, `DeleteQueue`, `ReplaceQueue`, `GetQueueIndex`,
   `SetQueueLoopMode`… **[forum, linkplay-console]**.
-- `CreateQueue(QueueContext, QueuePolicy)`: `QueueContext` is an escaped XML `<PlayList>` with `<ListName>`,
+- `CreateQueue(QueueContext)`: `QueueContext` is an escaped XML `<PlayList>` with `<ListName>`,
   `<ListInfo>` (`SourceName`, `TrackNumber`, `SearchUrl`, `Quality`…) and `<Tracks><Track1>…` (each with `URL`,
   `Source`, `Id`, `Key`, `Metadata` = DIDL-Lite, escaped again). Then `PlayQueueWithIndex(QueueName, Index)` with
-  the **same name**; the index is 1-based **[linkplay-console]**.
+  the **same name**; the index is 1-based **[linkplay-console]** (verified 2026-11-12, see *Loading a queue without
+  playing it*). Older examples pass a second argument `QueuePolicy`: this WiiM's SCPD has **no such argument**
+  (`QueuePolicy` is only a state variable), so it is ignored.
 - **Qobuz**: a 2023 forum post builds a queue with `<SourceName>Qobuz</SourceName>`, a `<SearchUrl>` pointing to
   `https://www.qobuz.com/api.json/0.2/album/get?album_id=…` (or `playlist/get?…`) and `<Login_username>`, **without
   tracks**; the WiiM then fetches and streams the tracks with its own Qobuz login **[forum, unconfirmed]**. If this
@@ -134,7 +136,8 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   player's `bundle.js` (`production:{api:{appId:"…"`, about 1.5 MB into a 9.5 MB file in 2026-11).
 - **As of 2026-11, `album/search` and `catalog/search` answer `401 User authentication is required`** with the
   app ID alone: searching needs a logged-in Qobuz user (`user_auth_token`), i.e. the user's Qobuz credentials on
-  the device. wiimscreen does not do this.
+  the device. wiimscreen does not do this. *(2026-11-12: the WiiM itself hands out that token over UPnP,
+  `GetUserInfo` — see the end of *Loading a queue without playing it*.)*
 - **Key-free search works through the WiiM (verified on a real WiiM, 2026-11).** A queue built from a real Qobuz
   queue (`wr::queueFromTemplate`: same SourceName, `Login_username`, quality; no tracks) with:
   - (A) the album `SearchUrl` `album/get?album_id=…`: the WiiM fetched the 48 tracks itself and played them;
@@ -148,7 +151,8 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty. *(Changed: the user reported
   that a search started the first result; the remote now never starts a search queue and creates it with
-  `QueuePolicy 0` first — 1, then no argument, if refused. Whether 0 avoids playback: not known yet.)*
+  `QueuePolicy 0` first — 1, then no argument, if refused. Whether 0 avoids playback: **no** — `CreateQueue` has no
+  `QueuePolicy` argument on this WiiM and always plays, see *Loading a queue without playing it*.)*
 
 - Journal › *Essais*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums`, read back
   without playing. **First result on a real WiiM: the tracks query loaded 1 favorite track** (so the WiiM does add
@@ -156,7 +160,65 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
 - **PlayQueue actions on a WiiM (SCPD, 2026-11):** `CreateQueue ReplaceQueue DeleteQueue BackUpQueue AppendQueue
   BrowseQueue BrowseQueueEx SetQueueLoopMode GetQueueLoopMode SetQueuePolicy PlayQueueWithIndex
   AppendTracksInQueue AppendTracksInQueueEx RemoveTracksInQueue MoveTracksInQueue GetKeyMapping SetKeyMapping
-  GetQueueOnline SearchQueueOnline SetQueueRecord SetSongsRecord UserRegister…` (`SearchQueueOnline` not tried).
+  GetQueueOnline SearchQueueOnline SetQueueRecord SetSongsRecord UserRegister…` (all tried 2026-11-12, see below).
+
+### Loading a queue without playing it (verified on a real WiiM Pro, 2026-11-12)
+
+Tested from a computer on the same network, WiiM stopped with nothing loaded, muted; each action alone, playback and
+the queue read back ~4–9 s later. Queue model: `<PlayList><ListName>…</ListName><ListInfo><Radio>0</Radio>
+<SourceName>Qobuz</SourceName><requestQuality>6</requestQuality><SearchUrl>…</SearchUrl><Login_username>…
+</Login_username></ListInfo></PlayList>` (no tracks), `SearchUrl` = `track/search?query=daft%20punk&offset=0&limit=50`
+or `album/get?album_id=…&offset=0&limit=50`.
+
+**Arguments as listed by this WiiM's `/upnp/PlayQueueSCPD.xml`** (`>` = output):
+`CreateQueue(QueueContext)`, `ReplaceQueue(QueueContext)`, `BackUpQueue(QueueContext)`, `AppendQueue(QueueContext)`,
+`DeleteQueue(QueueName)`, `BrowseQueue(QueueName, >QueueContext)`,
+`BrowseQueueEx(QueueName, TrackIndex, TrackNums, >QueueContext)`, `SetQueuePolicy(QueueName)`,
+`PlayQueueWithIndex(QueueName, Index)`, `AppendTracksInQueue(QueueContext)`,
+`AppendTracksInQueueEx(QueueContext, Direction, StartIndex, Play, Action)`,
+`RemoveTracksInQueue(QueueName, RangStart, RangEnd, Action)`, `MoveTracksInQueue(QueueName, IndexList, ToIndex)`,
+`GetQueueIndex(QueueName, >CurrentIndex, >PreloadingIndex, >CurrentPage, >TrackNums)`,
+`GetQueueOnline(QueueName, QueueID, QueueType, Queuelimit, QueueAutoInsert, >QueueContext)`,
+`SearchQueueOnline(QueueName, SearchKey, Queuelimit, >QueueContext)`, `SetQueueLoopMode(LoopMode)`,
+`GetQueueLoopMode(>LoopMode)`, `SetQueueRecord(QueueName, QueueID, Action)`, `SetSongsRecord(QueueName, SongID,
+Action)`, `SetKeyMapping(QueueContext)`, `GetKeyMapping(>QueueContext)`, `GetBasicUserInfo(>Result)`,
+`GetUserInfo(AccountSource, RefreshToken, >Result)`, `GetUserFavorites(AccountSource, MediaType, Filter, >Result)`,
+`SetUserFavorites(AccountSource, Action, MediaType, MediaID, MediaContext, >Result)`,
+`GetUserAccountHistory(AccountSource, Number, >Result)`, `UserLogin(…)`, `UserLogout(AccountSource, >Result)`,
+`UserRegister(…)`, `SetSpotifyPreset(KeyIndex, >Result)`, `DeleteActionQueue(PressType)`, `TakePlayControl(>Result)`,
+`SetRating(Source, TrackID, Rating, >Result)`.
+
+| Action (arguments) | Answer | Plays? | Queue afterwards |
+|---|---|---|---|
+| `SearchQueueOnline` (`QueueName` `Qobuz` or a new name, `SearchKey` `daft punk`, `Queuelimit` `20`) | 500, `501 GetPlayListFormOnline failed` | no | none |
+| `GetQueueOnline` (`QueueName` `Qobuz`, `QueueID` = album id, `QueueType` `album`/`0`/`1`, `Queuelimit` `20`, `QueueAutoInsert` `0`) | 500, same error | no | none |
+| `BackUpQueue(QueueContext)` | 200 | **no** | stored with its `SearchUrl`, **`TrackNumber` 0, no tracks** (still 0 after 9 s of `BrowseQueueEx(name, 1, 20)`) |
+| `AppendQueue(QueueContext)` | 200 | **no** | same as `BackUpQueue` |
+| `ReplaceQueue(QueueContext)` | 200 | **no** | same as `BackUpQueue` |
+| `AppendTracksInQueueEx(QueueContext, Direction 0, StartIndex 0, Play 0, Action 0)` on a new name | 500, `501 AddTracksInQueue error` | no | none |
+| `SetQueuePolicy(QueueName)` | 500, `501 Action Failed` | no | — |
+| `CreateQueue(QueueContext)` after it, and alone | 200 | **yes**, first result | filled: 9 then 15 tracks for the search |
+
+- **Conclusion: no PlayQueue action makes the WiiM fetch a `SearchUrl` without playing.** `BackUpQueue`,
+  `AppendQueue` and `ReplaceQueue` store a queue silently, but the WiiM only fetches the tracks when the queue starts
+  with `CreateQueue`. `PlayQueueWithIndex` on a queue stored with `BackUpQueue` answers 200 and does nothing (no
+  playback, still no tracks).
+- **`PlayQueueWithIndex` index is 1-based and follows the queue's own order** (`Index 3` played the queue's third
+  track, `GetQueueIndex` → `CurrentIndex 3`; `Index 0` behaves like `1`). With shuffle on (`getPlayerStatus` `loop`
+  `3`), **an album queue is already shuffled when created**, differently each time: to start a chosen track, find
+  its index by title in the queue read back after `CreateQueue`, not by its album track number.
+- **Mute does not stick**: the WiiM was found unmuted again between two trials after a `setPlayerCmd:stop`, with
+  nobody touching it. Re-send `mute:1` before each action that may play.
+- `TotalQueue` keeps only a couple of queues (older names are dropped); `DeleteQueue` cleans up test queues.
+
+**Search without any queue (the way out):** `GetUserInfo(AccountSource=Qobuz, RefreshToken=0)` answers, with no
+authentication, a JSON `Result` holding the linked account (`userName`, `userId`), the Qobuz app ID (`clientId`) and
+a valid user token (`accessToken`). `GET https://www.qobuz.com/api.json/0.2/track/search?query=…&limit=…` (and
+`album/search`) with headers `X-App-Id: <clientId>` and `X-User-Auth-Token: <accessToken>` answers 200 with real
+results (track id, title, performer, album id), **without touching playback**. A search screen can list these, then
+play a choice with `CreateQueue` (album `SearchUrl` from the result's album id) + `PlayQueueWithIndex` at the index
+found by title. `AccountSource` is case-sensitive (`qobuz` → `501 GetUserInfo failed`); `GetBasicUserInfo` lists
+every linked service with its `showName`. Treat the token as a secret: never log, display or store it.
 
 ### Deezer
 
