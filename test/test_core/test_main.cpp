@@ -751,6 +751,13 @@ static void test_keyboard() {
     TEST_ASSERT_EQUAL_STRING("", utf8PopBack("").c_str());
 }
 
+static void test_shares_word() {
+    TEST_ASSERT_TRUE(sharesWord("aretha frank", {"Respect", "Aretha Franklin", "Lady Soul"}));
+    TEST_ASSERT_TRUE(sharesWord("Beyonc\xC3\xA9", {"BEYONCE"}));  // accents et casse ignorés
+    TEST_ASSERT_FALSE(sharesWord("justin hurwitz", {"Respect", "Aretha Franklin"}));
+    TEST_ASSERT_FALSE(sharesWord("a b", {"a b c"}));  // mots trop courts : pas de preuve
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -766,6 +773,7 @@ int main() {
     RUN_TEST(test_favorites);
     RUN_TEST(test_queue_template);
     RUN_TEST(test_keyboard);
+    RUN_TEST(test_shares_word);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

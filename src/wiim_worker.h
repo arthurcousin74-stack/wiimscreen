@@ -107,6 +107,8 @@ private:
     String searchTest_;
     String search_;
     int searchPlay_ = 0;
+    int searchCount_ = 0;
+    std::string searchQueue_;  // file des derniers résultats affichés
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;

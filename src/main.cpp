@@ -1002,7 +1002,7 @@ static void onSearchKey(int k) {
             if (q.empty() || g_searchBusy) break;
             logEvent("Recherche Qobuz : %s", q.c_str());
             g_searchBusy = true;
-            g_searchStatus = "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6";
+            g_searchStatus = "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6 (jusqu'\xC3\xA0 une minute)";
             g_worker.searchQobuz(q.c_str());
             break;
         }

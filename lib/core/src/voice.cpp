@@ -145,6 +145,21 @@ std::vector<std::string> jsonObjects(const std::string& json) {
 
 }  // namespace
 
+bool sharesWord(const std::string& query, const std::vector<std::string>& texts) {
+    std::string all;
+    for (auto& t : texts) all += " " + normalizeText(t) + " ";
+    std::string q = normalizeText(query), w;
+    for (size_t i = 0; i <= q.size(); ++i) {
+        if (i == q.size() || q[i] == ' ') {
+            if (w.size() >= 3 && all.find(w) != std::string::npos) return true;
+            w.clear();
+        } else {
+            w += q[i];
+        }
+    }
+    return false;
+}
+
 std::string normalizeText(const std::string& s) {
     std::string out;
     for (size_t i = 0; i < s.size(); ++i) {

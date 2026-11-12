@@ -676,47 +676,73 @@ void WiimWorker::runSearch(const String& query) {
         push(std::move(ev));
         return;
     }
-    const std::string url = "https://www.qobuz.com/api.json/0.2/track/search?query=" + wr::urlQueryEncode(query.c_str()) +
-                            "&offset=0&limit=50";
-    const std::string ctx = wr::queueFromTemplate(templ, kSearchQueue, url);
-    const uint32_t t0 = millis();
-    std::string resp;
-    int create = upnpRequest(control, "CreateQueue",
-                             wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
-    if (create != 200)
-        create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
-                             resp);
-    if (create != 200) {
-        logEvent("Recherche \xC2\xAB %s \xC2\xBB : CreateQueue %d", query.c_str(), create);
-        ev.text = "le WiiM a refus\xC3\xA9 la recherche";
-        push(std::move(ev));
-        return;
-    }
     // Résultats relus ; d'abord sans lancer la lecture, puis en la lançant si la file reste vide
-    auto readBack = [&](int seconds, wr::QueueInfo& out) {
+    std::string resp;
+    auto readBack = [&](const std::string& name, int seconds, wr::QueueInfo& out) {
         for (int i = 0; i < seconds; ++i) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             std::string back;
-            if (browseQueue(control, kSearchQueue, back) == 200 && !back.empty()) {
+            if (browseQueue(control, name, back) == 200 && !back.empty()) {
                 out = wr::parseQueueContext(back);
                 if (out.tracks > 0) return true;
             }
         }
         return false;
     };
-    wr::QueueInfo q;
-    bool found = readBack(3, q);
-    if (!found) {
-        int play = upnpRequest(control, "PlayQueueWithIndex",
-                               wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", kSearchQueue}, {"Index", "1"}}),
-                               resp);
-        ev.played = play == 200;
-        found = ev.played && readBack(8, q);
+    // Façons d'écrire les espaces dans l'adresse : on passe à la suivante si les résultats n'ont
+    // aucun mot de la recherche (le WiiM a pu mal lire la requête)
+    const std::string words = query.c_str();
+    std::string plus = wr::urlQueryEncode(words);
+    for (size_t p; (p = plus.find("%20")) != std::string::npos;) plus.replace(p, 3, "+");
+    const std::string enc = wr::urlQueryEncode(words), base = "https://www.qobuz.com/api.json/0.2/";
+    const std::pair<const char*, std::string> variants[] = {
+        {"track/search, %20", base + "track/search?query=" + enc + "&offset=0&limit=50"},
+        {"track/search, +", base + "track/search?query=" + plus + "&offset=0&limit=50"},
+        {"catalog/search tracks", base + "catalog/search?query=" + enc + "&type=tracks&offset=0&limit=50"},
+        {"query en dernier", base + "track/search?offset=0&limit=50&query=" + enc}};
+    const uint32_t t0 = millis();
+    wr::QueueInfo best;
+    for (auto& v : variants) {
+        // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
+        const std::string name = std::string(kSearchQueue) + "-" + std::to_string(++searchCount_ % 2);
+        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+        const std::string& url = v.second;
+        const std::string ctx = wr::queueFromTemplate(templ, name, url);
+        int create = upnpRequest(control, "CreateQueue",
+                                 wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
+        if (create != 200)
+            create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
+                                 resp);
+        logEvent("Recherche \xC2\xAB %s \xC2\xBB (%s) : CreateQueue %d", query.c_str(), v.first, create);
+        logLong("envoy\xC3\xA9 ", url);
+        if (create != 200) continue;
+        wr::QueueInfo q;
+        bool played = false;
+        bool found = readBack(name, 3, q);
+        if (!found) {
+            played = upnpRequest(control, "PlayQueueWithIndex",
+                                 wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),
+                                 resp) == 200;
+            found = played && readBack(name, 8, q);
+        }
+        if (found) logLong(q.searchUrl == url ? "relu (identique) " : "relu ", wr::maskSecrets(q.searchUrl));
+        std::vector<std::string> texts;
+        for (auto& t : q.items) texts.insert(texts.end(), {t.title, t.artist, t.album});
+        const bool relevant = found && wr::sharesWord(words, texts);
+        logEvent("  %d r\xC3\xA9sultat(s)%s%s", found ? q.tracks : 0, played ? ", lecture lanc\xC3\xA9" "e" : ", sans lecture",
+                 found ? (relevant ? ", en rapport" : ", SANS RAPPORT avec la recherche") : "");
+        for (size_t i = 0; i < q.items.size() && i < 2; ++i)
+            logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
+        if (found && (best.tracks == 0 || relevant)) {
+            best = q;
+            ev.played = played;
+            searchQueue_ = name;
+        }
+        if (relevant) break;  // en rapport : terminé ; sinon, écriture suivante
     }
-    logEvent("Recherche \xC2\xAB %s \xC2\xBB : %d r\xC3\xA9sultat(s)%s (%lu ms)", query.c_str(), found ? q.tracks : 0,
-             ev.played ? ", lecture lanc\xC3\xA9" "e" : ", sans lecture", (unsigned long)(millis() - t0));
+    logEvent("Recherche : termin\xC3\xA9" "e en %lu ms", (unsigned long)(millis() - t0));
     ev.ok = true;
-    ev.tracks = q.items;
+    ev.tracks = best.items;
     const bool played = ev.played;
     push(std::move(ev));
     if (played) nextPoll_ = millis();
@@ -728,7 +754,7 @@ void WiimWorker::runPlaySearchResult(int index) {
     if (findPlayQueue(control, false))
         code = upnpRequest(control, "PlayQueueWithIndex",
                            wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
-                                        {{"QueueName", kSearchQueue}, {"Index", std::to_string(index)}}),
+                                        {{"QueueName", searchQueue_}, {"Index", std::to_string(index)}}),
                            resp);
     logEvent("Recherche : r\xC3\xA9sultat %d -> %d", index, code);
     WiimEvent ev;

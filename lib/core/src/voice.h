@@ -13,6 +13,8 @@ namespace wr {
 
 // Minuscules, sans accents ni ponctuation, espaces simples : « Joue FIP ! » → « joue fip »
 std::string normalizeText(const std::string& s);
+// Some word of the query (3 letters or more, accents/case ignored) appears in one of the texts
+bool sharesWord(const std::string& query, const std::vector<std::string>& texts);
 
 // Similarité de deux textes normalisés (0..1), tolérante aux petites fautes de transcription
 float similarity(const std::string& a, const std::string& b);

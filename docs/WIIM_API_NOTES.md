@@ -138,9 +138,12 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
 - **Key-free search works through the WiiM (verified on a real WiiM, 2026-11).** A queue built from a real Qobuz
   queue (`wr::queueFromTemplate`: same SourceName, `Login_username`, quality; no tracks) with:
   - (A) the album `SearchUrl` `album/get?album_id=…`: the WiiM fetched the 48 tracks itself and played them;
-  - (B) `SearchUrl` = `https://www.qobuz.com/api.json/0.2/track/search?query=<q>&offset=0&limit=50`: the WiiM ran
-    the search with its own Qobuz access, `BrowseQueue` returned the results (7 tracks, with DIDL-Lite titles,
-    artists, albums) and it played the first one.
+  - (B) `SearchUrl` = `https://www.qobuz.com/api.json/0.2/track/search?query=<q>&offset=0&limit=50`: the WiiM
+    accepted the queue, filled it (7 tracks, with DIDL-Lite titles, artists, albums) and played the first one,
+    **but the tracks had nothing to do with the query** (user report): the WiiM does not seem to pass the query
+    through. The search screen now tries several URL forms (`%20` / `+` spaces, `catalog/search?type=tracks`,
+    query last), keeps the first whose results share a word with the query, and logs the URL sent and the
+    `SearchUrl` read back. Outcome: not known yet.
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty.
 
