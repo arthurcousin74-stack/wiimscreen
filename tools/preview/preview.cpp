@@ -220,6 +220,11 @@ int main(int argc, char** argv) {
         D.createSprite(1280, 720);
     }
 
+    ui.renderMenu("57-219c0bc");
+    save(out, "13-menu.ppm");
+    ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");
+    save(out, "14-mise-a-jour.ppm");
+
     ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Première configuration.");
     save(out, "8-configuration.ppm");
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée

@@ -32,6 +32,10 @@ jobs:
       - name: Tests de la logique (PC)
         run: pio test -e native
 
+      # Version affichée par le Tab5 (menu Réglages, page de mise à jour) : n° de build et commit
+      - name: Numéro de version
+        run: echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION=\\\"${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}\\\"" >> "$GITHUB_ENV"
+
       - name: Compiler le firmware
         run: pio run -e tab5
 

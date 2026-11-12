@@ -22,6 +22,8 @@
 #include "art.h"
 #include "core.h"
 #include "dsp.h"
+#include "ota.h"
+#include "version.h"
 #include "voice.h"
 #include "voice_service.h"
 #include "portal.h"
@@ -117,9 +119,10 @@ static UiState displayState() {
 }
 
 static bool g_listening;  // commande vocale en cours d'écoute (voir plus bas)
+static bool g_menuOpen = false;  // menu Réglages affiché (appui long)
 
 static void show(int pressedPreset = -1, int pressedTransport = -1) {
-    if (g_listening) return;  // l'écran d'écoute reste affiché
+    if (g_listening || g_menuOpen) return;  // l'écran d'écoute ou le menu restent affichés
     g_lastTick = millis();
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
@@ -752,6 +755,19 @@ void loop() {
             // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
             setBrightness(kBrightOn);
             if (g_ambient) exitAmbient();
+        } else if (g_menuOpen) {
+            Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
+            if (c != Ui::MenuNone) sound::tap();
+            if (c == Ui::MenuConfig) {
+                runSetupPortal(g_settings, g_ui, "Reconfiguration demand\xC3\xA9" "e.");  // redémarre
+            } else if (c == Ui::MenuUpdate) {
+                runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
+                g_menuOpen = false;
+                show();
+            } else if (c == Ui::MenuClose) {
+                g_menuOpen = false;
+                show();
+            }
         } else if (g_listening) {
             finishVoice(!g_ui.hitVoiceCancel(t.x, t.y));  // Annuler, ou « j'ai fini »
         } else if (g_ambient) {
@@ -771,7 +787,9 @@ void loop() {
         if (!t.isPressed()) g_headerPressed = false;
         else if (now - g_headerPressStart > kLongPressMs) {
             sound::confirm();
-            runSetupPortal(g_settings, g_ui, "Reconfiguration demandée.");
+            g_headerPressed = false;
+            g_menuOpen = true;  // Réglages : configuration ou mise à jour
+            g_ui.renderMenu(FW_VERSION);
         }
     }
 
@@ -788,7 +806,7 @@ void loop() {
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && !g_listening && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
+    if (!g_ambient && !g_listening && !g_menuOpen && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
         g_state.online)
         enterAmbient();
     if (idle > kOffMs && !p.playing) {

@@ -808,6 +808,120 @@ int Ui::hitDots(int x, int y) const {
 
 // -------------------------------------------------------------- plein écran
 
+// Gros bouton de menu : titre et sous-titre, sur carte
+static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const char* sub, uint32_t dot, int sc16) {
+    C.fillRoundRect(r.x, r.y, r.w, r.h, sc16, kCard);
+    C.fillCircle(r.x + sc16 * 2, r.y + r.h / 2, sc16 * 2 / 3, dot);
+    C.setTextDatum(textdatum_t::top_left);
+    C.loadFont(kMid);
+    C.setTextColor(kText);
+    const int tx = r.x + sc16 * 4;
+    C.drawString(title, tx, r.y + r.h / 2 - C.fontHeight());
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    C.drawString(sub, tx, r.y + r.h / 2 + sc16 / 4);
+}
+
+void Ui::renderMenu(const char* version) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    background();
+    const int W = C.width(), H = C.height();
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(96), gap = sc(18);
+    const int x = (W - bw) / 2, y0 = (H - (2 * bh + gap + sc(44) + sc(30))) / 2 + sc(20);
+    C.setTextDatum(textdatum_t::bottom_center);
+    C.loadFont(kBig);
+    C.setTextColor(kText);
+    C.drawString("R\xC3\xA9glages", W / 2, y0 - sc(24));
+    menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
+    menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
+    menuButton(C, menuRects_[MenuConfig], "Configuration", "Wi-Fi, WiiM, presets, voix (depuis ton t\xC3\xA9l\xC3\xA9phone)",
+               accent_, sc(16));
+    menuButton(C, menuRects_[MenuUpdate], "Mise \xC3\xA0 jour", "Installer un nouveau firmware par le Wi-Fi", kText2,
+               sc(16));
+    const int cw = sc(150), ch = sc(44);
+    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuUpdate].bottom() + sc(30), cw, ch};
+    const wr::Rect& c = menuRects_[MenuClose];
+    C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Fermer", c.x + c.w / 2, c.y + c.h / 2 + 1);
+    C.setTextDatum(textdatum_t::bottom_right);
+    C.setTextColor(kText2);
+    C.drawString((String("Version ") + version).c_str(), W - sc(20), H - sc(14));
+    present();
+}
+
+Ui::MenuChoice Ui::hitMenu(int x, int y) const {
+    for (int i = 0; i < 3; ++i)
+        if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
+    return MenuNone;
+}
+
+void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    background();
+    const int W = C.width(), H = C.height(), m = sc(40);
+    C.setTextDatum(textdatum_t::top_left);
+    C.loadFont(kBig);
+    C.setTextColor(kText);
+    C.drawString("Mise \xC3\xA0 jour", m, m);
+    int y = m + C.fontHeight() + sc(24);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    C.drawString("1. Sur ton ordinateur (m\xC3\xAAme Wi-Fi), ouvre :", m, y);
+    y += C.fontHeight() + sc(8);
+    C.loadFont(kBig);
+    C.setTextColor(accent_);
+    C.drawString(url.c_str(), m + sc(24), y);
+    y += C.fontHeight() + sc(18);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    C.drawString("2. Saisis ce code, puis choisis le fichier wiim-remote-tab5.bin :", m, y);
+    y += C.fontHeight() + sc(8);
+    // Code en gros, chiffres espacés
+    C.loadFont(kBig);
+    std::string spaced;
+    for (const char* c = code.c_str(); *c; ++c) {
+        if (c != code.c_str()) spaced += ' ';
+        spaced += *c;
+    }
+    const int cw = (int)C.textWidth(spaced.c_str()) + sc(48), ch = C.fontHeight() + sc(20);
+    C.fillRoundRect(m + sc(24), y, cw, ch, sc(14), kCard);
+    C.setTextColor(kText);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.drawString(spaced.c_str(), m + sc(24) + cw / 2, y + ch / 2 + 2);
+    y += ch + sc(30);
+
+    // Progression ou état
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::top_left);
+    if (percent >= 0) {
+        const int bw = W - 2 * m, bh = sc(14);
+        C.fillRoundRect(m, y, bw, bh, bh / 2, kTrack);
+        C.fillRoundRect(m, y, std::max(bh, bw * std::min(100, percent) / 100), bh, bh / 2, accent_);
+        y += bh + sc(12);
+    }
+    if (status.length()) {
+        C.setTextColor(kText);
+        C.drawString(status.c_str(), m, y);
+    }
+    // Version et bouton Annuler
+    C.setTextColor(kText2);
+    C.setTextDatum(textdatum_t::bottom_left);
+    C.drawString((String("Version install\xC3\xA9" "e : ") + version).c_str(), m, H - sc(24));
+    const int bw = sc(150), bh = sc(44);
+    cancelRect_ = wr::Rect{W - m - bw, H - sc(24) - bh, bw, bh};
+    C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Annuler", cancelRect_.x + bw / 2, cancelRect_.y + bh / 2 + 1);
+    present();
+}
+
+
 void Ui::showInfo(const char* title, const String& body, const char* footer) {
     ambientShown_ = false;
     auto& C = canvas_;

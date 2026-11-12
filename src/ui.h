@@ -73,6 +73,15 @@ public:
     bool hitStrip(int x, int y) const;                     // bande des presets (glisser)
     int hitDots(int x, int y) const;                       // -1 / +1 : page précédente / suivante
 
+    // Menu de l'appui long : configuration, mise à jour, fermer
+    enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuClose };
+    void renderMenu(const char* version);
+    MenuChoice hitMenu(int x, int y) const;
+
+    // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
+    void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
+    bool hitUpdateCancel(int x, int y) const { return cancelRect_.contains(x, y); }
+
     // Écrans plein page
     void showInfo(const char* title, const String& body, const char* footer = nullptr);
     void showPortal(const String& apName, const String& apPass, const String& url, const String& reason);
@@ -121,6 +130,7 @@ private:
     // Commande vocale
     bool voiceOn_ = false;
     wr::Rect cancelRect_;
+    wr::Rect menuRects_[3];
     // Visualiseur
     bool visEnabled_ = false;
     bool ambientShown_ = false;

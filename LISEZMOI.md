@@ -77,7 +77,18 @@ La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reco
 | « Pause », « Reprends », « Suivant », « Précédent » | Commandes de lecture |
 | « Plus fort », « Moins fort », « Volume 30 », « Coupe le son », « Remets le son » | Volume |
 
-**Reconfigurer plus tard** : appui long (3 s) sur la pochette ou le titre.
+**Reconfigurer plus tard** : appui long (3 s) sur la pochette ou le titre, puis **Configuration**.
+
+## 5. Mettre à jour par le Wi-Fi
+
+Une fois ce firmware installé par USB, les versions suivantes s'installent sans câble :
+
+1. Télécharge l'artefact **wiim-remote-tab5** de la dernière exécution (onglet **Actions** de GitHub) et dézippe-le.
+2. Sur le Tab5 : appui long (3 s) sur la pochette → **Mise à jour**. L'écran affiche une adresse (`http://192.168.x.x`) et un code à 6 chiffres.
+3. Sur un ordinateur du même Wi-Fi, ouvre cette adresse, saisis le code, choisis `wiim-remote-tab5.bin`, **Installer**.
+4. Une barre de progression s'affiche sur l'ordinateur et sur le Tab5, puis il redémarre sur la nouvelle version (affichée en bas du menu Réglages).
+
+C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie utile. Le nouveau firmware est écrit à côté de l'ancien et vérifié avant d'être utilisé : un fichier incomplet, pour un autre appareil ou interrompu en route laisse l'ancien en place. Le mode mise à jour se ferme avec **Annuler**, après 5 codes faux ou au bout de 10 minutes.
 
 ## Utilisation
 
@@ -91,7 +102,7 @@ La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reco
 | − / + (bouts de la barre de volume) | Volume (pas réglable) |
 | ◀◀ / ▶▶ | Piste précédente / suivante |
 | ▶ / II | Lecture / pause |
-| Pochette ou titre, 3 s | Configuration |
+| Pochette ou titre, 3 s | Réglages : configuration ou mise à jour |
 | N'importe où, en vue ambiance | Revenir aux commandes |
 | Soulever / déplacer le Tab5 | Rallumer l'écran, revenir aux commandes |
 
@@ -138,6 +149,7 @@ src/portal.*         portail de configuration (point d'accès + DNS + formulaire
 src/settings.*       réglages en NVS
 src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
 src/voice_service.*  transcription OpenAI, recherche Radio Browser (HTTPS vérifié)
+src/ota.*            mise à jour par le Wi-Fi (page web + code affiché à l'écran)
 src/fonts/           polices VLW générées (tools/make_vlw.py)
 lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
                      spectre (FFT), lissage du visualiseur, détection de mouvement,
@@ -165,6 +177,7 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Le Wi-Fi de configuration est protégé par un mot de passe aléatoire de 10 caractères (générateur matériel), affiché uniquement sur l'écran. Il n'existe que pendant la configuration.
 - Le mot de passe Wi-Fi n'est jamais renvoyé dans la page de configuration.
 - Toutes les valeurs réaffichées dans la page sont échappées (HTML).
+- Mise à jour par le Wi-Fi : uniquement après un geste sur le Tab5 (menu Réglages), avec un code à 6 chiffres affiché seulement à l'écran, 5 essais au plus, 10 minutes au plus ; l'image est vérifiée par l'ESP32 avant d'être activée.
 - Clé OpenAI : refusée si elle contient des espaces ou des retours à la ligne (elle va dans un en-tête HTTP) ; jamais réaffichée ni écrite dans le journal.
 - Micro : actif uniquement pendant une commande vocale ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.
