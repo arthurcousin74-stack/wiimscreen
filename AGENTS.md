@@ -29,12 +29,12 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
 | `test/test_core/test_main.cpp` | Unity tests for everything in `lib/core` |
 | `src/main.cpp` | Setup, main loop (touch, drawing, applying WiiM state), ambient view, voice flow, menus |
-| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery |
+| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery, play queues (favorites, Qobuz/Deezer search, Journal tests) |
 | `src/ui.*` | All drawing (off-screen M5Canvas in PSRAM → display) |
 | `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
 | `src/discovery.*` | SSDP + `getStatusEx` discovery |
 | `src/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
-| `src/voice_service.*` | OpenAI transcription, Radio Browser search |
+| `src/voice_service.*` | OpenAI transcription (voice search), Radio Browser search (no longer used by the UI) |
 | `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/settings.*` | NVS-backed settings |
@@ -91,6 +91,13 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 
 ## Status / not verified on hardware yet
 
-Built and unit-tested; screens verified via the PC preview. No other board has been tried. Not yet confirmed on a physical Tab5: Wi-Fi via the
-C6, microphones (visualizer, voice), speaker volume levels, SSDP discovery, `setPlayerCmd:play:<url>` encoding,
-OTA end to end, HTTP keep-alive with the WiiM (falls back to a new connection per request). Prefer small, testable changes and note what was verified on real hardware in commit messages.
+Built and unit-tested; screens verified via the PC preview. No other board has been tried.
+
+**Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
+navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM
+(`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates.
+
+**Not yet confirmed on hardware:** favorite replay, Deezer search screen and playback at a track, restoring the music
+after a Qobuz search, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,
+the restart into setup mode, the partial-redraw speed-up. Prefer small, testable changes and note what was verified
+on real hardware in commit messages.

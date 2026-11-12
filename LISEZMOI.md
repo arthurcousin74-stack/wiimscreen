@@ -61,7 +61,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 
 ## 4. Recherche à la voix (facultatif)
 
-![Écoute](docs/voix.png)
+![Dictée dans le champ de recherche](docs/dictee.png)
 
 La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reconnaître du français libre (le moteur hors ligne d'Espressif ne connaît que des commandes en anglais et en chinois).
 

@@ -8,10 +8,10 @@
 step. Keep this style when you change it. -->
 
 wiimscreen shows the album art, the track data and the presets of your WiiM on a color touchscreen. You can also
-control the playback and the volume, keep your own favorites and search Qobuz. The device uses the local network
-interfaces of the WiiM (HTTP API and UPnP). It does not use a cloud service or a phone app. It does not need a key
-for a streaming service: the WiiM does the Qobuz search with its own Qobuz access. Voice search (French, OpenAI speech-to-text) is
-optional.
+control the playback and the volume, keep your own favorites, and search Qobuz and Deezer. The device uses the local
+network interfaces of the WiiM (HTTP API and UPnP). It does not use a cloud service or a phone app. It does not need
+a key for a streaming service: the WiiM does the Qobuz search with its own Qobuz access, and the Deezer search uses
+the public Deezer catalog. Voice search (OpenAI speech-to-text) is optional.
 
 The firmware is for ESP32 boards that have a touchscreen and PSRAM. The core logic does not use the hardware and has
 unit tests. The screen layout changes to fit the screen size.
@@ -31,9 +31,10 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 > - The firmware compiles and the unit tests pass.
 > - The screen images in this file come from the real UI code (refer to [tools/preview](tools/preview/)).
 > - These functions operate on a real Tab5 with a real WiiM: touch, Wi-Fi, playback status and control, the
->   navigation bar, the WiiM queue check and the Qobuz search.
-> - These functions are not yet confirmed on real hardware: the replay of favorites, the voice search, the
->   visualizer and the selection between several WiiM players.
+>   navigation bar, the WiiM queue check, the Qobuz search, and the load of a Deezer album from its ID.
+> - These functions are not yet confirmed on real hardware: the replay of favorites, the Deezer search screen, the
+>   return of the previous music after a Qobuz search, the voice search, the visualizer and the selection between
+>   several WiiM players.
 > - No other board is tested.
 > - The screen text and the voice search are in **French** at this time. Translations are welcome.
 >
@@ -53,6 +54,7 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   on-screen keyboard. The device gives the search to your WiiM. The WiiM does the search with its own Qobuz access
   and loads the results. The device shows the results (title, artist, album). Touch a result to play it. Before
   the first search, play one Qobuz album from the WiiM Home app. Refer to [Search Qobuz](#search-qobuz).
+  Note: the WiiM starts the results immediately. The device then puts back the music that played before.
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
   search, play one Deezer album from the WiiM Home app.
@@ -60,7 +62,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.
 - **Navigation bar** on the left side of the screen (at the top in portrait): the 🏠 button goes to the main
-  screen, the magnifying glass opens the Qobuz search, the ⚙ button opens the settings.
+  screen, the magnifying glass opens the search (Qobuz or Deezer), the ⚙ button opens the settings.
+- **Feedback**: a ring turns around a button until the WiiM does the command (next track, play, pause, preset,
+  favorite, search result). The keyboard shows each key press at once.
 - **Ambient view**: after 60 seconds without a touch, the device shows a large album art and large text. You can
   read it from across the room. Touch the 🏠 button or the screen to go back.
 - **Spectrum visualizer** (optional, experimental): in the ambient view, the microphones of the device show the
@@ -74,18 +78,19 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Over-the-air updates**: install a new firmware from a web browser on your network. The device shows a 6-digit
   code that you must type.
 - **Diagnostics**: the *Journal* (⚙ › *Journal*) shows the last events: touches, commands and the WiiM answers.
-  The *File du WiiM* button reads the play queue of the WiiM. Use these data in bug reports.
+  The *File du WiiM* button reads the play queues of the WiiM and the actions of its queue service. The *Essais*
+  button tests the Qobuz favorites and the Deezer albums. Use these data in bug reports.
 - **Other functions**: pick up the device to turn on the screen (IMU). The screen becomes dim when you do not use
   it. The device makes a click sound when you touch a button.
 - **Security**: the device keeps the SHA-256 fingerprint of the WiiM TLS certificate after the first connection.
   It compares the fingerprint before each request. Album art and online services use HTTPS with the Mozilla root
   certificates. The device does not show or log your passwords and keys.
 
-| Favorites (tiles with a heart) | Qobuz search | Search results |
+| Favorites (tiles with a heart) | Search (Qobuz or Deezer) | Search results |
 |---|---|---|
 | ![Favorites](docs/favoris.png) | ![Search](docs/recherche.png) | ![Results](docs/resultats.png) |
-| **Ambient view + visualizer** | **Radio, loading, notification** | **Voice** |
-| ![Ambient view](docs/ambiance.png) | ![Radio](docs/radio.png) | ![Voice](docs/voix.png) |
+| **Ambient view + visualizer** | **Radio, loading, notification** | **Voice search (listening)** |
+| ![Ambient view](docs/ambiance.png) | ![Radio](docs/radio.png) | ![Voice search](docs/dictee.png) |
 | **Presets without images (page 2 of 12)** | **WiiM discovery** | **Over-the-air update** |
 | ![Presets](docs/presets.png) | ![Discovery](docs/discovery.png) | ![OTA](docs/ota.png) |
 
@@ -151,20 +156,36 @@ The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does n
 1. In the WiiM Home app, play one Qobuz album. Do this one time only: the Tab5 copies the Qobuz settings of the
    WiiM (account name, quality) from this play queue.
 2. On the Tab5, touch the magnifying glass in the left bar.
-3. Type an artist or a track, then touch **Chercher** (search).
-4. Wait 2 to 5 seconds. The WiiM loads the results, and the Tab5 shows them.
-5. Touch a result. The WiiM plays it.
+3. Make sure that **Qobuz** is selected (below the search field).
+4. Type an artist or a track, then touch **Chercher** (search).
+5. Wait 2 to 5 seconds. The WiiM loads the results, and the Tab5 shows them.
+6. Touch a result. The WiiM plays it.
+
+Note: the WiiM starts the first result while it loads the results. The Tab5 then puts back the music that played
+before (the same track at the same position), or stops the playback if no music played.
 
 Note: the search finds tracks. To keep an album, play it and touch the heart button.
+
+### Search Deezer
+
+The WiiM must have your Deezer account (WiiM Home app › Deezer). The Tab5 does not need a Deezer key or password.
+
+1. In the WiiM Home app, play one Deezer album. Then, on the Tab5, touch ⚙ › *Journal* › **File du WiiM**. Do this
+   one time only: the Tab5 copies the Deezer settings of the WiiM from this play queue.
+2. On the Tab5, touch the magnifying glass in the left bar, then select **Deezer**.
+3. Type an artist or a track, then touch **Chercher**. The Tab5 searches the public Deezer catalog.
+4. Touch a result. The WiiM loads the album of this track and plays it from this track (wait some seconds).
 
 ### Voice search (optional)
 
 1. Make an API key at <https://platform.openai.com>.
 2. Open the setup page (touch ⚙ in the left bar, then **Configuration**). The Tab5 restarts in setup mode.
 3. Paste the key in **Commande vocale**, then save.
-4. On the search screen, touch the microphone in the search field. Wait for the beep.
+4. On the search screen, touch the microphone in the search field. Wait for the beep. The music becomes quieter.
 5. Say an artist, a track or an album.
-6. Touch the red button. The Tab5 writes the text and starts the search.
+6. Touch the red button. The Tab5 writes the text and starts the search (Qobuz or Deezer, as selected).
+
+Note: the Tab5 listens for a maximum of 8 seconds. Touch 🏠 or ⚙ to cancel.
 
 Note: the device sends the sound to OpenAI only while the microphone listens. The cost was approximately
 $0.003 for each minute of sound when we wrote this file. This is a few cents each month.
@@ -181,21 +202,22 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 │ wiim_client   TLS client, WiiM commands      │  UPnP SOAP   │ PlayQueue    │
 │ favorites     queue copies (LittleFS)        │  port 49152  │ (queues)     │
 │ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────┬───────┘
-│                                              │                     │ Qobuz API
-│                                              │                     ▼ (WiiM's own
-│                                              │               qobuz.com  access)
+│                                              │                     │ WiiM's own
+│                                              │                     ▼ access
+│                                              │          qobuz.com, airable.io (Deezer)
 │ art           background download of covers  │ ──▶ CDNs (album art, preset logos)
 │ ui            off-screen canvas (PSRAM) →    │
 │               MIPI-DSI panel, accent color   │
-│ voice_service OpenAI STT, Radio Browser      │ ──▶ api.openai.com, radio-browser.info
+│ voice_service OpenAI speech-to-text          │ ──▶ api.openai.com
+│ wiim_worker   Deezer public search           │ ──▶ api.deezer.com
 │ ota / portal  web pages for update & setup   │
 │ lib/core      pure C++ logic, unit-tested    │
 └──────────────────────────────────────────────┘
 ```
 
 - **`lib/core/`** contains all the logic that does not use the hardware: WiiM response parsing, UPnP/XML parsing
-  of the WiiM play queues, layout, on-screen keyboard, accent color, FFT spectrum, motion detection,
-  voice-intent parsing and firmware-image filtering. You can test it on a PC
+  of the WiiM play queues, Deezer search parsing, layout, on-screen keyboard, accent color, FFT spectrum, motion
+  detection, voice parsing and firmware-image filtering. You can test it on a PC
   with `pio test -e native`.
 - **`src/`** contains the device firmware (Arduino-ESP32 3.x on ESP-IDF 5 through pioarduino, M5Unified and M5GFX).
 - **`tools/preview/`** compiles the real `src/ui.cpp` for a PC (M5GFX and SDL2). It makes a PNG image of each
@@ -213,11 +235,21 @@ with its own Qobuz access and loads the tracks.
 1. The Tab5 reads a real Qobuz queue from the WiiM (`BrowseQueue`) and keeps it as a model.
 2. For a search, the Tab5 copies the model, removes the tracks and sets `SearchUrl` to a Qobuz track search
    (`track/search?query=…`). It sends this queue to the WiiM (`CreateQueue`).
-3. The WiiM does the search and loads the results into the queue. It does not start the playback.
+3. The WiiM does the search and loads the results into the queue. It also starts the playback of the queue.
 4. The Tab5 reads the queue again until the number of tracks is stable, and shows the tracks.
-5. When you touch a track, the Tab5 starts the queue at this track (`PlayQueueWithIndex`).
+5. The Tab5 puts back the music that played before the search (it noted the track and the position).
+6. When you touch a track, the Tab5 starts the queue at this track (`PlayQueueWithIndex`).
 
 The Tab5 never connects to Qobuz and never has your Qobuz password.
+
+### How the Deezer search operates
+
+The WiiM plays Deezer through a gateway (airable). A Deezer queue contains an address of this gateway with the ID
+of a Deezer album.
+
+1. The Tab5 searches the public Deezer catalog (`api.deezer.com/search`, no key). It shows the tracks.
+2. When you touch a track, the Tab5 sends a queue with the address of the album of this track (`CreateQueue`).
+3. The WiiM loads the tracks of the album. The Tab5 finds the position of the track and starts the queue there.
 
 ## Build from source
 
