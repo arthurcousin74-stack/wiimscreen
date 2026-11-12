@@ -21,5 +21,9 @@ bool add(wr::Favorite& f, const std::string& queueContext, std::string& error);
 bool remove(const std::string& id);
 bool context(const std::string& id, std::string& out);
 uint32_t revision();                            // changes after each add/remove
+// Model of a Qobuz queue (account, quality, source as the WiiM expects them), without tracks:
+// kept from the last Qobuz queue read on the WiiM, used to build search queues.
+bool saveQobuzTemplate(const std::string& queueContext);
+bool qobuzTemplate(std::string& out);
 
 }  // namespace fav

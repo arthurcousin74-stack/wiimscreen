@@ -109,6 +109,7 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 | ▶ / II | Lecture / pause |
 | Cœur (à gauche de ◀◀) | Ajouter l'album ou la playlist en cours aux favoris (ou l'en retirer) |
 | 🏠 en haut de la barre de gauche | Accueil : écran principal (première page de presets) |
+| Loupe au milieu de la barre de gauche | Recherche Qobuz : taper un artiste ou un morceau, puis toucher un résultat |
 | ⚙ en bas de la barre de gauche | Réglages : configuration, mise à jour, test tactile, journal |
 | Pochette ou titre, 3 s | Réglages (même menu) |
 | Maison (en haut à droite), ou n'importe où, en vue ambiance | Revenir à l'écran principal |

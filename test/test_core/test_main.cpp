@@ -323,7 +323,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.fav, L.volume, L.navHome, L.navSettings};
+                                L.transport[kNext], L.mic, L.fav, L.volume, L.navHome, L.navSettings, L.navSearch};
     blocks.push_back(L.strip);  // toujours là, même sans preset
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -332,7 +332,7 @@ static void checkLayout(int W, int H, int n) {
     }
     TEST_ASSERT_EQUAL(L.art.w, L.art.h);
     // Barre de navigation : boutons dedans, rien d'autre ne la touche
-    for (const Rect& r : {L.navHome, L.navSettings}) {
+    for (const Rect& r : {L.navHome, L.navSettings, L.navSearch}) {
         TEST_ASSERT_TRUE(r.x >= L.rail.x && r.right() <= L.rail.right() && r.y >= L.rail.y && r.bottom() <= L.rail.bottom());
         TEST_ASSERT_TRUE(r.h >= 44 * std::min(W, H) / 540);
     }
@@ -652,7 +652,9 @@ static void test_upnp_queue() {
         "&lt;SearchUrl&gt;https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&amp;amp;user_auth_token=SECRET"
         "&lt;/SearchUrl&gt;&lt;Login_username&gt;someone@example.com&lt;/Login_username&gt;&lt;/ListInfo&gt;"
         "&lt;Tracks&gt;&lt;Track1&gt;&lt;URL&gt;u1&lt;/URL&gt;&lt;Metadata&gt;&amp;lt;DIDL-Lite&amp;gt;&amp;lt;item&amp;gt;"
-        "&amp;lt;dc:title&amp;gt;So What&amp;lt;/dc:title&amp;gt;&amp;lt;/item&amp;gt;&amp;lt;/DIDL-Lite&amp;gt;"
+        "&amp;lt;dc:title&amp;gt;So What&amp;lt;/dc:title&amp;gt;&amp;lt;upnp:artist&amp;gt;Miles Davis&amp;lt;/upnp:artist&amp;gt;"
+        "&amp;lt;upnp:album&amp;gt;Kind of Blue&amp;lt;/upnp:album&amp;gt;&amp;lt;upnp:albumArtURI&amp;gt;https://a/b.jpg"
+        "&amp;lt;/upnp:albumArtURI&amp;gt;&amp;lt;/item&amp;gt;&amp;lt;/DIDL-Lite&amp;gt;"
         "&lt;/Metadata&gt;&lt;/Track1&gt;&lt;Track2&gt;&lt;URL&gt;u2&lt;/URL&gt;&lt;/Track2&gt;&lt;/Tracks&gt;"
         "&lt;/PlayList&gt;</QueueContext></u:BrowseQueueResponse></s:Body></s:Envelope>";
     std::string ctx;
@@ -666,6 +668,11 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL(2, q.tracks);
     TEST_ASSERT_EQUAL(1, (int)q.titles.size());
     TEST_ASSERT_EQUAL_STRING("So What", q.titles[0].c_str());
+    TEST_ASSERT_EQUAL(2, (int)q.items.size());
+    TEST_ASSERT_EQUAL_STRING("Miles Davis", q.items[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("Kind of Blue", q.items[0].album.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://a/b.jpg", q.items[0].art.c_str());
+    TEST_ASSERT_EQUAL_STRING("", q.items[1].title.c_str());  // piste sans métadonnées
     TEST_ASSERT_EQUAL_STRING("someone@example.com", q.user.c_str());
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&user_auth_token=***",
                              maskSecrets(q.searchUrl).c_str());
@@ -723,6 +730,27 @@ static void test_queue_template() {
     TEST_ASSERT_EQUAL_STRING("Miles%20Davis%20%C3%A9", urlQueryEncode("Miles Davis \xC3\xA9").c_str());
 }
 
+static void test_keyboard() {
+    for (const Rect& area : {Rect{100, 200, 1160, 500}, Rect{20, 600, 680, 640}, Rect{80, 150, 860, 380}}) {
+        auto keys = keyboardLayout(area);
+        TEST_ASSERT_EQUAL(10 + 10 + 10 + 9 + 3, (int)keys.size());
+        int enter = 0, back = 0;
+        for (size_t i = 0; i < keys.size(); ++i) {
+            const Rect& r = keys[i].r;
+            TEST_ASSERT_TRUE(r.x >= area.x && r.y >= area.y && r.right() <= area.right() && r.bottom() <= area.bottom());
+            TEST_ASSERT_TRUE(r.w >= 44 && r.h >= 44);  // cible tactile
+            for (size_t j = i + 1; j < keys.size(); ++j) TEST_ASSERT_FALSE(r.intersects(keys[j].r));
+            enter += keys[i].kind == Key::Enter;
+            back += keys[i].kind == Key::Back;
+        }
+        TEST_ASSERT_EQUAL(1, enter);
+        TEST_ASSERT_EQUAL(1, back);
+    }
+    TEST_ASSERT_EQUAL_STRING("caf", utf8PopBack("caf\xC3\xA9").c_str());  // « é » : deux octets retirés
+    TEST_ASSERT_EQUAL_STRING("ab", utf8PopBack("abc").c_str());
+    TEST_ASSERT_EQUAL_STRING("", utf8PopBack("").c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -737,6 +765,7 @@ int main() {
     RUN_TEST(test_upnp_queue);
     RUN_TEST(test_favorites);
     RUN_TEST(test_queue_template);
+    RUN_TEST(test_keyboard);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

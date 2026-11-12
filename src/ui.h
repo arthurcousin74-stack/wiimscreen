@@ -8,6 +8,7 @@
 #include "art.h"
 #include "core.h"
 #include "settings.h"
+#include "upnp.h"
 
 struct UiState {
     wr::PlayerStatus player;  // titre/artiste/album déjà complétés par getMetaInfo
@@ -101,6 +102,18 @@ public:
     bool hitLogQueue(int x, int y) const { return logQueue_.contains(x, y); }
     bool hitLogTest(int x, int y) const { return logTest_.contains(x, y); }
 
+    // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
+    bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
+    void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1);
+    int hitKey(int x, int y) const;      // indice dans keys(), ou -1
+    const std::vector<wr::Key>& keys() const { return keys_; }
+    void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
+                       const String& status, int pressed = -1);
+    int resultsPerPage() const { return resultsPerPage_; }
+    int hitResult(int x, int y) const;   // indice global du morceau, ou -1
+    int hitResultsPage(int x, int y) const;  // -1 / +1 : page précédente / suivante, 0 sinon
+    bool hitResultsEdit(int x, int y) const { return resultsEdit_.contains(x, y); }
+
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
     bool hitUpdateCancel(int x, int y) const { return cancelRect_.contains(x, y); }
@@ -134,7 +147,8 @@ private:
     void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
-    void navRail(int active);  // 0 Accueil, 1 Réglages
+    void navRail(int active);  // 0 Accueil, 1 Réglages, 2 Recherche
+    void searchIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
     void emptyStrip();         // bande des presets sans preset
     void heartIcon(int cx, int cy, int s, uint32_t color);
 
@@ -175,6 +189,10 @@ private:
     wr::Rect homeRect_;         // bouton Accueil de la vue ambiance
     bool railShown_ = false;    // barre de navigation à l'écran
     int favState_ = 0;
+    std::vector<wr::Key> keys_;           // clavier affiché
+    std::vector<wr::Rect> resultRects_;   // lignes de résultats affichées
+    int resultsFirst_ = 0, resultsPerPage_ = 1;
+    wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

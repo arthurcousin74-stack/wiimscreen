@@ -801,17 +801,203 @@ void Ui::navRail(int active) {
     C.fillRect(r.x, r.y, r.w, r.h, 0x0A0B0Eu);
     if (r.h > r.w) C.drawFastVLine(r.right() - 1, r.y, r.h, kCard);
     else C.drawFastHLine(r.x, r.bottom() - 1, r.w, kCard);
-    const wr::Rect* items[] = {&layout_.navHome, &layout_.navSettings};
-    for (int i = 0; i < 2; ++i) {
+    const wr::Rect* items[] = {&layout_.navHome, &layout_.navSettings, &layout_.navSearch};
+    for (int i = 0; i < 3; ++i) {
         const wr::Rect& b = *items[i];
         const int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const bool on = i == active;
         const uint32_t bg = on ? accent_ : kCard, fg = on ? kBg : kText2;
         C.fillCircle(cx, cy, b.w / 2, bg);
         if (i == 0) homeIcon(cx, cy, b.w / 4, fg, bg);
-        else gearIcon(cx, cy, b.w / 4, fg, bg);
+        else if (i == 1) gearIcon(cx, cy, b.w / 4, fg, bg);
+        else searchIcon(cx, cy, b.w / 4, fg, bg);
     }
     railShown_ = true;
+}
+
+static bool hitNav(const wr::Rect& rail, const wr::Rect& b, int pad, int x, int y);  // plus bas
+
+// Loupe : anneau et manche
+void Ui::searchIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
+    auto& C = canvas_;
+    const int rr = r * 3 / 4, ox = cx - r / 4, oy = cy - r / 4, t = std::max(3, r / 4);
+    C.fillCircle(ox, oy, rr, c);
+    C.fillCircle(ox, oy, rr - t, bg);
+    for (int k = -t / 2; k <= t / 2; ++k)
+        C.drawLine(ox + rr * 7 / 10 + k, oy + rr * 7 / 10 - k, cx + r, cy + r, c);
+    C.fillCircle(cx + r, cy + r, t / 2, c);
+}
+
+bool Ui::hitSearch(int x, int y) const {
+    return railShown_ && view_ != View::Ambient && hitNav(layout_.rail, layout_.navSearch, sc(16), x, y);
+}
+
+// Clavier de recherche : champ de texte, état, touches
+void Ui::renderSearch(const std::string& query, const String& status, bool busy, int pressedKey) {
+    ambientShown_ = false;
+    view_ = View::Other;
+    railShown_ = false;
+    auto& C = canvas_;
+    background();
+    navRail(2);
+    const wr::Rect& A = layout_.content;
+    const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    // Champ de texte
+    const int fh = sc(64), fy = A.y + m;
+    C.fillRoundRect(X, fy, W, fh, fh / 2, kCard);
+    C.drawRoundRect(X, fy, W, fh, fh / 2, accent_);
+    searchIcon(X + fh / 2, fy + fh / 2, sc(12), kText2, kCard);
+    C.loadFont(kMid);
+    C.setTextDatum(textdatum_t::middle_left);
+    const int tx = X + fh, tw = W - fh - sc(24);
+    if (query.empty()) {
+        C.setTextColor(kText2);
+        C.drawString(wr::wrapText("Artiste, morceau, album\xE2\x80\xA6", tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
+    } else {
+        std::string shown = query;  // le début coupé si le texte déborde : on voit la fin, là où l'on tape
+        while (shown.size() > 1 && measure(shown) > tw - sc(10)) shown = shown.substr(1);
+        C.setTextColor(kText);
+        C.drawString(shown.c_str(), tx, fy + fh / 2 + 1);
+        if (!busy) C.fillRect(tx + measure(shown) + sc(3), fy + sc(14), sc(3), fh - sc(28), accent_);  // curseur
+    }
+    // État (recherche en cours, aucun résultat, erreur) et source
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::top_left);
+    C.setTextColor(busy ? accent_ : kText2);
+    const String line = status.length() ? status : String("Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
+    C.drawString(wr::wrapText(line.c_str(), W, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
+    // Touches
+    const int ky = fy + fh + sc(10) + C.fontHeight() + sc(14);
+    keys_ = wr::keyboardLayout(wr::Rect{X, ky, W, A.bottom() - m - ky});
+    for (size_t i = 0; i < keys_.size(); ++i) {
+        const wr::Key& k = keys_[i];
+        const bool enter = k.kind == wr::Key::Enter, down = (int)i == pressedKey;
+        const uint32_t bg = down ? kCardHi : (enter ? (busy ? kCardHi : accent_) : kCard);
+        C.fillRoundRect(k.r.x, k.r.y, k.r.w, k.r.h, sc(10), bg);
+        const int cx = k.r.x + k.r.w / 2, cy = k.r.y + k.r.h / 2;
+        if (k.kind == wr::Key::Back) {  // flèche d'effacement
+            const int s = std::min(k.r.h, k.r.w) / 4;
+            C.fillTriangle(cx - 2 * s, cy, cx - s, cy - s, cx - s, cy + s, kText);
+            C.fillRect(cx - s, cy - s, 3 * s, 2 * s, kText);
+            C.drawLine(cx - s / 3, cy - s / 2, cx + s, cy + s / 2, bg);
+            C.drawLine(cx - s / 3, cy + s / 2, cx + s, cy - s / 2, bg);
+            continue;
+        }
+        C.loadFont(k.kind == wr::Key::Char ? kMid : kSmall);
+        C.setTextDatum(textdatum_t::middle_center);
+        C.setTextColor(enter && !busy ? kBg : (k.kind == wr::Key::Space || k.kind == wr::Key::Clear ? kText2 : kText));
+        C.drawString(enter && busy ? "\xE2\x80\xA6" : k.label.c_str(), cx, cy + 1);
+    }
+    present();
+}
+
+int Ui::hitKey(int x, int y) const {
+    const int pad = sc(4);  // les espaces entre touches comptent pour la plus proche
+    for (size_t i = 0; i < keys_.size(); ++i) {
+        const wr::Rect& r = keys_[i].r;
+        if (wr::Rect{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad}.contains(x, y)) return (int)i;
+    }
+    return -1;
+}
+
+// Résultats : une ligne par morceau (titre, artiste · album), par pages
+void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
+                       const String& status, int pressed) {
+    ambientShown_ = false;
+    view_ = View::Other;
+    railShown_ = false;
+    auto& C = canvas_;
+    background();
+    navRail(2);
+    const wr::Rect& A = layout_.content;
+    const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    // En-tête : « texte » · nombre, bouton Modifier
+    const int bh = sc(52), bw = sc(170);
+    resultsEdit_ = wr::Rect{X + W - bw, A.y + m, bw, bh};
+    C.fillRoundRect(resultsEdit_.x, resultsEdit_.y, bw, bh, bh / 2, kCard);
+    searchIcon(resultsEdit_.x + sc(30), resultsEdit_.y + bh / 2, sc(9), kText, kCard);
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Modifier", resultsEdit_.x + bw / 2 + sc(14), resultsEdit_.y + bh / 2 + 1);
+    C.loadFont(kMid);
+    C.setTextDatum(textdatum_t::middle_left);
+    const std::string head = "\xC2\xAB " + query + " \xC2\xBB";
+    C.drawString(wr::wrapText(head, W - bw - sc(20), 1, measure)[0].c_str(), X, A.y + m + bh / 2);
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::top_left);
+    C.setTextColor(kText2);
+    String sub = status.length() ? status
+                                 : String((int)items.size()) + (items.size() > 1 ? " morceaux" : " morceau") +
+                                       " \xC2\xB7 touche celui \xC3\xA0 \xC3\xA9" "couter";
+    C.drawString(wr::wrapText(sub.c_str(), W, 1, measure)[0].c_str(), X, A.y + m + bh + sc(8));
+    // Lignes
+    const int top = A.y + m + bh + sc(8) + C.fontHeight() + sc(14), navH = sc(56);
+    const int rowH = sc(72), gap = sc(8);
+    resultsPerPage_ = std::max(1, (A.bottom() - m - navH - sc(10) - top + gap) / (rowH + gap));
+    const int pages = std::max(1, ((int)items.size() + resultsPerPage_ - 1) / resultsPerPage_);
+    page = std::max(0, std::min(pages - 1, page));
+    resultsFirst_ = page * resultsPerPage_;
+    resultRects_.clear();
+    for (int k = 0; k < resultsPerPage_ && resultsFirst_ + k < (int)items.size(); ++k) {
+        const int i = resultsFirst_ + k;
+        const wr::Rect r{X, top + k * (rowH + gap), W, rowH};
+        resultRects_.push_back(r);
+        const uint32_t bg = i == pressed ? kCardHi : kCard;
+        C.fillRoundRect(r.x, r.y, r.w, r.h, sc(12), bg);
+        // Numéro, titre, artiste · album
+        C.loadFont(kSmall);
+        C.setTextDatum(textdatum_t::middle_center);
+        C.setTextColor(kText2);
+        C.drawString(String(i + 1).c_str(), r.x + sc(30), r.y + r.h / 2 + 1);
+        const int tx = r.x + sc(60), tw = r.w - sc(80);
+        const wr::QueueTrack& t = items[i];
+        C.setTextDatum(textdatum_t::top_left);
+        C.loadFont(kSmall);
+        C.setTextColor(kText);
+        C.drawString(wr::wrapText(t.title.empty() ? "?" : t.title, tw, 1, measure)[0].c_str(), tx, r.y + sc(8));
+        std::string under = t.artist;
+        if (!t.album.empty()) under += (under.empty() ? "" : " \xC2\xB7 ") + t.album;
+        C.loadFont(kTiny);
+        C.setTextColor(kText2);
+        if (!under.empty()) C.drawString(wr::wrapText(under, tw, 1, measure)[0].c_str(), tx, r.y + r.h / 2 + sc(4));
+    }
+    // Pages
+    resultsPrev_ = resultsNext_ = wr::Rect{};
+    if (pages > 1) {
+        const int ny = A.bottom() - m - navH, nw = sc(200);
+        C.loadFont(kSmall);
+        C.setTextDatum(textdatum_t::middle_center);
+        if (page > 0) {
+            resultsPrev_ = wr::Rect{X, ny, nw, navH};
+            C.fillRoundRect(X, ny, nw, navH, navH / 2, kCard);
+            C.setTextColor(kText);
+            C.drawString("Pr\xC3\xA9" "c\xC3\xA9" "dents", X + nw / 2, ny + navH / 2 + 1);
+        }
+        if (page < pages - 1) {
+            resultsNext_ = wr::Rect{X + W - nw, ny, nw, navH};
+            C.fillRoundRect(X + W - nw, ny, nw, navH, navH / 2, kCard);
+            C.setTextColor(kText);
+            C.drawString("Suivants", X + W - nw / 2, ny + navH / 2 + 1);
+        }
+        C.setTextColor(kText2);
+        C.drawString((String(page + 1) + " / " + String(pages)).c_str(), X + W / 2, ny + navH / 2 + 1);
+    }
+    present();
+}
+
+int Ui::hitResult(int x, int y) const {
+    for (size_t k = 0; k < resultRects_.size(); ++k)
+        if (resultRects_[k].contains(x, y)) return resultsFirst_ + (int)k;
+    return -1;
+}
+
+int Ui::hitResultsPage(int x, int y) const {
+    if (resultsPrev_.contains(x, y)) return -1;
+    if (resultsNext_.contains(x, y)) return 1;
+    return 0;
 }
 
 // Engrenage : dents en couronne, disque, trou central

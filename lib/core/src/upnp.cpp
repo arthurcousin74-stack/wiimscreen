@@ -196,19 +196,28 @@ QueueInfo parseQueueContext(const std::string& xml) {
     std::string tracks;
     if (xmlElement(list, "Tracks", tracks)) {
         // <Track1>…</Track1><Track2>…
+        size_t pos = 0;  // chaque piste est cherchée après la précédente (files de centaines de Ko)
         for (int n = 1; n < 10000; ++n) {
             std::string t;
-            if (!xmlElement(tracks, "Track" + std::to_string(n), t)) break;
+            size_t end = 0;
+            if (!xmlElement(tracks, "Track" + std::to_string(n), t, pos, &end)) break;
+            pos = end;
             ++q.tracks;
-            if (q.titles.size() < 200) {
+            if (q.items.size() < 200) {
+                QueueTrack item;
                 std::string meta;
                 if (xmlElement(t, "Metadata", meta)) {
                     // DIDL-Lite échappé une ou deux fois selon l'émetteur
                     std::string didl = xmlUnescape(meta);
                     if (didl.find("&lt;") != std::string::npos) didl = xmlUnescape(didl);
-                    std::string title;
-                    if (xmlElement(didl, "title", title)) q.titles.push_back(trim(xmlUnescape(title)));
+                    std::string v;
+                    if (xmlElement(didl, "title", v)) item.title = trim(xmlUnescape(v));
+                    if (xmlElement(didl, "artist", v) || xmlElement(didl, "creator", v)) item.artist = trim(xmlUnescape(v));
+                    if (xmlElement(didl, "album", v)) item.album = trim(xmlUnescape(v));
+                    if (xmlElement(didl, "albumArtURI", v)) item.art = trim(xmlUnescape(v));
                 }
+                if (!item.title.empty()) q.titles.push_back(item.title);
+                q.items.push_back(item);
             }
         }
     }

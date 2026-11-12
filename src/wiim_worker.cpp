@@ -253,6 +253,10 @@ void WiimWorker::run() {
         favPlay_ = "";
         String searchTest = searchTest_;
         searchTest_ = "";
+        String search = search_;
+        search_ = "";
+        int searchPlay = searchPlay_;
+        searchPlay_ = 0;
         xSemaphoreGive(lock_);
         if (presets) {
             WiimEvent ev;
@@ -266,6 +270,8 @@ void WiimWorker::run() {
         if (queue) runQueueCheck();
         if (play.length()) runPlayFavorite(play);
         if (searchTest.length()) runSearchTest(searchTest);
+        if (search.length()) runSearch(search);
+        if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (save.wanted) runSaveFavorite(save);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
     }
@@ -277,7 +283,7 @@ void WiimWorker::run() {
 namespace {
 
 constexpr const char* kPlayQueue = "urn:schemas-wiimu-com:service:PlayQueue:1";
-constexpr size_t kMaxBody = 192 * 1024;
+constexpr size_t kMaxBody = 1024 * 1024;  // en PSRAM ; certaines files du WiiM dépassent 192 Ko
 
 // Flux qui garde au plus `cap` octets (HTTPClient gère « chunked » et Content-Length)
 class CapStream : public Stream {
@@ -453,6 +459,7 @@ void WiimWorker::runQueueCheck() {
         if (std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
         seen.push_back(key);
         serialDump(("BrowseQueue " + n).c_str(), ctx, q.user);
+        if (q.sourceName == "Qobuz") fav::saveQobuzTemplate(ctx);
         logEvent("File \xC2\xAB %s \xC2\xBB (nom %s) : source %s, %d piste(s)%s%s",
                  q.listName.empty() ? "?" : q.listName.c_str(), n.c_str(),
                  q.sourceName.empty() ? "?" : q.sourceName.c_str(), q.declaredTracks >= 0 ? q.declaredTracks : q.tracks,
@@ -517,6 +524,7 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
         return;
     }
     wr::QueueInfo q = wr::parseQueueContext(best);
+    if (q.sourceName == "Qobuz") fav::saveQobuzTemplate(best);
     wr::Favorite f;
     f.key = wr::queueKey(q);
     f.title = r.album.length() ? r.album.c_str() : q.listName;
@@ -574,6 +582,7 @@ void WiimWorker::runSearchTest(const String& query) {
         logEvent("Essai : aucune file Qobuz comme mod\xC3\xA8le (lance un album Qobuz depuis l'app, puis r\xC3\xA9" "essaie)");
         return;
     }
+    fav::saveQobuzTemplate(templ);
     const wr::QueueInfo model = wr::parseQueueContext(templ);
     logEvent("Essai : mod\xC3\xA8le \xC2\xAB %s \xC2\xBB, compte %s, qualit\xC3\xA9 %s", model.listName.c_str(),
              wr::maskAccount(model.user).c_str(), model.quality.c_str());
@@ -614,6 +623,120 @@ void WiimWorker::runSearchTest(const String& query) {
     }
     logEvent("Essai Qobuz sans cl\xC3\xA9 : termin\xC3\xA9");
     nextPoll_ = millis();
+}
+
+// ---------------------------------------------------------------------------
+// Recherche Qobuz sans clé : le WiiM lit lui-même les résultats d'une file dont l'adresse est une
+// recherche de morceaux (vérifié sur un WiiM, 2026-11). La file est relue pour afficher les résultats.
+
+static const char* kSearchQueue = "wiimscreen-recherche";
+
+void WiimWorker::searchQobuz(const String& query) {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    search_ = query;
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
+void WiimWorker::playSearchResult(int index) {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    searchPlay_ = index + 1;  // 1 pour le premier résultat
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
+// Modèle de file Qobuz : celui gardé, sinon une file Qobuz du WiiM, sinon un favori Qobuz
+bool WiimWorker::qobuzModel(const std::string& control, std::string& templ) {
+    if (fav::qobuzTemplate(templ)) return true;
+    for (auto& n : queueNames(control, false)) {
+        std::string ctx;
+        if (browseQueue(control, n, ctx) == 200 && wr::parseQueueContext(ctx).sourceName == "Qobuz") {
+            fav::saveQobuzTemplate(ctx);
+            templ = ctx;
+            return true;
+        }
+    }
+    for (auto& f : fav::list())
+        if (f.source == "Qobuz" && fav::context(f.id, templ)) return true;
+    return false;
+}
+
+void WiimWorker::runSearch(const String& query) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = query;
+    std::string control, templ;
+    if (!findPlayQueue(control, false)) {
+        ev.text = "le WiiM ne r\xC3\xA9pond pas";
+        push(std::move(ev));
+        return;
+    }
+    if (!qobuzModel(control, templ)) {
+        ev.text = "lance d'abord un album Qobuz depuis l'app WiiM Home (une seule fois)";
+        push(std::move(ev));
+        return;
+    }
+    const std::string url = "https://www.qobuz.com/api.json/0.2/track/search?query=" + wr::urlQueryEncode(query.c_str()) +
+                            "&offset=0&limit=50";
+    const std::string ctx = wr::queueFromTemplate(templ, kSearchQueue, url);
+    const uint32_t t0 = millis();
+    std::string resp;
+    int create = upnpRequest(control, "CreateQueue",
+                             wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
+    if (create != 200)
+        create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
+                             resp);
+    if (create != 200) {
+        logEvent("Recherche \xC2\xAB %s \xC2\xBB : CreateQueue %d", query.c_str(), create);
+        ev.text = "le WiiM a refus\xC3\xA9 la recherche";
+        push(std::move(ev));
+        return;
+    }
+    // Résultats relus ; d'abord sans lancer la lecture, puis en la lançant si la file reste vide
+    auto readBack = [&](int seconds, wr::QueueInfo& out) {
+        for (int i = 0; i < seconds; ++i) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            std::string back;
+            if (browseQueue(control, kSearchQueue, back) == 200 && !back.empty()) {
+                out = wr::parseQueueContext(back);
+                if (out.tracks > 0) return true;
+            }
+        }
+        return false;
+    };
+    wr::QueueInfo q;
+    bool found = readBack(3, q);
+    if (!found) {
+        int play = upnpRequest(control, "PlayQueueWithIndex",
+                               wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", kSearchQueue}, {"Index", "1"}}),
+                               resp);
+        ev.played = play == 200;
+        found = ev.played && readBack(8, q);
+    }
+    logEvent("Recherche \xC2\xAB %s \xC2\xBB : %d r\xC3\xA9sultat(s)%s (%lu ms)", query.c_str(), found ? q.tracks : 0,
+             ev.played ? ", lecture lanc\xC3\xA9" "e" : ", sans lecture", (unsigned long)(millis() - t0));
+    ev.ok = true;
+    ev.tracks = q.items;
+    const bool played = ev.played;
+    push(std::move(ev));
+    if (played) nextPoll_ = millis();
+}
+
+void WiimWorker::runPlaySearchResult(int index) {
+    std::string control, resp;
+    int code = -1;
+    if (findPlayQueue(control, false))
+        code = upnpRequest(control, "PlayQueueWithIndex",
+                           wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
+                                        {{"QueueName", kSearchQueue}, {"Index", std::to_string(index)}}),
+                           resp);
+    logEvent("Recherche : r\xC3\xA9sultat %d -> %d", index, code);
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    ev.ok = code == 200;
+    if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 ce morceau";
+    push(std::move(ev));
+    nextPoll_ = millis() + 800;
 }
 
 void WiimWorker::runPlayFavorite(const String& id) {

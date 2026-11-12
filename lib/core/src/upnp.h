@@ -37,6 +37,11 @@ std::string upnpUrl(const std::string& base, const std::string& url);
 std::string soapBody(const std::string& serviceType, const std::string& action,
                      const std::vector<std::pair<std::string, std::string>>& args);
 
+// One track of a queue, from its DIDL-Lite metadata.
+struct QueueTrack {
+    std::string title, artist, album, art;
+};
+
 // Content of a queue (QueueContext of BrowseQueue / CreateQueue, already unescaped once).
 struct QueueInfo {
     bool ok = false;           // a <PlayList> was found
@@ -48,6 +53,7 @@ struct QueueInfo {
     int declaredTracks = -1;   // TrackNumber, -1 if absent
     int tracks = 0;            // <TrackN> elements present
     std::vector<std::string> titles;  // track titles (from the DIDL-Lite metadata), 200 at most
+    std::vector<QueueTrack> items;    // same tracks with artist, album and cover, 200 at most
 };
 QueueInfo parseQueueContext(const std::string& xml);
 

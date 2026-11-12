@@ -69,6 +69,12 @@ static bool g_listening = false;  // commande vocale en cours d'écoute
 static bool g_menuOpen = false;   // menu Réglages affiché (appui long)
 static bool g_touchTest = false;  // écran de test tactile (menu Réglages)
 static bool g_logOpen = false;    // écran Journal (menu Réglages)
+// Recherche Qobuz (par le WiiM) : clavier, puis résultats
+static bool g_searchOpen = false, g_resultsOpen = false, g_searchBusy = false;
+static std::string g_searchQuery;
+static String g_searchStatus;
+static std::vector<wr::QueueTrack> g_searchResults;
+static int g_resultsPage = 0;
 static uint32_t g_logFrame = 0;
 static int g_touchCount = 0;
 static uint32_t g_touchFrame = 0;
@@ -146,7 +152,10 @@ static bool g_dirty = false;
 
 static void show() { g_dirty = true; }
 
-static bool modalOpen() { return g_listening || g_menuOpen || g_touchTest || g_logOpen; }
+static bool modalOpen() { return g_listening || g_menuOpen || g_touchTest || g_logOpen || g_searchOpen || g_resultsOpen; }
+static void openSearch();  // recherche Qobuz, plus bas
+static void onSearchKey(int k);
+static void onSearchDone(const WiimEvent& ev);
 
 static int favoriteState();  // plus bas, avec les favoris
 
@@ -448,6 +457,7 @@ static void serviceWiim() {
                 }
                 show();
                 break;
+            case WiimEvent::SearchDone: onSearchDone(ev); break;
             case WiimEvent::FavPlayed:
                 if (!ev.ok) {
                     sound::error();
@@ -857,6 +867,12 @@ static void handleTap(int x, int y) {
         show();
         return;
     }
+    if (g_ui.hitSearch(x, y)) {  // Recherche (barre)
+        logEvent("Appui Recherche (%d,%d)", x, y);
+        sound::tap();
+        openSearch();
+        return;
+    }
     if (g_ui.hitSettings(x, y)) {  // Réglages (barre)
         logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
         sound::tap();
@@ -959,6 +975,67 @@ void setup() {
     show();
 }
 
+// ------------------------------------------------------------ recherche Qobuz
+
+static void openSearch() {
+    g_searchOpen = true;
+    g_searchStatus = g_searchBusy ? String("Recherche en cours\xE2\x80\xA6") : String();
+    g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy);
+}
+
+static void onSearchKey(int k) {
+    if (k < 0) return;
+    const wr::Key key = g_ui.keys()[k];
+    sound::tap();
+    switch (key.kind) {
+        case wr::Key::Char:
+            if (g_searchQuery.size() < 60) g_searchQuery += key.text;
+            break;
+        case wr::Key::Space:
+            if (!g_searchQuery.empty() && g_searchQuery.back() != ' ') g_searchQuery += ' ';
+            break;
+        case wr::Key::Back: g_searchQuery = wr::utf8PopBack(g_searchQuery); break;
+        case wr::Key::Clear: g_searchQuery.clear(); break;
+        case wr::Key::Enter: {
+            std::string q = g_searchQuery;
+            while (!q.empty() && q.back() == ' ') q.pop_back();
+            if (q.empty() || g_searchBusy) break;
+            logEvent("Recherche Qobuz : %s", q.c_str());
+            g_searchBusy = true;
+            g_searchStatus = "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6";
+            g_worker.searchQobuz(q.c_str());
+            break;
+        }
+    }
+    if (key.kind != wr::Key::Enter) g_searchStatus = g_searchBusy ? g_searchStatus : String();
+    g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy, k);
+}
+
+// Résultats arrivés (tâche WiiM)
+static void onSearchDone(const WiimEvent& ev) {
+    g_searchBusy = false;
+    if (!ev.ok) {
+        sound::error();
+        g_searchStatus = "Recherche impossible : " + ev.text;
+    } else if (ev.tracks.empty()) {
+        g_searchStatus = "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB " + ev.name + " \xC2\xBB";
+    } else {
+        g_searchResults = ev.tracks;
+        g_resultsPage = 0;
+        g_searchStatus = "";
+        if (g_searchOpen) {  // toujours sur le clavier : on montre les résultats
+            g_searchOpen = false;
+            g_resultsOpen = true;
+            g_ui.renderResults(g_searchQuery, g_searchResults, 0,
+                               ev.played ? String("Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer")
+                                         : String());
+        }
+        if (ev.played) g_worker.pollSoon();
+        return;
+    }
+    if (g_searchOpen) g_ui.renderSearch(g_searchQuery, g_searchStatus, false);
+}
+
 void loop() {
     M5.update();
     auto t = M5.Touch.getDetail();
@@ -1003,6 +1080,11 @@ void loop() {
             logEvent("Appui Essai recherche");
             g_worker.testQobuzSearch(g_state.player.artist.c_str());  // artiste en cours, sinon Miles Davis
             g_logFrame = 0;
+        } else if (t.wasPressed() && g_ui.hitSearch(t.x, t.y)) {
+            sound::tap();
+            g_logOpen = false;
+            g_lastTouch = now;
+            openSearch();
         } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
             sound::tap();
             g_logOpen = false;
@@ -1012,6 +1094,48 @@ void loop() {
         } else if (now - g_logFrame > 1000) {
             g_logFrame = now;
             g_ui.renderLog(logLines(), FW_VERSION);
+        }
+        serviceWiim();
+        delay(5);
+        return;
+    }
+
+    // Recherche : clavier, puis résultats (la barre de gauche reste active)
+    if (g_searchOpen || g_resultsOpen) {
+        if (t.wasPressed()) {
+            g_lastTouch = now;
+            if (g_brightness != kBrightOn) setBrightness(kBrightOn);
+            else if (g_ui.hitHome(t.x, t.y)) {
+                sound::tap();
+                g_searchOpen = g_resultsOpen = false;
+                show();
+            } else if (g_ui.hitSettings(t.x, t.y)) {
+                sound::tap();
+                g_searchOpen = g_resultsOpen = false;
+                g_menuOpen = true;
+                g_ui.renderMenu(FW_VERSION);
+            } else if (g_searchOpen) {
+                onSearchKey(g_ui.hitKey(t.x, t.y));
+            } else {
+                int r = g_ui.hitResult(t.x, t.y), pg = g_ui.hitResultsPage(t.x, t.y);
+                if (r >= 0) {
+                    sound::tap();
+                    g_ui.renderResults(g_searchQuery, g_searchResults, g_resultsPage, "", r);  // ligne enfoncée
+                    logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
+                    g_worker.playSearchResult(r);
+                    setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title).c_str(), 4000);
+                    g_resultsOpen = false;
+                    show();
+                } else if (pg) {
+                    sound::tap();
+                    g_resultsPage += pg;
+                    g_ui.renderResults(g_searchQuery, g_searchResults, g_resultsPage, "");
+                } else if (g_ui.hitResultsEdit(t.x, t.y) || g_ui.hitSearch(t.x, t.y)) {
+                    sound::tap();
+                    g_resultsOpen = false;
+                    openSearch();
+                }
+            }
         }
         serviceWiim();
         delay(5);
@@ -1032,6 +1156,10 @@ void loop() {
             logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_ambient) exitAmbient();
+        } else if (g_menuOpen && g_ui.hitSearch(t.x, t.y)) {
+            sound::tap();
+            g_menuOpen = false;
+            openSearch();
         } else if (g_menuOpen && g_ui.hitHome(t.x, t.y)) {
             sound::tap();  // Accueil : fermer les réglages
             g_menuOpen = false;
@@ -1108,7 +1236,7 @@ void loop() {
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && !g_listening && !g_menuOpen && !g_touchTest && !g_logOpen && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
+    if (!g_ambient && !modalOpen() && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
         g_state.online)
         enterAmbient();
     if (idle > kOffMs && !p.playing) {

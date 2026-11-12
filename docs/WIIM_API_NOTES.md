@@ -135,10 +135,14 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
 - **As of 2026-11, `album/search` and `catalog/search` answer `401 User authentication is required`** with the
   app ID alone: searching needs a logged-in Qobuz user (`user_auth_token`), i.e. the user's Qobuz credentials on
   the device. wiimscreen does not do this.
-- Key-free experiment (Journal › *Essai recherche*, plays music): a queue built from a real Qobuz queue
-  (`wr::queueFromTemplate`) with no tracks and (A) the album `SearchUrl`, (B) a
-  `track/search?query=…` `SearchUrl`, to see whether the WiiM fetches the tracks itself with its own Qobuz
-  access. Result on real hardware: not known yet.
+- **Key-free search works through the WiiM (verified on a real WiiM, 2026-11).** A queue built from a real Qobuz
+  queue (`wr::queueFromTemplate`: same SourceName, `Login_username`, quality; no tracks) with:
+  - (A) the album `SearchUrl` `album/get?album_id=…`: the WiiM fetched the 48 tracks itself and played them;
+  - (B) `SearchUrl` = `https://www.qobuz.com/api.json/0.2/track/search?query=<q>&offset=0&limit=50`: the WiiM ran
+    the search with its own Qobuz access, `BrowseQueue` returned the results (7 tracks, with DIDL-Lite titles,
+    artists, albums) and it played the first one.
+  wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
+  WiiM fills it before playing is not known yet), then starts it if it stays empty.
 
 ## What the local API does not do
 

@@ -114,6 +114,19 @@ bool remove(const std::string& id) {
     return true;
 }
 
+bool saveQobuzTemplate(const std::string& queueContext) {
+    wr::QueueInfo q = wr::parseQueueContext(queueContext);
+    if (q.sourceName != "Qobuz") return false;
+    const std::string small = wr::queueFromTemplate(queueContext, q.listName, q.searchUrl);  // sans les pistes
+    Guard g;
+    return g_ok && !small.empty() && writeFile("/fav/qobuz_template.xml", small);
+}
+
+bool qobuzTemplate(std::string& out) {
+    Guard g;
+    return g_ok && readFile("/fav/qobuz_template.xml", out) && !out.empty();
+}
+
 bool context(const std::string& id, std::string& out) {
     Guard g;
     return g_ok && readFile(path(id).c_str(), out);

@@ -23,6 +23,9 @@ Hardware testing in progress.
 - Favorites: the button left of the playback controls saves the album or playlist that plays (a copy of the
   WiiM's play queue, no streaming-service key needed); favorites appear as tiles after the WiiM presets (small
   heart badge) and replay with one tap. Touch the button again on a favorite album to remove it. Up to 24.
+- Qobuz search without any key: the search button in the left bar opens an on-screen keyboard; the WiiM runs
+  the track search with its own Qobuz access, the remote reads the results back and lists them (title, artist,
+  album); a tap plays a track. Needs one Qobuz album played from the WiiM Home app once (as a model).
 - Journal › *Essai recherche*: key-free experiment that asks the WiiM to play a Qobuz queue made only of an
   album address, then of a track search (no Qobuz key on the remote).
 - Settings menu: touch test and event log (for hardware bug reports). The log wraps long lines and has a

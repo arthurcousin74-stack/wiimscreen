@@ -540,11 +540,13 @@ Layout computeLayout(int width, int height, int presetCount) {
         L.rail = Rect{0, 0, railW, height};
         L.navHome = Rect{(railW - sideD) / 2, m, sideD, sideD};
         L.navSettings = Rect{(railW - sideD) / 2, height - m - sideD, sideD, sideD};
+        L.navSearch = Rect{(railW - sideD) / 2, (height - sideD) / 2, sideD, sideD};
         L.content = Rect{railW, 0, width - railW, height};
     } else {
         L.rail = Rect{0, 0, width, railW};
         L.navHome = Rect{m, (railW - sideD) / 2, sideD, sideD};
         L.navSettings = Rect{width - m - sideD, (railW - sideD) / 2, sideD, sideD};
+        L.navSearch = Rect{(width - sideD) / 2, (railW - sideD) / 2, sideD, sideD};
         L.content = Rect{0, railW, width, height - railW};
     }
     const int X0 = landscape ? L.content.x - sc(4) : 0;  // la barre a déjà sa marge
@@ -613,6 +615,37 @@ Layout computeLayout(int width, int height, int presetCount) {
                     L.transport[kVolUp].x - sc(10) - valueW - (L.mute.right() + sc(10)), volH};
 
     return L;
+}
+
+std::vector<Key> keyboardLayout(const Rect& area) {
+    std::vector<Key> keys;
+    const int g = std::max(4, area.w / 120);
+    const int unit = (area.w - 9 * g) / 10, rowH = (area.h - 4 * g) / 5;
+    auto add = [&](int row, int col, int span, const std::string& label, const std::string& text, Key::Kind kind) {
+        Key k;
+        k.r = Rect{area.x + col * (unit + g), area.y + row * (rowH + g), span * unit + (span - 1) * g, rowH};
+        k.label = label;
+        k.text = text;
+        k.kind = kind;
+        keys.push_back(k);
+    };
+    const char* rows[] = {"1234567890", "azertyuiop", "qsdfghjklm"};
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; rows[r][c]; ++c) add(r, c, 1, std::string(1, rows[r][c]), std::string(1, rows[r][c]), Key::Char);
+    const char* last = "wxcvbn'-";
+    for (int c = 0; last[c]; ++c) add(3, c, 1, std::string(1, last[c]), std::string(1, last[c]), Key::Char);
+    add(3, 8, 2, "\xE2\x8C\xAB", "", Key::Back);  // ⌫
+    add(4, 0, 2, "Effacer", "", Key::Clear);
+    add(4, 2, 5, "espace", " ", Key::Space);
+    add(4, 7, 3, "Chercher", "", Key::Enter);
+    return keys;
+}
+
+std::string utf8PopBack(const std::string& s) {
+    if (s.empty()) return s;
+    size_t i = s.size() - 1;
+    while (i > 0 && (static_cast<unsigned char>(s[i]) & 0xC0) == 0x80) --i;  // octets de suite 10xxxxxx
+    return s.substr(0, i);
 }
 
 uint32_t nameColor(const std::string& name) {

@@ -274,6 +274,21 @@ int main(int argc, char** argv) {
             "  813.5 s  File du WiiM : termin\xC3\xA9 (XML complet sur le port s\xC3\xA9rie)"};
         up.renderLog(jl, "57-219c0bc");
         save(out, "22-journal-portrait.ppm");
+        {
+            std::vector<wr::QueueTrack> found = {
+            {"Respect", "Aretha Franklin", "I Never Loved a Man the Way I Love You", ""},
+            {"Think (with The Royal Philharmonic Orchestra)", "Aretha Franklin", "A Brand New Me", ""},
+            {"Climbing Higher Mountains (Live at New Temple Missionary Baptist Church, Los Angeles, CA, 01/13/72)",
+             "Aretha Franklin", "Amazing Grace: The Complete Recordings", ""},
+            {"(You Make Me Feel Like) A Natural Woman", "Aretha Franklin", "Lady Soul", ""},
+            {"Chain of Fools", "Aretha Franklin", "Lady Soul", ""},
+            {"I Say a Little Prayer", "Aretha Franklin", "Aretha Now", ""},
+            {"Day Dreaming", "Aretha Franklin", "Young, Gifted and Black", ""}};
+            up.renderSearch("", "", false);
+            save(out, "26-recherche-portrait.ppm");
+            up.renderResults("aretha franklin", found, 0, "");
+            save(out, "27-resultats-portrait.ppm");
+        }
         D.deleteSprite();
         D.createSprite(1280, 720);
     }
@@ -285,6 +300,21 @@ int main(int argc, char** argv) {
 
     ui.renderMenu("57-219c0bc");
     save(out, "13-menu.ppm");
+    {
+        std::vector<wr::QueueTrack> found = {
+            {"Respect", "Aretha Franklin", "I Never Loved a Man the Way I Love You", ""},
+            {"Think (with The Royal Philharmonic Orchestra)", "Aretha Franklin", "A Brand New Me", ""},
+            {"Climbing Higher Mountains (Live at New Temple Missionary Baptist Church, Los Angeles, CA, 01/13/72)",
+             "Aretha Franklin", "Amazing Grace: The Complete Recordings", ""},
+            {"(You Make Me Feel Like) A Natural Woman", "Aretha Franklin", "Lady Soul", ""},
+            {"Chain of Fools", "Aretha Franklin", "Lady Soul", ""},
+            {"I Say a Little Prayer", "Aretha Franklin", "Aretha Now", ""},
+            {"Day Dreaming", "Aretha Franklin", "Young, Gifted and Black", ""}};
+        ui.renderSearch("aretha frank", "", false, 20);
+        save(out, "24-recherche.ppm");
+        ui.renderResults("aretha franklin", found, 0, "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer");
+        save(out, "25-resultats.ppm");
+    }
     {
             std::vector<String> jl = {
             "  812.4 s  Appui File du WiiM",

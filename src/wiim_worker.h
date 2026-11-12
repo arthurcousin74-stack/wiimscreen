@@ -7,6 +7,7 @@
 
 #include "core.h"
 #include "settings.h"
+#include "upnp.h"
 #include "wiim_client.h"
 
 // Tout le réseau avec le WiiM passe par une tâche de fond (cœur du Wi-Fi) : chaque
@@ -28,13 +29,15 @@ struct WiimReport {
 };
 
 struct WiimEvent {
-    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed };
+    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone };
     Kind kind = CommandDone;
     WiimError error = WiimError::None;
     String text;  // commande ; empreinte vue (PinMismatch) ; nouvelle adresse (Moved) ; favori ou erreur
     bool ok = false;
     std::vector<wr::Preset> presets;
-    String uuid, name;  // Identity
+    String uuid, name;  // Identity ; name : texte cherché (SearchDone)
+    std::vector<wr::QueueTrack> tracks;  // SearchDone : résultats
+    bool played = false;                 // SearchDone : la lecture du premier résultat a été lancée
 };
 
 class WiimWorker {
@@ -56,6 +59,10 @@ public:
     void playFavorite(const String& id);
     // Essai (journal) : files Qobuz sans pistes — album, puis recherche de `query` — envoyées au WiiM
     void testQobuzSearch(const String& query);
+    // Recherche Qobuz par le WiiM (évènement SearchDone avec les morceaux trouvés), puis lecture d'un
+    // résultat (0 pour le premier). Non bloquant.
+    void searchQobuz(const String& query);
+    void playSearchResult(int index);
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
     bool takeReport(WiimReport& out);
@@ -78,6 +85,9 @@ private:
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
     void runSearchTest(const String& query);
+    void runSearch(const String& query);
+    void runPlaySearchResult(int index);
+    bool qobuzModel(const std::string& control, std::string& templ);
     void push(WiimEvent&& e);
     void notePinning(WiimError e);
     bool commandsWaiting();
@@ -95,6 +105,8 @@ private:
     FavRequest favSave_;
     String favPlay_;
     String searchTest_;
+    String search_;
+    int searchPlay_ = 0;
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;

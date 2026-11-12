@@ -168,11 +168,24 @@ struct Layout {
     Rect rail;         // barre de navigation
     Rect navHome;      // Accueil (écran principal)
     Rect navSettings;  // Réglages
+    Rect navSearch;    // Recherche (au milieu)
     Rect content;      // reste de l'écran, à côté de la barre
 };
 
 // Les dimensions suivent la taille de l'écran (référence : 540 px sur le petit côté).
 Layout computeLayout(int width, int height, int presetCount);
+
+// Clavier à l'écran (recherche) : AZERTY, 5 rangées sur une grille de 10 colonnes.
+struct Key {
+    enum Kind { Char, Space, Back, Clear, Enter };
+    Rect r;
+    std::string label;  // texte affiché
+    std::string text;   // texte ajouté (Char)
+    Kind kind = Char;
+};
+std::vector<Key> keyboardLayout(const Rect& area);
+// Retire le dernier caractère UTF-8 (pas seulement le dernier octet)
+std::string utf8PopBack(const std::string& s);
 
 // Couleur stable tirée d'un nom (fond des presets sans image), lisible avec du texte blanc.
 uint32_t nameColor(const std::string& name);

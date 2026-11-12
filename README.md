@@ -42,6 +42,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button. The device
   keeps a copy of the WiiM play queue. The album then shows as a tile, and one touch plays it again. You do not
   need a key for the streaming service. The device keeps a maximum of 24 favorites.
+- **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track. Your
+  WiiM does the search with its own Qobuz access. Touch a result to play it. Before the first search, play one
+  Qobuz album from the WiiM Home app.
 - **Presets as tiles** with their images. The device gets the presets from the WiiM, or you can write your own list.
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.
