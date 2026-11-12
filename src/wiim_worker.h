@@ -86,6 +86,7 @@ private:
     bool findPlayQueue(std::string& control, bool verbose);
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
+    void runPlayQobuzFavorites();
     void runSearchTest(const String& query);
     void runDeezerTest(const std::string& control, const String& query);
     void runNoPlayTest(const String& query);

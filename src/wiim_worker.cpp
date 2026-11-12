@@ -1129,7 +1129,44 @@ void WiimWorker::runPlaySearchResult(int index) {
     nextPoll_ = millis() + 800;
 }
 
+// Favoris Qobuz du compte : file dont l'adresse est la liste des morceaux favoris ; le WiiM la lit avec sa
+// propre connexion Qobuz (vérifié : il y ajoute le jeton de l'utilisateur) et la lance.
+void WiimWorker::runPlayQobuzFavorites() {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ, resp;
+    if (!findPlayQueue(control, false) || !qobuzModel(control, templ)) {
+        ev.text = "lance d'abord un album Qobuz depuis l'app WiiM Home";
+        push(std::move(ev));
+        return;
+    }
+    const std::string name = "Favoris Qobuz";
+    upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    const char* policy = "0";
+    const int c = createQueueQuiet(
+        control,
+        wr::queueFromTemplate(templ, name,
+                              "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100"),
+        policy);
+    wr::QueueInfo q;
+    const bool loaded = c == 200 && readQueueStable(control, name, 8, q);
+    // Le WiiM lance d'ordinaire la file créée ; sinon on la lance
+    const int p = loaded ? upnpRequest(control, "PlayQueueWithIndex",
+                                       wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),
+                                       resp)
+                         : -1;
+    logEvent("Favoris Qobuz : CreateQueue %d, %d morceau(x), Play %d", c, loaded ? q.tracks : 0, p);
+    ev.ok = loaded && p == 200;
+    if (!ev.ok) ev.text = loaded ? "le WiiM n'a pas lanc\xC3\xA9 les favoris" : "aucun morceau favori sur Qobuz";
+    push(std::move(ev));
+    nextPoll_ = millis() + 800;
+}
+
 void WiimWorker::runPlayFavorite(const String& id) {
+    if (id == "qobuz-favoris") {
+        runPlayQobuzFavorites();
+        return;
+    }
     WiimEvent ev;
     ev.kind = WiimEvent::FavPlayed;
     std::string ctx, control;

@@ -52,6 +52,7 @@ static std::vector<wr::Preset> g_wiimPresets;          // presets du WiiM (ou sa
 static bool g_favOk = false;                            // mémoire des favoris disponible
 static bool g_favBusy = false;                          // enregistrement d'un favori en cours
 static std::vector<wr::Favorite> g_favs;
+static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » (file chargée par le WiiM)
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
 static bool g_presetsFromWiim = false;
 static uint32_t g_lastPresetFetch = 0;
@@ -337,6 +338,14 @@ static void refreshTiles() {
         p.label = g_favs[i].title;
         p.picUrl = g_favs[i].artUrl;
         p.favId = g_favs[i].id;
+        list.push_back(p);
+    }
+    // Favoris Qobuz du compte (ceux de l'app) : le WiiM les charge avec sa propre connexion Qobuz
+    if (g_favOk && fav::hasQobuzModel()) {
+        wr::Preset p;
+        p.slot = 99;
+        p.label = "Favoris Qobuz";
+        p.favId = kQobuzFavsId;
         list.push_back(p);
     }
     if (samePresets(list, g_presets)) return;
