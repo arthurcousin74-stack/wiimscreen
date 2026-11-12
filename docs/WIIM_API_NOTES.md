@@ -220,6 +220,11 @@ play a choice with `CreateQueue` (album `SearchUrl` from the result's album id) 
 found by title. `AccountSource` is case-sensitive (`qobuz` → `501 GetUserInfo failed`); `GetBasicUserInfo` lists
 every linked service with its `showName`. Treat the token as a secret: never log, display or store it.
 
+**Used by wiimscreen (2026-11):** the search screen (Qobuz) and the favorite-album tiles use this access
+(`WiimWorker::qobuzAccess`, token in RAM only, asked again on 401/403); results play with `CreateQueue` (album
+`SearchUrl`) + `PlayQueueWithIndex` at the index found by title. The queue-based search (with mute and restore)
+remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `QueueContext` only.
+
 ### Deezer
 
 - A Deezer album started from the WiiM Home app gives a queue with **`SourceName` `Deezer2`** and

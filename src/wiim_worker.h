@@ -7,6 +7,7 @@
 
 #include "core.h"
 #include "settings.h"
+#include "qobuz.h"
 #include "upnp.h"
 #include "voice.h"
 #include "wiim_client.h"
@@ -30,7 +31,7 @@ struct WiimReport {
 };
 
 struct WiimEvent {
-    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone };
+    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone, QobuzFavorites };
     Kind kind = CommandDone;
     WiimError error = WiimError::None;
     String text;  // commande ; empreinte vue (PinMismatch) ; nouvelle adresse (Moved) ; favori ou erreur
@@ -39,6 +40,7 @@ struct WiimEvent {
     String uuid, name;  // Identity ; name : texte cherché (SearchDone)
     std::vector<wr::QueueTrack> tracks;  // SearchDone : résultats
     bool played = false;                 // SearchDone : la lecture du premier résultat a été lancée
+    std::vector<wr::QobuzAlbum> albums;  // QobuzFavorites : albums favoris du compte Qobuz
 };
 
 class WiimWorker {
@@ -64,6 +66,8 @@ public:
     // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
     // joué par le WiiM (album du morceau, par sa passerelle airable). Non bloquant.
     void search(const String& query, int source);
+    // Albums favoris du compte Qobuz (évènement QobuzFavorites), lus avec l'accès donné par le WiiM
+    void refreshQobuzFavorites();
     void playSearchResult(int index);
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
@@ -87,6 +91,12 @@ private:
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
     void runPlayQobuzFavorites();
+    bool playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
+                     const std::string& title, const char* label);
+    bool qobuzAccess(const std::string& control, bool refresh);
+    int qobuzGet(const std::string& control, const std::string& path, std::string& out);
+    void runQobuzFavorites();
+    void runPlayQobuzAlbum(const std::string& albumId);
     void runSearchTest(const String& query);
     void runDeezerTest(const std::string& control, const String& query);
     void runNoPlayTest(const String& query);
@@ -128,6 +138,10 @@ private:
     int searchSourceReq_ = 0;  // source de la recherche demandée
     int searchSource_ = 0;     // source des derniers résultats
     std::vector<wr::DeezerTrack> deezerResults_;
+    std::vector<wr::QobuzTrack> qobuzResults_;  // searchSource_ 2 : recherche Qobuz directe
+    wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
+    bool haveQobuz_ = false;
+    bool qobuzFavsWanted_ = false;
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;

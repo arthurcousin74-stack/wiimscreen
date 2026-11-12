@@ -9,6 +9,7 @@
 #include "ca_bundle.h"
 #include "discovery.h"
 #include "favorites.h"
+#include "qobuz.h"
 #include "log.h"
 #include "upnp.h"
 #include "voice.h"
@@ -247,8 +248,8 @@ void WiimWorker::run() {
             execute(cmd);
         }
         xSemaphoreTake(lock_, portMAX_DELAY);
-        bool presets = presetsWanted_, pollNow = pollWanted_, queue = queueWanted_;
-        presetsWanted_ = pollWanted_ = queueWanted_ = false;
+        bool presets = presetsWanted_, pollNow = pollWanted_, queue = queueWanted_, qfavs = qobuzFavsWanted_;
+        presetsWanted_ = pollWanted_ = queueWanted_ = qobuzFavsWanted_ = false;
         FavRequest save = favSave_;
         favSave_.wanted = false;
         String play = favPlay_;
@@ -271,6 +272,7 @@ void WiimWorker::run() {
             push(std::move(ev));
         }
         if (queue) runQueueCheck();
+        if (qfavs) runQobuzFavorites();
         if (play.length()) runPlayFavorite(play);
         if (searchTest.length()) runSearchTest(searchTest);
         if (search.length()) {
@@ -590,16 +592,10 @@ static std::vector<wr::DeezerTrack> deezerSearch(const std::string& query, int l
     return found;
 }
 
-// Crée une file sans demander à la lire : QueuePolicy 0, puis 1 (exemple connu), puis sans l'argument
-// si le WiiM refuse. `policy` reçoit la valeur acceptée.
+// Crée une file. Sur un WiiM Pro, CreateQueue n'a qu'un argument (QueueContext) et lance toujours la file
+// (vérifié 2026-11-12 : aucun « QueuePolicy »). `policy` ne sert plus qu'aux journaux.
 static int createQueueQuiet(const std::string& control, const std::string& ctx, const char*& policy) {
     std::string resp;
-    for (const char* p : {"0", "1"}) {
-        policy = p;
-        int c = upnpRequest(control, "CreateQueue",
-                            wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", p}}), resp);
-        if (c == 200) return c;
-    }
     policy = "absent";
     return upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
 }
@@ -898,38 +894,27 @@ void WiimWorker::runDeezerSearch(const String& query) {
 }
 
 // Morceau Deezer choisi : file de son album (le WiiM lit les pistes par airable), puis lecture à sa place
-void WiimWorker::runPlayDeezer(int i) {
-    WiimEvent ev;
-    ev.kind = WiimEvent::FavPlayed;
-    std::string control, templ, resp;
-    if (i < 0 || i >= (int)deezerResults_.size() || !findPlayQueue(control, false) || !deezerModel(control, templ)) {
-        ev.text = "morceau Deezer introuvable";
-        push(std::move(ev));
-        return;
-    }
-    const wr::DeezerTrack& t = deezerResults_[i];
-    const std::string base = wr::urlOrigin(wr::parseQueueContext(templ).searchUrl);
-    const std::string name = std::string("wiimscreen-deezer-") + std::to_string(++searchCount_ % 2);
+// File d'un album (le WiiM lit les pistes depuis `searchUrl`), lancée au morceau `title` (trouvé dans la file
+// relue : l'ordre peut être mélangé) ; le premier morceau si `title` est vide ou introuvable.
+bool WiimWorker::playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
+                             const std::string& title, const char* label) {
+    std::string resp;
+    const std::string name = std::string("wiimscreen-album-") + std::to_string(++searchCount_ % 2);
     upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
     const char* policy = "0";
-    const int create = createQueueQuiet(control, wr::queueFromTemplate(templ, name, base + "/deezer/album/" +
-                                                                               std::to_string(t.albumId)),
-                                        policy);
-    // Place du morceau dans l'album : relu dans la file dès qu'il y apparaît
+    const int create = createQueueQuiet(control, wr::queueFromTemplate(templ, name, url), policy);
     int index = 0;
     const uint32_t t0 = millis();
     if (create == 200) {
-        const std::string want = wr::normalizeText(t.title);
+        const std::string want = wr::normalizeText(title);
         while (index == 0 && millis() - t0 < 12000) {
             vTaskDelay(pdMS_TO_TICKS(700));
             std::string back;
             if (browseQueue(control, name, back) != 200 || back.empty()) continue;
             const wr::QueueInfo q = wr::parseQueueContext(back);
-            for (size_t k = 0; k < q.items.size(); ++k)
-                if (wr::normalizeText(q.items[k].title) == want) {
-                    index = (int)k + 1;
-                    break;
-                }
+            if (want.empty() && q.tracks > 0) index = 1;
+            for (size_t k = 0; k < q.items.size() && index == 0; ++k)
+                if (wr::normalizeText(q.items[k].title) == want) index = (int)k + 1;
             if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
         }
     }
@@ -938,12 +923,104 @@ void WiimWorker::runPlayDeezer(int i) {
                                                           {{"QueueName", name}, {"Index", std::to_string(index)}}),
                                              resp)
                                : -1;
-    logEvent("Deezer \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (album %ld, piste %d) : CreateQueue %d, Play %d (%lu ms)", t.title.c_str(),
-             t.albumId, index, create, play, (unsigned long)(millis() - t0));
-    ev.ok = play == 200;
+    logEvent("%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d) : CreateQueue %d, Play %d (%lu ms)", label, title.c_str(), index,
+             create, play, (unsigned long)(millis() - t0));
+    nextPoll_ = millis() + 800;
+    return play == 200;
+}
+
+void WiimWorker::runPlayDeezer(int i) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ;
+    if (i < 0 || i >= (int)deezerResults_.size() || !findPlayQueue(control, false) || !deezerModel(control, templ)) {
+        ev.text = "morceau Deezer introuvable";
+        push(std::move(ev));
+        return;
+    }
+    const wr::DeezerTrack& t = deezerResults_[i];
+    const std::string base = wr::urlOrigin(wr::parseQueueContext(templ).searchUrl);
+    ev.ok = playAlbumAt(control, templ, base + "/deezer/album/" + std::to_string(t.albumId), t.title, "Deezer");
     if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 ce morceau Deezer";
     push(std::move(ev));
-    nextPoll_ = millis() + 800;
+}
+
+// ---------------------------------------------------------------------------
+// Qobuz en direct : le WiiM donne l'identifiant d'application et le jeton du compte lié (UPnP
+// GetUserInfo, vérifié sur un WiiM Pro, 2026-11). Le Tab5 interroge alors Qobuz (recherche, favoris)
+// sans toucher à la lecture. Le jeton reste en mémoire : jamais journalisé, affiché ni enregistré.
+
+bool WiimWorker::qobuzAccess(const std::string& control, bool refresh) {
+    if (haveQobuz_ && !refresh) return true;
+    haveQobuz_ = false;
+    std::string resp, result;
+    const int c = upnpRequest(control, "GetUserInfo",
+                              wr::soapBody(kPlayQueue, "GetUserInfo", {{"AccountSource", "Qobuz"}, {"RefreshToken", "0"}}),
+                              resp);
+    if (c == 200 && wr::xmlElement(resp, "Result", result)) haveQobuz_ = wr::parseQobuzAccess(wr::xmlUnescape(result), qobuz_);
+    logEvent("Qobuz : acc\xC3\xA8s par le WiiM %s (GetUserInfo %d)", haveQobuz_ ? "obtenu" : "indisponible", c);
+    return haveQobuz_;
+}
+
+// GET https://www.qobuz.com/api.json/0.2/<path> ; nouvel accès demandé au WiiM une fois si Qobuz le refuse
+int WiimWorker::qobuzGet(const std::string& control, const std::string& path, std::string& out) {
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!qobuzAccess(control, attempt > 0)) return -1;
+        WiFiClientSecure tls;
+        tls.setCACertBundle(ca_bundle_start, caBundleSize());
+        tls.setHandshakeTimeout(8);
+        HTTPClient http;
+        http.setConnectTimeout(6000);
+        http.setTimeout(10000);
+        http.setReuse(false);
+        if (!http.begin(tls, ("https://www.qobuz.com/api.json/0.2/" + path).c_str())) return -1;
+        http.addHeader("X-App-Id", qobuz_.appId.c_str());
+        http.addHeader("X-User-Auth-Token", qobuz_.token.c_str());
+        const int code = http.GET();
+        CapStream s(kMaxBody);
+        if (code == 200) http.writeToStream(&s);
+        http.end();
+        out.swap(s.data);
+        if (code != 401 && code != 403) return code;
+    }
+    return 401;
+}
+
+void WiimWorker::refreshQobuzFavorites() {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    qobuzFavsWanted_ = true;
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
+void WiimWorker::runQobuzFavorites() {
+    std::string control, body;
+    if (!findPlayQueue(control, false)) return;
+    const int code = qobuzGet(control, "favorite/getUserFavorites?type=albums&limit=50", body);
+    WiimEvent ev;
+    ev.kind = WiimEvent::QobuzFavorites;
+    ev.ok = code == 200;
+    if (ev.ok) ev.albums = wr::parseQobuzAlbums(body);
+    logEvent("Qobuz : albums favoris %d, %u", code, (unsigned)ev.albums.size());
+    push(std::move(ev));
+}
+
+// Album favori Qobuz : file de l'album lancée au premier morceau
+void WiimWorker::runPlayQobuzAlbum(const std::string& albumId) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ;
+    if (!findPlayQueue(control, false) || !qobuzModel(control, templ)) {
+        ev.text = "lance d'abord un album Qobuz depuis l'app WiiM Home";
+        push(std::move(ev));
+        return;
+    }
+    ev.ok = playAlbumAt(control, templ,
+                        "https://www.qobuz.com/api.json/0.2/album/get?album_id=" + wr::urlQueryEncode(albumId) +
+                            "&offset=0&limit=50",
+                        "", "Album Qobuz");
+    if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 cet album";
+    push(std::move(ev));
 }
 
 // Modèle de file Qobuz : celui gardé, sinon une file Qobuz du WiiM, sinon un favori Qobuz
@@ -1037,6 +1114,23 @@ void WiimWorker::runSearch(const String& query) {
         push(std::move(ev));
         return;
     }
+    // Recherche directe (accès Qobuz donné par le WiiM) : rien ne joue avant que l'on choisisse
+    {
+        std::string body;
+        const uint32_t t0 = millis();
+        const int code = qobuzGet(control, "track/search?query=" + wr::urlQueryEncode(query.c_str()) + "&limit=40", body);
+        if (code == 200) {
+            qobuzResults_ = wr::parseQobuzTracks(body);
+            searchSource_ = 2;
+            logEvent("Recherche Qobuz directe \xC2\xAB %s \xC2\xBB : %u morceau(x) (%lu ms)", query.c_str(),
+                     (unsigned)qobuzResults_.size(), (unsigned long)(millis() - t0));
+            ev.ok = true;
+            for (auto& t : qobuzResults_) ev.tracks.push_back(wr::QueueTrack{t.title, t.artist, t.album, t.image});
+            push(std::move(ev));
+            return;
+        }
+        logEvent("Recherche Qobuz directe : %d, recherche par une file du WiiM", code);
+    }
     if (!qobuzModel(control, templ)) {
         ev.text = "lance d'abord un album Qobuz depuis l'app WiiM Home (une seule fois)";
         push(std::move(ev));
@@ -1113,6 +1207,22 @@ void WiimWorker::runPlaySearchResult(int index) {
         runPlayDeezer(index - 1);
         return;
     }
+    if (searchSource_ == 2) {
+        WiimEvent ev;
+        ev.kind = WiimEvent::FavPlayed;
+        std::string control, templ;
+        const int i = index - 1;
+        if (i >= 0 && i < (int)qobuzResults_.size() && findPlayQueue(control, false) && qobuzModel(control, templ)) {
+            const wr::QobuzTrack& t = qobuzResults_[i];
+            ev.ok = playAlbumAt(control, templ,
+                                "https://www.qobuz.com/api.json/0.2/album/get?album_id=" + wr::urlQueryEncode(t.albumId) +
+                                    "&offset=0&limit=50",
+                                t.title, "Qobuz");
+        }
+        if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 ce morceau";
+        push(std::move(ev));
+        return;
+    }
     std::string control, resp;
     int code = -1;
     if (findPlayQueue(control, false))
@@ -1165,6 +1275,10 @@ void WiimWorker::runPlayQobuzFavorites() {
 void WiimWorker::runPlayFavorite(const String& id) {
     if (id == "qobuz-favoris") {
         runPlayQobuzFavorites();
+        return;
+    }
+    if (id.startsWith("qobuz-album:")) {
+        runPlayQobuzAlbum(id.substring(12).c_str());
         return;
     }
     WiimEvent ev;

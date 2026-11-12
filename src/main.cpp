@@ -52,6 +52,7 @@ static std::vector<wr::Preset> g_wiimPresets;          // presets du WiiM (ou sa
 static bool g_favOk = false;                            // mémoire des favoris disponible
 static bool g_favBusy = false;                          // enregistrement d'un favori en cours
 static std::vector<wr::Favorite> g_favs;
+static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Qobuz (lus par l'accès du WiiM)
 static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » (file chargée par le WiiM)
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
 static bool g_presetsFromWiim = false;
@@ -348,6 +349,15 @@ static void refreshTiles() {
         p.favId = kQobuzFavsId;
         list.push_back(p);
     }
+    // Albums favoris Qobuz, avec leur pochette
+    for (size_t i = 0; i < g_qobuzAlbums.size() && i < 36; ++i) {
+        wr::Preset p;
+        p.slot = 200 + (int)i;
+        p.label = g_qobuzAlbums[i].title;
+        p.picUrl = g_qobuzAlbums[i].image;
+        p.favId = "qobuz-album:" + g_qobuzAlbums[i].id;
+        list.push_back(p);
+    }
     if (samePresets(list, g_presets)) return;
     applyPresets(list);
     show();
@@ -394,6 +404,7 @@ static void onPresets(bool ok, const std::vector<wr::Preset>& fromWiim) {
 static void requestPresets() {
     g_lastPresetFetch = millis();
     g_worker.refreshPresets();
+    g_worker.refreshQobuzFavorites();  // albums favoris Qobuz (tuiles), même rythme que les presets
 }
 
 // Images téléchargées en tâche de fond : pochette ou image de preset
@@ -523,6 +534,12 @@ static void serviceWiim() {
                 show();
                 break;
             case WiimEvent::SearchDone: onSearchDone(ev); break;
+            case WiimEvent::QobuzFavorites:
+                if (ev.ok) {
+                    g_qobuzAlbums = ev.albums;
+                    refreshTiles();
+                }
+                break;
             case WiimEvent::FavPlayed:
                 if (g_pendingT >= 0) g_pendingSeq = g_worker.queued();  // les relevés suivants peuvent confirmer
                 if (!ev.ok) {

@@ -8,6 +8,9 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Qobuz favorite albums as tiles (with covers) and a "Favoris Qobuz" tile for favorite tracks.
+- Qobuz search without playback: the remote searches Qobuz with the access the WiiM gives on the LAN (UPnP
+  `GetUserInfo`, found by a session on the user's network); the music only changes when a result is chosen.
 - M5Stack Tab5 (ESP32-P4) firmware: color "now playing" UI with album art, accent color from the cover,
   progress/seek, volume pill, preset tiles with artwork (from the WiiM), pages and swipe, active preset marker,
   loading and offline states, notifications.

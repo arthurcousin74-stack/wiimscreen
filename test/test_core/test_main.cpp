@@ -8,6 +8,7 @@
 #include "voice.h"
 #include "firmware.h"
 #include "upnp.h"
+#include "qobuz.h"
 
 #include <cmath>
 
@@ -786,6 +787,48 @@ static void test_deezer() {
     TEST_ASSERT_EQUAL_STRING("", urlOrigin("ftp://h/x").c_str());
 }
 
+static void test_qobuz_json() {
+    // Clés imbriquées : le « title » et le « name » du bon niveau
+    const std::string tracks =
+        "{\"query\":\"daft\",\"tracks\":{\"limit\":2,\"items\":[{\"maximum_bit_depth\":16,"
+        "\"composer\":{\"name\":\"Thomas Bangalter\",\"id\":1},\"album\":{\"image\":{\"small\":\"https:\\/\\/static.qobuz.com\\/a_230.jpg\","
+        "\"large\":\"x\"},\"artist\":{\"name\":\"Daft Punk\"},\"title\":\"Discovery\",\"id\":\"0724384960650\","
+        "\"label\":{\"name\":\"Parlophone\"}},\"performer\":{\"name\":\"Daft Punk\",\"id\":36819},"
+        "\"title\":\"One More Time\",\"version\":null,\"id\":3135556},"
+        "{\"title\":\"Digital Love\",\"version\":\"Remastered\",\"id\":3135557,\"album\":{\"id\":\"0724384960650\","
+        "\"title\":\"Discovery\",\"artist\":{\"name\":\"Daft Punk\"}}}]}}";
+    auto t = parseQobuzTracks(tracks);
+    TEST_ASSERT_EQUAL(2, (int)t.size());
+    TEST_ASSERT_EQUAL_STRING("One More Time", t[0].title.c_str());
+    TEST_ASSERT_EQUAL_STRING("3135556", t[0].id.c_str());
+    TEST_ASSERT_EQUAL_STRING("Daft Punk", t[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("0724384960650", t[0].albumId.c_str());
+    TEST_ASSERT_EQUAL_STRING("Discovery", t[0].album.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://static.qobuz.com/a_230.jpg", t[0].image.c_str());
+    TEST_ASSERT_EQUAL_STRING("Digital Love (Remastered)", t[1].title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Daft Punk", t[1].artist.c_str());  // pas de performer : artiste de l'album
+
+    const std::string albums =
+        "{\"albums\":{\"total\":1,\"items\":[{\"image\":{\"small\":\"https:\\/\\/s\\/b.jpg\"},\"artist\":{\"name\":"
+        "\"Justin Hurwitz\",\"id\":5},\"genre\":{\"name\":\"Bandes originales\"},\"title\":\"Babylon (Music from the "
+        "Motion Picture)\",\"tracks_count\":48,\"id\":\"mlw3bkxusda\"}]}}";
+    auto a = parseQobuzAlbums(albums);
+    TEST_ASSERT_EQUAL(1, (int)a.size());
+    TEST_ASSERT_EQUAL_STRING("mlw3bkxusda", a[0].id.c_str());
+    TEST_ASSERT_EQUAL_STRING("Babylon (Music from the Motion Picture)", a[0].title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Justin Hurwitz", a[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://s/b.jpg", a[0].image.c_str());
+    TEST_ASSERT_EQUAL(48, a[0].tracks);
+    TEST_ASSERT_TRUE(parseQobuzAlbums("{\"status\":\"error\"}").empty());
+    TEST_ASSERT_EQUAL_STRING("\xC3\xA9t\xC3\xA9", jsonText("\"\\u00e9t\\u00e9\"").c_str());
+
+    QobuzAccess acc;
+    TEST_ASSERT_TRUE(parseQobuzAccess("{\"userName\":\"x\",\"clientId\":\"123456789\",\"accessToken\":\"abc-DEF_9\"}", acc));
+    TEST_ASSERT_EQUAL_STRING("123456789", acc.appId.c_str());
+    TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\",\"accessToken\":\"bad\\r\\ntoken\"}", acc));  // en-tête HTTP
+    TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\"}", acc));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -803,6 +846,7 @@ int main() {
     RUN_TEST(test_keyboard);
     RUN_TEST(test_shares_word);
     RUN_TEST(test_deezer);
+    RUN_TEST(test_qobuz_json);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

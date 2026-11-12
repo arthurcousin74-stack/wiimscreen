@@ -10,8 +10,8 @@ step. Keep this style when you change it. -->
 wiimscreen shows the album art, the track data and the presets of your WiiM on a color touchscreen. You can also
 control the playback and the volume, keep your own favorites, and search Qobuz and Deezer. The device uses the local
 network interfaces of the WiiM (HTTP API and UPnP). It does not use a cloud service or a phone app. It does not need
-a key for a streaming service: the WiiM does the Qobuz search with its own Qobuz access, and the Deezer search uses
-the public Deezer catalog. Voice search (OpenAI speech-to-text) is optional.
+a key or a password for a streaming service: the WiiM gives its own Qobuz access to the device, and the Deezer search
+uses the public Deezer catalog. Voice search (OpenAI speech-to-text) is optional.
 
 The firmware is for ESP32 boards that have a touchscreen and PSRAM. The core logic does not use the hardware and has
 unit tests. The screen layout changes to fit the screen size.
@@ -46,16 +46,17 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   AirPlay, Bluetooth…) and the audio quality (*16 bits · 44.1 kHz*). Touch the progress bar to go to a different
   position in the track. A "live" badge shows for radio streams.
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
+- **Qobuz favorites**: the favorite albums of your Qobuz account show as tiles with their album art. One touch plays
+  the album. The **Favoris Qobuz** tile plays your favorite tracks.
 - **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button at the left
   of the playback buttons. The device keeps a copy of the WiiM play queue. The album then shows as a tile with its
   album art, and one touch plays it again. Touch the heart again to remove the album. You do not need a key for
   the streaming service. The device keeps a maximum of 24 favorites.
 - **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track on the
-  on-screen keyboard. The device gives the search to your WiiM. The WiiM does the search with its own Qobuz access
-  and loads the results. The device shows the results (title, artist, album). Touch a result to play it. Before
-  the first search, play one Qobuz album from the WiiM Home app. Refer to [Search Qobuz](#search-qobuz).
-  Note: the WiiM starts the results immediately. The device mutes the WiiM during the search, then puts back the
-  music that played before.
+  on-screen keyboard. The device searches Qobuz with the access that your WiiM gives. It shows the results (title,
+  artist, album). The music does not change until you touch a result. Then the WiiM plays the album of this track,
+  from this track. Before the first search, play one Qobuz album from the WiiM Home app. Refer to
+  [Search Qobuz](#search-qobuz).
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
   search, play one Deezer album from the WiiM Home app.
@@ -159,12 +160,11 @@ The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does n
 2. On the Tab5, touch the magnifying glass in the left bar.
 3. Make sure that **Qobuz** is selected (below the search field).
 4. Type an artist or a track, then touch **Chercher** (search).
-5. Wait 2 to 5 seconds. The WiiM loads the results, and the Tab5 shows them.
-6. Touch a result. The WiiM plays it.
+5. Wait 1 or 2 seconds. The Tab5 shows the results. The music does not change.
+6. Touch a result. The WiiM plays the album of this track, from this track.
 
-Note: the WiiM starts the first result while it loads the results. The Tab5 mutes the WiiM during the search. Then
-it puts back the music that played before (the same track at the same position), or stops the playback if no music
-played, and it turns the sound on again.
+Note: if the WiiM does not give its Qobuz access, the Tab5 uses an older method: the WiiM does the search in a play
+queue. Then the WiiM starts a result, so the Tab5 mutes the WiiM and puts back the music that played before.
 
 Note: the search finds tracks. To keep an album, play it and touch the heart button.
 
@@ -204,6 +204,7 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 │ wiim_client   TLS client, WiiM commands      │  UPnP SOAP   │ PlayQueue    │
 │ favorites     queue copies (LittleFS)        │  port 49152  │ (queues)     │
 │ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────┬───────┘
+│ wiim_worker   Qobuz search and favorites     │ ──▶ qobuz.com (access from the WiiM)
 │                                              │                     │ WiiM's own
 │                                              │                     ▼ access
 │                                              │          qobuz.com, airable.io (Deezer)
@@ -232,17 +233,20 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 
 The WiiM has an UPnP service, `PlayQueue`, that WiiM does not document. The WiiM Home app uses it to send a play
 queue to the WiiM. A Qobuz queue contains an address of the Qobuz API (`SearchUrl`). The WiiM reads this address
-with its own Qobuz access and loads the tracks.
+with its own Qobuz access and loads the tracks. The same service gives the Qobuz access of the WiiM
+(`GetUserInfo`).
 
 1. The Tab5 reads a real Qobuz queue from the WiiM (`BrowseQueue`) and keeps it as a model.
-2. For a search, the Tab5 copies the model, removes the tracks and sets `SearchUrl` to a Qobuz track search
-   (`track/search?query=…`). It sends this queue to the WiiM (`CreateQueue`).
-3. The WiiM does the search and loads the results into the queue. It also starts the playback of the queue.
-4. The Tab5 reads the queue again until the number of tracks is stable, and shows the tracks.
-5. The Tab5 puts back the music that played before the search (it noted the track and the position).
-6. When you touch a track, the Tab5 starts the queue at this track (`PlayQueueWithIndex`).
+2. The Tab5 gets the Qobuz access of the WiiM (`GetUserInfo`): an application ID and a token. It keeps them in
+   memory only. It does not show, log or save the token.
+3. For a search, the Tab5 sends the search to Qobuz with this access, and shows the tracks. The music does not
+   change.
+4. When you touch a track, the Tab5 copies the model, sets `SearchUrl` to the album of this track and sends this
+   queue to the WiiM (`CreateQueue`). The WiiM loads the album.
+5. The Tab5 finds the track in the queue and starts the queue at this track (`PlayQueueWithIndex`).
 
-The Tab5 never connects to Qobuz and never has your Qobuz password.
+The Tab5 never has your Qobuz password. The favorite albums come from the same access
+(`favorite/getUserFavorites`).
 
 ### How the Deezer search operates
 
@@ -311,8 +315,9 @@ for AI coding agents.
 
 ## Security and privacy
 
-All the data stays on your local network, except for the album art, the voice search and the Deezer search. The
-Qobuz search goes from the WiiM to Qobuz: the Tab5 does not connect to Qobuz.
+All the data stays on your local network, except for the album art, the voice search, the Deezer search and the
+Qobuz requests (search and favorites). For Qobuz, the Tab5 uses the access that your WiiM gives on your local
+network. It keeps this access in memory only.
 For more data and to report a problem, refer to [SECURITY.md](SECURITY.md).
 
 - The TLS connection to the WiiM uses a pinned certificate.
