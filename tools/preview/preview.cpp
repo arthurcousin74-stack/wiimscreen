@@ -195,6 +195,18 @@ int main(int argc, char** argv) {
     ui12.render(idle);
     save(out, "6-rien-en-lecture.ppm");
 
+    // Aucun preset sur le WiiM (cas fréquent au début)
+    {
+        Ui& u0 = *new Ui();
+        Settings s0;
+        u0.begin(s0);
+        UiState none;
+        none.online = true;
+        none.player.volume = 49;
+        u0.render(none);
+        save(out, "17-aucun-preset.ppm");
+    }
+
     // Hors ligne
     UiState off = st;
     off.online = false;

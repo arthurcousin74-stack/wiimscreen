@@ -26,7 +26,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/voice.*` | Voice intent parsing (French), speech endpointing, Radio Browser parsing, WAV header |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `test/test_core/test_main.cpp` | Unity tests for everything in `lib/core` |
-| `src/main.cpp` | Setup, main loop, polling, touch handling, ambient view, voice flow, menus |
+| `src/main.cpp` | Setup, main loop (touch, drawing, applying WiiM state), ambient view, voice flow, menus |
+| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery |
 | `src/ui.*` | All drawing (off-screen M5Canvas in PSRAM → display) |
 | `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
 | `src/discovery.*` | SSDP + `getStatusEx` discovery |
@@ -63,6 +64,10 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - 16-bit canvases are byte-swapped RGB565; the background gradient is Bayer-dithered to avoid banding.
 - WiiM `getPlayerStatus` has no track info; `getMetaInfo` keys may carry a trailing space; preset `number` is an
   integer; `seek` takes seconds. Details in `docs/WIIM_API_NOTES.md`.
+- **Never call the WiiM from the main loop.** Each request opens a TLS connection (1–3 s on the P4); doing it in
+  `loop()` froze the screen and dropped taps. Use `g_worker.command()` (non-blocking), update `g_state`
+  optimistically, and let `serviceWiim()` apply reports and errors. Reports that started before the latest command
+  are discarded (`cmdSeq`) so they don't undo the optimistic state.
 - `show()` must not draw over modal screens (voice listening, menu): guarded by `g_listening` / `g_menuOpen`.
 
 ## Status / not verified on hardware yet

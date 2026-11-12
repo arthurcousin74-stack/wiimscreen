@@ -295,11 +295,19 @@ void Ui::info(const UiState& st) {
         C.drawString(st.online ? "Rien en lecture" : "WiiM injoignable", r.x, y);
         y += titleH;
         C.loadFont(kSmall);
-        C.drawString(fit(presets_.empty() ? "Lance la musique depuis l'app WiiM Home."
-                                          : "Choisis un preset ci-dessous.",
-                         r.w)
-                         .c_str(),
-                     r.x, y + sc(6));
+        if (presets_.empty()) {
+            // Aucun preset sur le WiiM : expliquer comment en ajouter
+            int ly = y + sc(6);
+            for (auto& l : wr::wrapText("Aucun preset : ajoute tes radios et playlists favorites dans l'app "
+                                        "WiiM Home, elles appara\xC3\xAEtront ici. En attendant, lance la musique "
+                                        "depuis ton t\xC3\xA9l\xC3\xA9phone.",
+                                        r.w, 4, measure)) {
+                C.drawString(l.c_str(), r.x, ly);
+                ly += C.fontHeight() + sc(4);
+            }
+        } else {
+            C.drawString(fit("Choisis un preset ci-dessous.", r.w).c_str(), r.x, y + sc(6));
+        }
         return;
     }
     C.setTextColor(kText);
