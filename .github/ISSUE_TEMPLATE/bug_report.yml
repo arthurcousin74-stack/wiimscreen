@@ -1,0 +1,32 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: wiimscreen version
+      description: Bottom of the Réglages menu (hold the album art 3 s)
+      placeholder: e.g. v0.1.0 or 57-219c0bc
+    validations:
+      required: true
+  - type: input
+    id: wiim
+    attributes:
+      label: WiiM model and firmware
+      placeholder: e.g. WiiM Pro Plus, 4.8.xxxxx
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you saw. A photo of the screen helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Serial log (optional)
+      description: "`pio device monitor` at 115200 baud. Remove any Wi-Fi password or API key."
+      render: text

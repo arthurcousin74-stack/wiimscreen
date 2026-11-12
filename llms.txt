@@ -1,0 +1,27 @@
+# wiimscreen
+
+> Open-source (MIT) firmware that turns an M5Stack Tab5 (ESP32-P4, 5" 1280x720 touchscreen) into a remote control and "now playing" display for WiiM music streamers (WiiM Mini, Pro, Pro Plus, Amp, Ultra and other LinkPlay devices), using the WiiM local HTTP API (httpapi.asp) — no cloud. Shows album art with colors taken from the cover, track info, progress, presets as artwork tiles, volume; ambient view with a microphone spectrum visualizer; automatic WiiM discovery (SSDP); phone-based setup via QR code; optional French voice commands (OpenAI speech-to-text, Radio Browser station search); over-the-air updates from a browser. Written in C++ with PlatformIO, Arduino-ESP32 3.x (pioarduino), M5Unified and M5GFX.
+
+Status: beta — builds and passes native unit tests; UI rendered and checked on PC; hardware testing in progress. On-screen text is in French; code comments are mostly French.
+
+## Start here
+
+- [README](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/README.md): features, hardware, flashing, setup, architecture, how to reuse the code
+- [AGENTS.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/AGENTS.md): build/test commands, file layout, conventions, pitfalls already solved (Arduino-ESP32 3.x, ESP32-P4/C6 Wi-Fi, CA bundle format, shared I2S)
+- [WiiM / LinkPlay HTTP API notes](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/docs/WIIM_API_NOTES.md): getPlayerStatus, getMetaInfo (album art URL, sample rate), getPresetInfo (preset artwork), getStatusEx (uuid, name), commands, SSDP discovery, quirks
+- [LISEZMOI.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/LISEZMOI.md): full user guide in French
+
+## Code
+
+- [lib/core](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/lib/core/src): hardware-free, unit-tested logic — WiiM response parsing, screen layout, accent color from album art, FFT spectrum, motion detection, French voice-intent parsing, OTA image filtering
+- [src/wiim_client.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/wiim_client.cpp): HTTPS client for the WiiM with TLS certificate pinning
+- [src/discovery.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/discovery.cpp): find WiiM players on the LAN (SSDP M-SEARCH + getStatusEx)
+- [src/ui.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/ui.cpp): all drawing with M5GFX on an off-screen PSRAM canvas
+- [src/main.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/main.cpp): main loop, polling, touch, ambient view, voice flow
+- [tools/preview](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/tools/preview): render the real UI to PNG on a PC (M5GFX + SDL2)
+
+## Optional
+
+- [THIRD_PARTY_NOTICES.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/THIRD_PARTY_NOTICES.md): licenses of fonts, CA certificates and libraries
+- [SECURITY.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/SECURITY.md): threat model and how to report issues
+- [CHANGELOG.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/CHANGELOG.md): history (the project started on the e-ink M5PaperS3)

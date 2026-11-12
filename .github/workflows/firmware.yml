@@ -1,14 +1,18 @@
-# Compile le firmware du Tab5 et produit UN fichier .bin à flasher à l'adresse 0x0
-# depuis le navigateur (voir LISEZMOI.md).
-# Résultat : onglet Actions > dernière exécution > artefact "wiim-remote-tab5".
+# Builds the Tab5 firmware as ONE .bin to flash at address 0x0 (USB, from the browser)
+# or to upload over Wi-Fi (Réglages > Mise à jour). See README.md / LISEZMOI.md.
+# Every push: Actions > run > artifact "wiim-remote-tab5".
+# Tag vX.Y.Z: also publishes a GitHub Release with the .bin (pre-release while < v1.0.0).
 name: firmware
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: read  # only the release job below gets write access
 
 jobs:
   build:
@@ -32,9 +36,11 @@ jobs:
       - name: Tests de la logique (PC)
         run: pio test -e native
 
-      # Version affichée par le Tab5 (menu Réglages, page de mise à jour) : n° de build et commit
-      - name: Numéro de version
-        run: echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION=\\\"${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}\\\"" >> "$GITHUB_ENV"
+      # Version shown by the Tab5 (Réglages menu, update page): the tag, or build number + commit
+      - name: Version number
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="$GITHUB_REF_NAME"; else V="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"; fi
+          echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION=\\\"$V\\\"" >> "$GITHUB_ENV"
 
       - name: Compiler le firmware
         run: pio run -e tab5
@@ -59,3 +65,25 @@ jobs:
         with:
           name: wiim-remote-tab5
           path: dist/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wiim-remote-tab5
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRE=""
+          if [[ "$GITHUB_REF_NAME" == v0.* || "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" dist/wiim-remote-tab5.bin dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "wiimscreen $GITHUB_REF_NAME" $PRE \
+            --notes "Firmware for the M5Stack Tab5. Flash wiim-remote-tab5.bin at address 0x0 (see README), or install it over Wi-Fi: hold the album art 3 s > Mise à jour. Changes: see CHANGELOG.md."

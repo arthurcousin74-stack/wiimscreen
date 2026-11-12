@@ -1,5 +1,7 @@
 # Télécommande WiiM pour M5Stack Tab5
 
+*English: [README.md](README.md)*
+
 Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qui pilote un streamer WiiM sur le réseau local.
 
 ![Écran principal](docs/apercu.png)
@@ -185,3 +187,7 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Micro : actif uniquement pendant une commande vocale ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.
 - Images (pochettes, presets) : certificat du serveur vérifié (certificats racines Mozilla) pour les adresses HTTPS ; taille plafonnée à 768 Ko ; seuls JPEG et PNG sont décodés, après vérification de leur signature.
+
+## Licence
+
+[MIT](LICENSE) © wiimscreen contributors. Composants tiers : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Projet indépendant, sans lien avec WiiM / Linkplay ni M5Stack.
