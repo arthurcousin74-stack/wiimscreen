@@ -235,6 +235,46 @@ bool jsonInt(const std::string& json, const std::string& key, long& out) {
     return false;
 }
 
+bool ssdpHost(const std::string& response, std::string& ip) {
+    std::string lower = response;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    size_t p = lower.find("\nlocation:");
+    if (p == std::string::npos) return false;
+    p = lower.find("://", p);
+    if (p == std::string::npos) return false;
+    p += 3;
+    size_t e = p;
+    while (e < response.size() && (std::isdigit(static_cast<unsigned char>(response[e])) || response[e] == '.')) ++e;
+    std::string host = response.substr(p, e - p);
+    // IPv4 complète : quatre nombres de 0 à 255
+    int parts = 0;
+    size_t s = 0;
+    while (s <= host.size()) {
+        size_t d = host.find('.', s);
+        if (d == std::string::npos) d = host.size();
+        std::string n = host.substr(s, d - s);
+        if (n.empty() || n.size() > 3 || std::atoi(n.c_str()) > 255) return false;
+        ++parts;
+        s = d + 1;
+    }
+    if (parts != 4) return false;
+    ip = host;
+    return true;
+}
+
+WiimIdentity parseStatusEx(const std::string& json) {
+    WiimIdentity id;
+    std::string v;
+    if (!jsonString(json, "uuid", id.uuid) && !jsonString(json, "project", v)) return id;
+    id.ok = true;
+    if (!jsonString(json, "DeviceName", id.name) || id.name.empty()) jsonString(json, "ssid", id.name);
+    id.name = decodeHexText(id.name);
+    if (id.name.size() > 60) id.name.resize(60);
+    if (id.name.empty()) id.name = "WiiM";
+    return id;
+}
+
 std::string formatTime(uint32_t ms) {
     uint32_t s = ms / 1000, h = s / 3600, m = (s / 60) % 60;
     s %= 60;

@@ -21,6 +21,7 @@
 
 #include "art.h"
 #include "core.h"
+#include "discovery.h"
 #include "dsp.h"
 #include "ota.h"
 #include "version.h"
@@ -288,6 +289,81 @@ static void checkImages() {
 
 // --------------------------------------------------------------------- relevé
 
+// --------------------------------------------------------- WiiM sur le réseau
+
+static uint32_t g_lastRediscover = 0;
+static int g_netFailures = 0;
+static bool g_identityChecked = false;
+
+static void useWiim(const WiimDevice& d) {
+    const bool same = g_settings.wiimUuid.length() && d.uuid == g_settings.wiimUuid.c_str();
+    g_settings.host = d.ip.c_str();
+    g_settings.wiimUuid = d.uuid.c_str();
+    g_settings.wiimName = d.name.c_str();
+    saveWiim(g_settings.host, g_settings.wiimUuid, g_settings.wiimName);
+    if (!same) {  // autre lecteur : son certificat sera enregistré au premier échange
+        g_settings.fingerprint = "";
+        saveFingerprint("");
+    }
+    g_wiim.configure(g_settings);
+}
+
+// Sans adresse enregistrée : recherche sur le Wi-Fi, choix sur l'écran s'il y en a plusieurs
+static void chooseWiim() {
+    for (;;) {
+        g_ui.showInfo("Recherche du WiiM\xE2\x80\xA6", "Le Tab5 cherche les lecteurs WiiM sur ton Wi-Fi.");
+        std::vector<WiimDevice> found = discoverWiims();
+        if (found.size() == 1) {
+            useWiim(found[0]);
+            return;
+        }
+        std::vector<std::pair<std::string, std::string>> list;
+        for (auto& d : found) list.push_back({d.name, d.ip});
+        g_ui.renderPicker(list);
+        for (bool retry = false; !retry;) {
+            M5.update();
+            auto t = M5.Touch.getDetail();
+            if (t.wasPressed()) {
+                int c = g_ui.hitPicker(t.x, t.y);
+                if (c >= 0 && c < (int)found.size()) {
+                    sound::tap();
+                    useWiim(found[c]);
+                    return;
+                }
+                if (c == Ui::PickRetry) sound::tap(), retry = true;
+                if (c == Ui::PickConfig) runSetupPortal(g_settings, g_ui, "Saisis l'adresse IP du WiiM.");
+            }
+            delay(20);
+        }
+    }
+}
+
+// Le WiiM ne répond plus : il a peut-être changé d'adresse. On cherche le même (uuid),
+// jamais un autre lecteur.
+static bool rediscover() {
+    if (!g_settings.wiimUuid.length() || millis() - g_lastRediscover < 120000) return false;
+    g_lastRediscover = millis();
+    for (auto& d : discoverWiims(2000))
+        if (d.uuid == g_settings.wiimUuid.c_str() && d.ip != g_settings.host.c_str()) {
+            useWiim(d);
+            return true;
+        }
+    return false;
+}
+
+// Adresse saisie à la main : on lit une fois l'identité du WiiM pour pouvoir le suivre
+static void learnIdentity() {
+    if (g_identityChecked || g_settings.wiimUuid.length()) return;
+    g_identityChecked = true;
+    std::string body;
+    if (g_wiim.command("getStatusEx", &body) != WiimError::None) return;
+    wr::WiimIdentity id = wr::parseStatusEx(body);
+    if (!id.ok || id.uuid.empty()) return;
+    g_settings.wiimUuid = id.uuid.c_str();
+    g_settings.wiimName = id.name.c_str();
+    saveWiim(g_settings.host, g_settings.wiimUuid, g_settings.wiimName);
+}
+
 static void poll() {
     g_lastPoll = millis();
     UiState next = g_state;
@@ -299,7 +375,17 @@ static void poll() {
 
     wr::PlayerStatus st;
     WiimError e = g_wiim.status(st);
+    g_netFailures = e == WiimError::Network ? g_netFailures + 1 : 0;
+    if (g_netFailures >= 3 && rediscover()) {
+        g_netFailures = 0;
+        e = g_wiim.status(st);  // nouvelle adresse : on relit tout de suite
+        if (e == WiimError::None) {
+            next.message = String("WiiM retrouv\xC3\xA9 \xC3\xA0 sa nouvelle adresse (") + g_settings.host + ")";
+            g_messageUntil = millis() + 8000;
+        }
+    }
     next.online = (e == WiimError::None);
+    if (next.online) learnIdentity();
     if (g_wiim.takeJustPinned()) {
         next.message = "Certificat du WiiM enregistré";
         g_messageUntil = millis() + 8000;
@@ -735,6 +821,7 @@ void setup() {
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistrée est invalide.");
 
     connectWifi();
+    if (!g_settings.host.length()) chooseWiim();  // recherche automatique du WiiM
     g_wiim.configure(g_settings);
     g_artFetcher.begin();
     g_state.battery = batteryLevel();

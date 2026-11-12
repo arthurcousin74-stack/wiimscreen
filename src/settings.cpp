@@ -25,6 +25,8 @@ bool loadSettings(Settings& s) {
     s.ssid = p.getString("ssid", "");
     s.pass = p.getString("pass", "");
     s.host = p.getString("host", "");
+    s.wiimUuid = p.getString("wiimuuid", "");
+    s.wiimName = p.getString("wiimname", "");
     s.https = p.getBool("https", true);
     s.fingerprint = p.getString("fp", "");
     s.presetsText = p.getString("presets", "");
@@ -52,6 +54,8 @@ void saveSettings(const Settings& s) {
     p.putString("ssid", s.ssid);
     p.putString("pass", s.pass);
     p.putString("host", s.host);
+    p.putString("wiimuuid", s.wiimUuid);
+    p.putString("wiimname", s.wiimName);
     p.putBool("https", s.https);
     p.putString("fp", s.fingerprint);
     p.putString("presets", s.presetsText);
@@ -69,5 +73,14 @@ void saveFingerprint(const String& hex) {
     Preferences p;
     p.begin(kNamespace, false);
     p.putString("fp", hex);
+    p.end();
+}
+
+void saveWiim(const String& host, const String& uuid, const String& name) {
+    Preferences p;
+    p.begin(kNamespace, false);
+    p.putString("host", host);
+    p.putString("wiimuuid", uuid);
+    p.putString("wiimname", name);
     p.end();
 }

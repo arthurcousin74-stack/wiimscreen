@@ -147,6 +147,33 @@ static void test_wiim_doc_examples() {
     TEST_ASSERT_EQUAL_STRING("TIDAL", sourceName(32).c_str());
 }
 
+static void test_discovery() {
+    std::string ip;
+    TEST_ASSERT_TRUE(ssdpHost("HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nEXT:\r\n"
+                              "LOCATION: http://192.168.1.50:49152/description.xml\r\n"
+                              "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n",
+                              ip));
+    TEST_ASSERT_EQUAL_STRING("192.168.1.50", ip.c_str());
+    TEST_ASSERT_TRUE(ssdpHost("HTTP/1.1 200 OK\r\nlocation: http://10.0.0.7/upnp.xml\r\n", ip));
+    TEST_ASSERT_EQUAL_STRING("10.0.0.7", ip.c_str());
+    TEST_ASSERT_FALSE(ssdpHost("HTTP/1.1 200 OK\r\nLOCATION: http://wiim.local:49152/d.xml\r\n", ip));
+    TEST_ASSERT_FALSE(ssdpHost("HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.300/d.xml\r\n", ip));
+    TEST_ASSERT_FALSE(ssdpHost("HTTP/1.1 200 OK\r\nST: x\r\n", ip));
+
+    // Exemple de la documentation WiiM (getStatusEx, extrait)
+    WiimIdentity w = parseStatusEx(
+        "{\"language\": \"en_us\", \"ssid\": \"WiiM Mini-8FA2\", \"firmware\": \"Linkplay.4.6.425351\", "
+        "\"project\": \"Muzo_Mini\", \"uuid\": \"FF970016A6FE22C1660AB4D8\", \"DeviceName\": \"Salon\", "
+        "\"GroupName\": \"Salon\"}");
+    TEST_ASSERT_TRUE(w.ok);
+    TEST_ASSERT_EQUAL_STRING("Salon", w.name.c_str());
+    TEST_ASSERT_EQUAL_STRING("FF970016A6FE22C1660AB4D8", w.uuid.c_str());
+    WiimIdentity n = parseStatusEx("{\"project\":\"Muzo_Mini\",\"ssid\":\"WiiM Mini-8FA2\"}");
+    TEST_ASSERT_TRUE(n.ok);
+    TEST_ASSERT_EQUAL_STRING("WiiM Mini-8FA2", n.name.c_str());  // sans DeviceName : ssid
+    TEST_ASSERT_FALSE(parseStatusEx("<html>TV</html>").ok);           // autre appareil UPnP
+}
+
 static void test_quality() {
     TEST_ASSERT_EQUAL_STRING("16 bits \xC2\xB7 44,1 kHz", formatQuality(44100, 16).c_str());
     TEST_ASSERT_EQUAL_STRING("24 bits \xC2\xB7 96 kHz", formatQuality(96000, 24).c_str());
@@ -540,6 +567,7 @@ int main() {
     RUN_TEST(test_player_status);
     RUN_TEST(test_meta_info);
     RUN_TEST(test_quality);
+    RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);
     RUN_TEST(test_json_escapes);

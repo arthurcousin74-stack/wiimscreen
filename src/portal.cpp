@@ -61,10 +61,11 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
     if (s.pass.length()) h += F(" placeholder='inchangé si vide'");
     h += F("></label>");
 
-    h += F("<label>Adresse IP du WiiM<input name=host required maxlength=64 inputmode=decimal "
-           "placeholder=192.168.1.50 value=\"");
-    h += esc(s.host) + F("\"><small>App WiiM Home &gt; ton appareil &gt; Paramètres &gt; Informations. "
-                         "Réserve cette IP dans ta box.</small></label>");
+    h += F("<label>Adresse IP du WiiM (facultatif)<input name=host maxlength=64 inputmode=decimal "
+           "placeholder='Vide : recherche automatique' value=\"");
+    h += esc(s.host) + F("\"><small><b>Laisse vide</b> : le Tab5 trouve ton WiiM tout seul sur le Wi-Fi "
+                         "(et le retrouve si son adresse change). Sinon : app WiiM Home &gt; ton appareil &gt; "
+                         "Paramètres &gt; Informations.</small></label>");
 
     h += F("<label>Presets<textarea name=presets maxlength=1200 placeholder='Vide : presets du WiiM'>");
     h += esc(s.presetsText) + F("</textarea><small><b>Laisse vide</b> pour reprendre les presets de l'app "
@@ -188,6 +189,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         if (!next.sttModel.length()) next.sttModel = "gpt-4o-mini-transcribe";
         bool https = server.arg("scheme") != "http";
         if (https != s.https || next.host != s.host || server.hasArg("forgetfp")) next.fingerprint = "";
+        if (next.host != s.host) next.wiimUuid = next.wiimName = "";  // autre WiiM : identité à relire
         next.https = https;
 
         std::string perr;
@@ -195,7 +197,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         if (next.ssid.length() == 0 || next.ssid.length() > 32) err = "Nom de réseau Wi-Fi invalide.";
         else if (next.pass.length() && (next.pass.length() < 8 || next.pass.length() > 63))
             err = "Le mot de passe Wi-Fi doit faire entre 8 et 63 caractères.";
-        else if (!wr::isValidHost(next.host.c_str())) err = "Adresse du WiiM invalide (exemple : 192.168.1.50).";
+        else if (next.host.length() && !wr::isValidHost(next.host.c_str())) err = "Adresse du WiiM invalide (exemple : 192.168.1.50).";
         else if (next.openaiKey.length() && !tokenOk(next.openaiKey, 20, 200))
             err = "Clé OpenAI invalide : colle-la sans espace ni retour à la ligne.";
         else if (!tokenOk(next.sttModel, 1, 60)) err = "Nom de modèle de transcription invalide.";

@@ -45,8 +45,8 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 1. Scanne le QR code (ou rejoins le Wi-Fi `WiiM-Remote-XXXX` avec le mot de passe affiché).
 2. La page de configuration s'ouvre ; sinon va sur **http://192.168.4.1**.
 3. Renseigne :
-   - ton **Wi-Fi** (2,4 GHz)
-   - l'**IP du WiiM** : app WiiM Home > ton appareil > Paramètres > Informations (pense à la réserver dans ta box)
+   - ton **Wi-Fi** (2,4 GHz) : choisis-le dans la liste et tape son mot de passe. Astuce Android : **Paramètres > Wi-Fi > ton réseau > Partager** affiche le mot de passe sous le QR code
+   - l'**IP du WiiM** : **laisse vide**. Le Tab5 cherche les WiiM sur ton Wi-Fi ; s'il y en a plusieurs, il te demande lequel commander (par leur nom dans l'app WiiM Home). Si son adresse change plus tard, le Tab5 retrouve le même WiiM tout seul
    - les **presets** : laisse vide pour reprendre ceux de l'app WiiM Home (noms et images). Sinon, une ligne par bouton, `numéro=nom` (12 max) :
    ```
    1=Radio Swiss Jazz
@@ -108,7 +108,8 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 
 ## En cas de souci
 
-- **« WiiM injoignable »** : WiiM éteint, ou son IP a changé → appui long sur le bandeau, corrige l'IP.
+- **« WiiM injoignable »** : WiiM éteint ou débranché. Si seule son adresse a changé, le Tab5 le retrouve en moins de deux minutes (« WiiM retrouvé à sa nouvelle adresse »).
+- **« Aucun WiiM trouvé »** au démarrage : WiiM éteint, ou sur un autre réseau (Wi-Fi invité, autre box). Certains routeurs bloquent la recherche entre appareils (« isolation des clients ») : saisis alors l'IP du WiiM dans la configuration.
 - **« Certificat du WiiM inattendu »** : après une réinitialisation ou une mise à jour du WiiM, son certificat peut changer. Si c'est le cas, reconfigure et coche « Oublier le certificat enregistré ». Si rien n'a changé côté WiiM, quelqu'un s'intercale peut-être sur ton réseau : ne l'accepte pas à l'aveugle.
 - **« Wi-Fi injoignable »** : touche l'écran pour rouvrir la configuration. Si le Wi-Fi ne démarre jamais, le module Wi-Fi (ESP32-C6) du Tab5 a peut-être besoin de son firmware d'origine : M5Stack fournit un guide de restauration.
 - **Pas de pochette** (deux croches à la place) : la source n'en fournit pas (entrée ligne, Bluetooth, certaines radios), ou l'image est dans un format non pris en charge (WebP, JPEG progressif).
@@ -150,6 +151,7 @@ src/settings.*       réglages en NVS
 src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
 src/voice_service.*  transcription OpenAI, recherche Radio Browser (HTTPS vérifié)
 src/ota.*            mise à jour par le Wi-Fi (page web + code affiché à l'écran)
+src/discovery.*      recherche des WiiM sur le Wi-Fi (SSDP + getStatusEx)
 src/fonts/           polices VLW générées (tools/make_vlw.py)
 lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
                      spectre (FFT), lissage du visualiseur, détection de mouvement,
@@ -177,6 +179,7 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Le Wi-Fi de configuration est protégé par un mot de passe aléatoire de 10 caractères (générateur matériel), affiché uniquement sur l'écran. Il n'existe que pendant la configuration.
 - Le mot de passe Wi-Fi n'est jamais renvoyé dans la page de configuration.
 - Toutes les valeurs réaffichées dans la page sont échappées (HTML).
+- Recherche du WiiM : lecture seule (getStatusEx). Quand le Tab5 suit son WiiM à une nouvelle adresse, l'empreinte du certificat enregistrée doit toujours correspondre : un appareil qui se ferait passer pour lui est refusé.
 - Mise à jour par le Wi-Fi : uniquement après un geste sur le Tab5 (menu Réglages), avec un code à 6 chiffres affiché seulement à l'écran, 5 essais au plus, 10 minutes au plus ; l'image est vérifiée par l'ESP32 avant d'être activée.
 - Clé OpenAI : refusée si elle contient des espaces ou des retours à la ligne (elle va dans un en-tête HTTP) ; jamais réaffichée ni écrite dans le journal.
 - Micro : actif uniquement pendant une commande vocale ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.

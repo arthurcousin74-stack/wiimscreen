@@ -78,6 +78,11 @@ public:
     void renderMenu(const char* version);
     MenuChoice hitMenu(int x, int y) const;
 
+    // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé
+    enum { PickNone = -1, PickRetry = -2, PickConfig = -3 };
+    void renderPicker(const std::vector<std::pair<std::string, std::string>>& devices);
+    int hitPicker(int x, int y) const;  // indice du WiiM, ou PickRetry / PickConfig / PickNone
+
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
     bool hitUpdateCancel(int x, int y) const { return cancelRect_.contains(x, y); }
@@ -131,6 +136,8 @@ private:
     bool voiceOn_ = false;
     wr::Rect cancelRect_;
     wr::Rect menuRects_[3];
+    std::vector<wr::Rect> pickRects_;
+    wr::Rect pickRetry_, pickConfig_;
     // Visualiseur
     bool visEnabled_ = false;
     bool ambientShown_ = false;

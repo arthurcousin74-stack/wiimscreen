@@ -78,6 +78,17 @@ bool parsePresetInfo(const std::string& json, std::vector<Preset>& out);
 // "3:07", "1:02:03"
 std::string formatTime(uint32_t ms);
 
+// --- Découverte du WiiM sur le réseau
+// Réponse SSDP (UPnP) : adresse IPv4 tirée de l'en-tête LOCATION
+bool ssdpHost(const std::string& response, std::string& ip);
+// getStatusEx : identité d'un lecteur WiiM / LinkPlay (ok faux pour un autre appareil)
+struct WiimIdentity {
+    bool ok = false;
+    std::string name;  // nom choisi dans l'app WiiM Home
+    std::string uuid;  // identifiant unique, stable
+};
+WiimIdentity parseStatusEx(const std::string& json);
+
 // "24 bits · 96 kHz", "16 bits · 44,1 kHz" ; vide si inconnu.
 std::string formatQuality(int sampleRate, int bitDepth);
 

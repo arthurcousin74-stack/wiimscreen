@@ -10,7 +10,9 @@
 struct Settings {
     String ssid;
     String pass;
-    String host;         // IP du WiiM, éventuellement avec ":port"
+    String host;         // IP du WiiM, éventuellement avec ":port" ; vide = recherche automatique
+    String wiimUuid;     // identifiant du WiiM choisi (getStatusEx) : le retrouver s'il change d'adresse
+    String wiimName;     // son nom dans l'app WiiM Home
     bool https = true;
     String fingerprint;  // empreinte SHA-256 du certificat du WiiM, vide = à relever
     String presetsText;  // une ligne par preset : "1=Radio Swiss Jazz" ; vide = presets du WiiM
@@ -28,7 +30,7 @@ struct Settings {
 
     bool autoPresets() const;
 
-    bool configured() const { return ssid.length() > 0 && host.length() > 0; }
+    bool configured() const { return ssid.length() > 0; }
 };
 
 // Texte de presets vide (ou seulement des espaces / commentaires) : presets repris du WiiM
@@ -38,3 +40,5 @@ bool presetsTextIsAuto(const String& text);
 bool loadSettings(Settings& s);
 void saveSettings(const Settings& s);
 void saveFingerprint(const String& hex);
+// WiiM trouvé sur le réseau (ou nouvelle adresse du même WiiM)
+void saveWiim(const String& host, const String& uuid, const String& name);

@@ -220,6 +220,11 @@ int main(int argc, char** argv) {
         D.createSprite(1280, 720);
     }
 
+    ui.renderPicker({{"Salon", "192.168.1.50"}, {"Cuisine", "192.168.1.61"}, {"Bureau", "192.168.1.73"}});
+    save(out, "15-choix-wiim.ppm");
+    ui.renderPicker({});
+    save(out, "16-aucun-wiim.ppm");
+
     ui.renderMenu("57-219c0bc");
     save(out, "13-menu.ppm");
     ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");

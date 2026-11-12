@@ -853,6 +853,70 @@ void Ui::renderMenu(const char* version) {
     present();
 }
 
+void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& devices) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
+    background();
+    const int W = C.width(), H = C.height(), m = sc(40);
+    C.setTextDatum(textdatum_t::top_left);
+    C.loadFont(kBig);
+    C.setTextColor(kText);
+    C.drawString(devices.empty() ? "Aucun WiiM trouv\xC3\xA9" : "Quel WiiM ?", m, m);
+    int y = m + C.fontHeight() + sc(16);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    pickRects_.clear();
+    if (devices.empty()) {
+        for (auto& l : wr::wrapText("V\xC3\xA9rifie que le WiiM est allum\xC3\xA9 et branch\xC3\xA9 sur le m\xC3\xAA" "me "
+                                    "Wi-Fi que le Tab5, puis r\xC3\xA9" "essaie. Tu peux aussi saisir son adresse IP dans la "
+                                    "configuration.",
+                                    W - 2 * m, 4, measure)) {
+            C.drawString(l.c_str(), m, y);
+            y += C.fontHeight() + sc(6);
+        }
+    } else {
+        C.drawString("Plusieurs lecteurs sont sur ton Wi-Fi : touche celui \xC3\xA0 commander.", m, y);
+        y += C.fontHeight() + sc(20);
+        const int cols = W > H ? 2 : 1, gap = sc(16);
+        const int cw = (W - 2 * m - (cols - 1) * gap) / cols, ch = sc(84);
+        for (size_t i = 0; i < devices.size() && i < 6; ++i) {
+            wr::Rect r{m + (int)(i % cols) * (cw + gap), y + (int)(i / cols) * (ch + gap), cw, ch};
+            pickRects_.push_back(r);
+            C.fillRoundRect(r.x, r.y, r.w, r.h, sc(16), kCard);
+            C.fillCircle(r.x + sc(34), r.y + r.h / 2, sc(14), accent_);
+            C.loadFont(kMid);
+            C.setTextColor(kText);
+            C.setTextDatum(textdatum_t::top_left);
+            auto name = wr::wrapText(devices[i].first, r.w - sc(80), 1, measure);
+            C.drawString(name.empty() ? "WiiM" : name[0].c_str(), r.x + sc(64), r.y + sc(10));
+            C.loadFont(kSmall);
+            C.setTextColor(kText2);
+            C.drawString(devices[i].second.c_str(), r.x + sc(64), r.y + r.h - sc(10) - C.fontHeight());
+        }
+    }
+    // Réessayer / Configuration
+    const int bw = sc(190), bh = sc(48), gap = sc(16);
+    pickRetry_ = wr::Rect{W / 2 - gap / 2 - bw, H - m - bh, bw, bh};
+    pickConfig_ = wr::Rect{W / 2 + gap / 2, H - m - bh, bw, bh};
+    C.loadFont(kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    for (auto* b : {&pickRetry_, &pickConfig_}) {
+        C.fillRoundRect(b->x, b->y, b->w, b->h, b->h / 2, b == &pickRetry_ && devices.empty() ? accent_ : kCard);
+        C.setTextColor(b == &pickRetry_ && devices.empty() ? kBg : kText);
+        C.drawString(b == &pickRetry_ ? "R\xC3\xA9" "essayer" : "Configuration", b->x + b->w / 2, b->y + b->h / 2 + 1);
+    }
+    present();
+}
+
+int Ui::hitPicker(int x, int y) const {
+    for (size_t i = 0; i < pickRects_.size(); ++i)
+        if (pickRects_[i].contains(x, y)) return (int)i;
+    if (pickRetry_.contains(x, y)) return PickRetry;
+    if (pickConfig_.contains(x, y)) return PickConfig;
+    return PickNone;
+}
+
 Ui::MenuChoice Ui::hitMenu(int x, int y) const {
     for (int i = 0; i < 3; ++i)
         if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
@@ -1007,6 +1071,7 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     para("Si la page ne s'ouvre pas, va sur " + url, kSmall, kText, m + indent);
     y += sc(14);
     step(3);
-    para("Renseigne ton Wi-Fi et l'IP du WiiM.", kSmall, kText, m + indent);
+    para("Choisis ton Wi-Fi et tape son mot de passe : le Tab5 trouve ton WiiM tout seul.", kSmall, kText,
+         m + indent);
     present();
 }
