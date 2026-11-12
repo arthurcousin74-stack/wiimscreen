@@ -81,6 +81,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   restarts; `setup()` runs the portal before connecting, like the first configuration.
 - Navigation bar: `Layout::rail/navHome/navSettings/content`; screens that show it call `Ui::navRail()` and lay
   out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
+- **Fonts**: always `useFont(C, kX)` in `ui.cpp`, never `C.loadFont()` directly: M5GFX re-parses the VLW header on
+  every load (the search keyboard loaded 43 fonts per frame); `useFont` skips reloading the same font.
+- **Partial redraws** keep taps responsive: a full frame pushes ~1.8 MB. `pressKey()`, `updateSearchField()`,
+  `updateTransport()` and `updateProgress()` redraw one area over `bg_` (clip) and send it with `presentRect()`.
+  The waiting rings animate with `updateTransport()` only.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 

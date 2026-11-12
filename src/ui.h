@@ -69,6 +69,8 @@ public:
     // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
     // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
     bool updateProgress(const UiState& st);
+    // Rangée des boutons de lecture seule (animation d'attente) ; false si la vue commandes n'est pas affichée
+    bool updateTransport(const UiState& st, int pressed = -1);
     // Visualiseur de la vue ambiance : réserve sa place si activé
     void setVisualizer(bool enabled) { visEnabled_ = enabled; }
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
@@ -111,6 +113,10 @@ public:
                       bool sources = false, int mic = 0, float level = 0);
     int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, -1 ailleurs
     int hitKey(int x, int y) const;      // indice dans keys(), ou -1
+    // Mises à jour partielles (rapides) de l'écran de recherche : une touche enfoncée / relâchée, le champ
+    void pressKey(int index, bool down);
+    void updateSearchField(const std::string& query, const String& status, bool busy, int source, bool sources,
+                           int mic = 0, float level = 0);
     const std::vector<wr::Key>& keys() const { return keys_; }
     void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
                        const String& status, int pressed = -1);
@@ -154,8 +160,12 @@ private:
     void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
     void navRail(int active);  // 0 Accueil, 1 Réglages, 2 Recherche
     void searchIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
+    void searchField(const std::string& query, const String& status, bool busy, int source, bool sources, int mic,
+                     float level);
+    void drawKey(int index, bool down);
     void emptyStrip();         // bande des presets sans preset
     void heartIcon(int cx, int cy, int s, uint32_t color);
+    void favButton();
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -200,6 +210,8 @@ private:
     wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
     wr::Rect srcRects_[2];  // choix Qobuz | Deezer du clavier
     wr::Rect micRect_;      // micro (dictée) du champ de recherche
+    wr::Rect searchArea_;   // champ + choix de la source + ligne d'état (redessinés seuls)
+    bool keysBusy_ = false;
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

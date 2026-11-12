@@ -25,6 +25,17 @@ static const uint8_t* const kSmall = font_ui_28;
 static const uint8_t* const kMid = font_ui_40;
 static const uint8_t* const kBig = font_ui_56;
 
+// Police chargée sur un canevas : M5GFX relit l'en-tête VLW à chaque loadFont ; on évite de recharger la même
+// (le clavier de recherche en chargeait 43 par image). Un seul canevas charge des polices sur l'appareil.
+static const lgfx::LGFXBase* s_fontCanvas = nullptr;
+static const uint8_t* s_font = nullptr;
+static void useFont(M5Canvas& C, const uint8_t* f) {
+    if (s_fontCanvas == &C && s_font == f) return;
+    C.loadFont(f);
+    s_fontCanvas = &C;
+    s_font = f;
+}
+
 static uint32_t mix(uint32_t a, uint32_t b, float t) {  // t = 0 : a, t = 1 : b
     auto ch = [&](int sh) {
         float v = ((a >> sh) & 0xFF) * (1 - t) + ((b >> sh) & 0xFF) * t;
@@ -247,7 +258,7 @@ static constexpr uint32_t kRed = 0xE5484Du;
 // Puce : petite pilule (point coloré facultatif + texte)
 void Ui::chip(int& x, int y, const std::string& text, uint32_t dot, uint32_t textColor) {
     auto& C = canvas_;
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     const int h = sc(28), padX = sc(12), dotD = dot ? sc(10) : 0, dotGap = dot ? sc(8) : 0;
     const int w = padX * 2 + dotD + dotGap + (int)C.textWidth(text.c_str());
     if (x + w > layout_.info.right()) return;
@@ -272,7 +283,7 @@ void Ui::info(const UiState& st) {
     // --- Puces ; batterie à droite
     int right = r.right();
     if (st.battery >= 0) {
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         const int bw = sc(34), bh = sc(17), by = r.y + (sc(28) - bh) / 2;
         int bx = right - bw - sc(4);
         C.drawRoundRect(bx, by, bw, bh, sc(4), kText2);
@@ -303,21 +314,21 @@ void Ui::info(const UiState& st) {
     const bool empty = st.player.title.empty();
     std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     const int titleH = C.fontHeight() + sc(2);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     const int artistH = C.fontHeight() + sc(4);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     const int albumH = C.fontHeight();
     const int needOne = titleH + artistH + albumH;
     const int titleLines = (r.bottom() - y >= needOne + titleH) ? 2 : 1;
 
-    C.loadFont(kBig);
+    useFont(C, kBig);
     if (empty) {
         C.setTextColor(kText2);
         C.drawString(st.online ? "Rien en lecture" : "WiiM injoignable", r.x, y);
         y += titleH;
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         if (presets_.empty()) {
             C.drawString(fit("Lance la musique depuis ton t\xC3\xA9l\xC3\xA9phone.", r.w).c_str(), r.x, y + sc(6));
         } else {
@@ -331,13 +342,13 @@ void Ui::info(const UiState& st) {
         y += titleH;
     }
     if (!st.player.artist.empty() && y + artistH <= r.bottom()) {
-        C.loadFont(kMid);
+        useFont(C, kMid);
         C.setTextColor(accent_);
         C.drawString(fit(st.player.artist, r.w).c_str(), r.x, y + sc(2));
         y += artistH;
     }
     if (!album.empty() && y + albumH <= r.bottom()) {
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.setTextColor(kText2);
         C.drawString(fit(album, r.w).c_str(), r.x, y + sc(4));
     }
@@ -356,7 +367,7 @@ void Ui::progressRow(const UiState& st, const wr::Rect& r, wr::Rect* hit) {
         chip(x, cy - sc(14), "EN DIRECT", accent_, kText2);
         return;
     }
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     const uint32_t pos = std::min(st.player.positionMs, st.player.durationMs);
     const int gutter = sc(68);
     C.setTextColor(kText2);
@@ -457,7 +468,7 @@ void Ui::volumePill(const UiState& st, int pressed) {
     if (st.online && !st.player.muted && fill > 0) C.fillRoundRect(bx, cy - bh / 2, std::max(bh, fill), bh, bh / 2, kText);
     if (st.online) C.fillCircle(bx + fill, cy, sc(9), st.player.muted ? kText2 : kText);
     // Valeur
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_right);
     C.setTextColor(st.online ? kText : kText2);
     String t = !st.online ? String("\xE2\x80\x94") : st.player.muted ? String("Muet") : String(vol);
@@ -499,7 +510,7 @@ void Ui::tile(int slot, int index, bool pressed) {
         if (!firsts.empty()) ini += firsts.front();
         if (firsts.size() > 1) ini += firsts.back();
         if (ini.empty()) ini = "\xE2\x99\xAA";
-        C.loadFont(kMid);
+        useFont(C, kMid);
         C.setTextDatum(textdatum_t::middle_center);
         C.setTextColor(kText);
         C.drawString(ini.c_str(), ax + side / 2, ay + side / 2 + 1);
@@ -520,10 +531,10 @@ void Ui::tile(int slot, int index, bool pressed) {
     // Nom : une ligne en police normale, sinon deux lignes plus petites
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     std::vector<std::string> lines;
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     lines = wr::wrapText(label, r.w - sc(16), 1, measure);
     if (endsWithEllipsis(lines)) {
-        C.loadFont(kTiny);
+        useFont(C, kTiny);
         lines = wr::wrapText(label, r.w - sc(16), 2, measure);
     }
     const int lh = C.fontHeight() + sc(1);
@@ -558,7 +569,7 @@ void Ui::toast(const String& msg) {
     if (!msg.length()) return;
     auto& C = canvas_;
     const wr::Rect& a = layout_.art;
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     const int pad = sc(14), dotW = sc(26);
     const int w = a.w - 2 * sc(12);
@@ -591,13 +602,7 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
     navRail(0);
-    if (favState_ > 0) {
-        const wr::Rect& f = layout_.fav;
-        const bool on = favState_ == 2;
-        canvas_.fillCircle(f.x + f.w / 2, f.y + f.h / 2, f.w / 2, on ? accent_ : kCard);
-        heartIcon(f.x + f.w / 2, f.y + f.h / 2, f.w / 4, on ? kBg : (favState_ == 3 ? kTrack : kText));
-        if (!on) heartIcon(f.x + f.w / 2, f.y + f.h / 2 - 1, f.w / 4 - sc(4), favState_ == 3 ? kText2 : kCard);
-    }
+    favButton();
     volumePill(st, pressedTransport);
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
         int i = page_ * layout_.perPage + (int)slot;
@@ -635,18 +640,18 @@ void Ui::emptyStrip() {
     C.drawRoundRect(ix, iy, d, d, sc(12), kTrack);
     C.drawRoundRect(ix + 1, iy + 1, d - 2, d - 2, sc(11), kTrack);
     C.setTextDatum(textdatum_t::middle_center);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kTrack);
     C.drawString("+", ix + d / 2, iy + d / 2);
     const int tx = ix + d + sc(22), tw = r.right() - sc(20) - tx;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextColor(kText);
     int y = r.y + sc(22);
     C.drawString(wr::wrapText("Aucun favori pour l'instant", tw, 1, measure)[0].c_str(), tx, y);
     y += C.fontHeight() + sc(8);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     for (auto& l : wr::wrapText("Pendant qu'un album ou une playlist joue, touche le bouton favori (\xC3\xA0 gauche des commandes) "
                                 "pour l'ajouter ici.",
@@ -655,6 +660,34 @@ void Ui::emptyStrip() {
         C.drawString(l.c_str(), tx, y);
         y += C.fontHeight() + sc(4);
     }
+}
+
+void Ui::favButton() {
+    if (favState_ <= 0) return;
+    const wr::Rect& f = layout_.fav;
+    const bool on = favState_ == 2;
+    canvas_.fillCircle(f.x + f.w / 2, f.y + f.h / 2, f.w / 2, on ? accent_ : kCard);
+    heartIcon(f.x + f.w / 2, f.y + f.h / 2, f.w / 4, on ? kBg : (favState_ == 3 ? kTrack : kText));
+    if (!on) heartIcon(f.x + f.w / 2, f.y + f.h / 2 - 1, f.w / 4 - sc(4), favState_ == 3 ? kText2 : kCard);
+}
+
+// Rangée des boutons de lecture seule (anneaux qui tournent pendant une attente) : bien moins coûteux qu'un
+// écran complet 20 fois par seconde, et la boucle reste libre pour les appuis
+bool Ui::updateTransport(const UiState& st, int pressed) {
+    if (view_ != View::Controls) return false;
+    const wr::Rect& play = layout_.transport[wr::kPlayPause];
+    const int pad = sc(10);
+    const int x0 = std::min(layout_.fav.x, layout_.transport[wr::kPrev].x) - pad;
+    const int x1 = std::max(layout_.mic.right(), layout_.transport[wr::kNext].right()) + pad;
+    const wr::Rect r{x0, play.y - pad, x1 - x0, play.h + 2 * pad};
+    auto& C = canvas_;
+    C.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&C, 0, 0);
+    transport(st, pressed);
+    favButton();
+    C.clearClipRect();
+    presentRect(r);
+    return true;
 }
 
 void Ui::renderAmbient(const UiState& st) {
@@ -690,12 +723,12 @@ void Ui::renderAmbient(const UiState& st) {
 
     std::string title = st.player.title.empty() ? (st.online ? "Rien en lecture" : "Hors ligne")
                                                 : st.player.title;
-    C.loadFont(kBig);
+    useFont(C, kBig);
     auto titleLines = wr::wrapText(title, tw, 3, measure);
     const int titleH = C.fontHeight() + sc(6);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     const int artistH = C.fontHeight() + sc(6);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     const int smallH = C.fontHeight() + sc(6);
     std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
     std::string q = wr::formatQuality(st.meta.sampleRate, st.meta.bitDepth);
@@ -708,19 +741,19 @@ void Ui::renderAmbient(const UiState& st) {
     int y = landscape ? std::max(top, top + (bottom - top - blockH) / 2) : top;
 
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(st.player.title.empty() ? kText2 : kText);
     for (auto& l : titleLines) {
         C.drawString(l.c_str(), tx, y);
         y += titleH;
     }
     if (!st.player.artist.empty()) {
-        C.loadFont(kMid);
+        useFont(C, kMid);
         C.setTextColor(accent_);
         C.drawString(wr::wrapText(st.player.artist, tw, 1, measure)[0].c_str(), tx, y);
         y += artistH;
     }
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     if (!album.empty()) {
         C.setTextColor(kText);
         C.drawString(wr::wrapText(album, tw, 1, measure)[0].c_str(), tx, y);
@@ -837,9 +870,72 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
     ambientShown_ = false;
     view_ = View::Other;
     railShown_ = false;
-    auto& C = canvas_;
     background();
     navRail(2);
+    searchField(query, status, busy, source, sources, mic, level);
+    // Touches : d'abord les lettres (une seule police), puis les autres
+    auto& C = canvas_;
+    const wr::Rect& A = layout_.content;
+    const int m = sc(18);
+    keys_ = wr::keyboardLayout(wr::Rect{A.x + m, searchArea_.bottom(), A.w - 2 * m, A.bottom() - m - searchArea_.bottom()});
+    keysBusy_ = busy;
+    useFont(C, kMid);
+    for (size_t i = 0; i < keys_.size(); ++i)
+        if (keys_[i].kind == wr::Key::Char) drawKey((int)i, (int)i == pressedKey);
+    useFont(C, kSmall);
+    for (size_t i = 0; i < keys_.size(); ++i)
+        if (keys_[i].kind != wr::Key::Char) drawKey((int)i, (int)i == pressedKey);
+    present();
+}
+
+// Une touche (la police doit déjà être chargée : grande pour les lettres, petite pour les autres)
+void Ui::drawKey(int i, bool down) {
+    auto& C = canvas_;
+    const wr::Key& k = keys_[i];
+    const bool enter = k.kind == wr::Key::Enter;
+    const uint32_t bg = down ? kCardHi : (enter ? (keysBusy_ ? kCardHi : accent_) : kCard);
+    C.fillRoundRect(k.r.x, k.r.y, k.r.w, k.r.h, sc(10), bg);
+    const int cx = k.r.x + k.r.w / 2, cy = k.r.y + k.r.h / 2;
+    if (k.kind == wr::Key::Back) {  // flèche d'effacement
+        const int s = std::min(k.r.h, k.r.w) / 4;
+        C.fillTriangle(cx - 2 * s, cy, cx - s, cy - s, cx - s, cy + s, kText);
+        C.fillRect(cx - s, cy - s, 3 * s, 2 * s, kText);
+        C.drawLine(cx - s / 3, cy - s / 2, cx + s, cy + s / 2, bg);
+        C.drawLine(cx - s / 3, cy + s / 2, cx + s, cy - s / 2, bg);
+        return;
+    }
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(enter && !keysBusy_ ? kBg : (k.kind == wr::Key::Space || k.kind == wr::Key::Clear ? kText2 : kText));
+    C.drawString(enter && keysBusy_ ? "\xE2\x80\xA6" : k.label.c_str(), cx, cy + 1);
+}
+
+// Appui sur une touche : seule cette touche est redessinée et envoyée à l'écran (quelques ms)
+void Ui::pressKey(int i, bool down) {
+    if (i < 0 || i >= (int)keys_.size()) return;
+    auto& C = canvas_;
+    const wr::Rect& r = keys_[i].r;
+    C.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&C, 0, 0);
+    useFont(C, keys_[i].kind == wr::Key::Char ? kMid : kSmall);
+    drawKey(i, down);
+    C.clearClipRect();
+    presentRect(r);
+}
+
+// Champ, choix de la source et ligne d'état seuls : à chaque lettre tapée et pendant la dictée
+void Ui::updateSearchField(const std::string& query, const String& status, bool busy, int source, bool sources,
+                           int mic, float level) {
+    auto& C = canvas_;
+    C.setClipRect(searchArea_.x, searchArea_.y, searchArea_.w, searchArea_.h);
+    bg_.pushSprite(&C, 0, 0);
+    searchField(query, status, busy, source, sources, mic, level);
+    C.clearClipRect();
+    presentRect(searchArea_);
+}
+
+void Ui::searchField(const std::string& query, const String& status, bool busy, int source, bool sources, int mic,
+                     float level) {
+    auto& C = canvas_;
     const wr::Rect& A = layout_.content;
     const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
@@ -866,14 +962,14 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
         }
         micW = d + sc(10);
     }
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextDatum(textdatum_t::middle_left);
     const int tx = X + fh, tw = W - fh - sc(24) - micW;
     if (mic == 1 || mic == 2) {
         C.setTextColor(mic == 1 ? kText : kText2);
         const char* say = mic == 1 ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6 touche le bouton rouge quand tu as fini"
                                    : "Transcription\xE2\x80\xA6";
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.drawString(wr::wrapText(say, tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
     } else if (query.empty()) {
         C.setTextColor(kText2);
@@ -886,7 +982,7 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
         if (!busy) C.fillRect(tx + measure(shown) + sc(3), fy + sc(14), sc(3), fh - sc(28), accent_);  // curseur
     }
     // Choix de la source (à droite), puis état (recherche en cours, aucun résultat, erreur)
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     int lineW = W;
     srcRects_[0] = srcRects_[1] = wr::Rect{};
     if (sources) {
@@ -910,29 +1006,7 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
                             : String(source == 1 ? "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM"
                                                  : "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
     C.drawString(wr::wrapText(line.c_str(), lineW, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
-    // Touches
-    const int ky = fy + fh + sc(10) + C.fontHeight() + sc(14);
-    keys_ = wr::keyboardLayout(wr::Rect{X, ky, W, A.bottom() - m - ky});
-    for (size_t i = 0; i < keys_.size(); ++i) {
-        const wr::Key& k = keys_[i];
-        const bool enter = k.kind == wr::Key::Enter, down = (int)i == pressedKey;
-        const uint32_t bg = down ? kCardHi : (enter ? (busy ? kCardHi : accent_) : kCard);
-        C.fillRoundRect(k.r.x, k.r.y, k.r.w, k.r.h, sc(10), bg);
-        const int cx = k.r.x + k.r.w / 2, cy = k.r.y + k.r.h / 2;
-        if (k.kind == wr::Key::Back) {  // flèche d'effacement
-            const int s = std::min(k.r.h, k.r.w) / 4;
-            C.fillTriangle(cx - 2 * s, cy, cx - s, cy - s, cx - s, cy + s, kText);
-            C.fillRect(cx - s, cy - s, 3 * s, 2 * s, kText);
-            C.drawLine(cx - s / 3, cy - s / 2, cx + s, cy + s / 2, bg);
-            C.drawLine(cx - s / 3, cy + s / 2, cx + s, cy - s / 2, bg);
-            continue;
-        }
-        C.loadFont(k.kind == wr::Key::Char ? kMid : kSmall);
-        C.setTextDatum(textdatum_t::middle_center);
-        C.setTextColor(enter && !busy ? kBg : (k.kind == wr::Key::Space || k.kind == wr::Key::Clear ? kText2 : kText));
-        C.drawString(enter && busy ? "\xE2\x80\xA6" : k.label.c_str(), cx, cy + 1);
-    }
-    present();
+    searchArea_ = wr::Rect{A.x, A.y, A.w, fy + fh + sc(10) + C.fontHeight() + sc(14) - A.y};
 }
 
 int Ui::hitSource(int x, int y) const {
@@ -967,15 +1041,15 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     resultsEdit_ = wr::Rect{X + W - bw, A.y + m, bw, bh};
     C.fillRoundRect(resultsEdit_.x, resultsEdit_.y, bw, bh, bh / 2, kCard);
     searchIcon(resultsEdit_.x + sc(30), resultsEdit_.y + bh / 2, sc(9), kText, kCard);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
     C.drawString("Modifier", resultsEdit_.x + bw / 2 + sc(14), resultsEdit_.y + bh / 2 + 1);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextDatum(textdatum_t::middle_left);
     const std::string head = "\xC2\xAB " + query + " \xC2\xBB";
     C.drawString(wr::wrapText(head, W - bw - sc(20), 1, measure)[0].c_str(), X, A.y + m + bh / 2);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText2);
     String sub = status.length() ? status
@@ -997,19 +1071,19 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
         const uint32_t bg = i == pressed ? kCardHi : kCard;
         C.fillRoundRect(r.x, r.y, r.w, r.h, sc(12), bg);
         // Numéro, titre, artiste · album
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.setTextDatum(textdatum_t::middle_center);
         C.setTextColor(kText2);
         C.drawString(String(i + 1).c_str(), r.x + sc(30), r.y + r.h / 2 + 1);
         const int tx = r.x + sc(60), tw = r.w - sc(80);
         const wr::QueueTrack& t = items[i];
         C.setTextDatum(textdatum_t::top_left);
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.setTextColor(kText);
         C.drawString(wr::wrapText(t.title.empty() ? "?" : t.title, tw, 1, measure)[0].c_str(), tx, r.y + sc(8));
         std::string under = t.artist;
         if (!t.album.empty()) under += (under.empty() ? "" : " \xC2\xB7 ") + t.album;
-        C.loadFont(kTiny);
+        useFont(C, kTiny);
         C.setTextColor(kText2);
         if (!under.empty()) C.drawString(wr::wrapText(under, tw, 1, measure)[0].c_str(), tx, r.y + r.h / 2 + sc(4));
     }
@@ -1017,7 +1091,7 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     resultsPrev_ = resultsNext_ = wr::Rect{};
     if (pages > 1) {
         const int ny = A.bottom() - m - navH, nw = sc(200);
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.setTextDatum(textdatum_t::middle_center);
         if (page > 0) {
             resultsPrev_ = wr::Rect{X, ny, nw, navH};
@@ -1092,12 +1166,12 @@ void Ui::renderVoice(VoicePhase phase, float level) {
     micIcon(cx, cy, R / 2, listening ? kBg : kText, listening ? accent_ : kCardHi);
 
     C.setTextDatum(textdatum_t::top_center);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kText);
     int y = cy + R + sc(70);
     C.drawString(listening ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6" : "Je r\xC3\xA9" "fl\xC3\xA9" "chis\xE2\x80\xA6", cx, y);
     y += C.fontHeight() + sc(10);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     if (listening) {
         C.drawString("\xC2\xAB Joue FIP \xC2\xBB \xC2\xB7 \xC2\xAB Mets France Culture \xC2\xBB \xC2\xB7 "
@@ -1107,7 +1181,7 @@ void Ui::renderVoice(VoicePhase phase, float level) {
         C.drawString("Touche l'\xC3\xA9" "cran quand tu as fini.", cx, y);
     }
     // Annuler
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     const int bw = sc(150), bh = sc(44);
     cancelRect_ = wr::Rect{cx - bw / 2, H - sc(30) - bh, bw, bh};
     C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
@@ -1197,11 +1271,11 @@ static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const 
     C.fillRoundRect(r.x, r.y, r.w, r.h, sc16, kCard);
     C.fillCircle(r.x + sc16 * 2, r.y + r.h / 2, sc16 * 2 / 3, dot);
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextColor(kText);
     const int tx = r.x + sc16 * 4;
     C.drawString(title, tx, r.y + r.h / 2 - C.fontHeight());
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     C.drawString(sub, tx, r.y + r.h / 2 + sc16 / 4);
 }
@@ -1218,7 +1292,7 @@ void Ui::renderMenu(const char* version) {
     const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(64), gap = sc(10);
     const int x = A.x + (W - bw) / 2, y0 = A.y + sc(100);
     C.setTextDatum(textdatum_t::bottom_center);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kText);
     C.drawString("R\xC3\xA9glages", A.x + W / 2, y0 - sc(20));
     menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
@@ -1236,7 +1310,7 @@ void Ui::renderMenu(const char* version) {
     menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuLog].bottom() + sc(20), cw, ch};
     const wr::Rect& c = menuRects_[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
     C.drawString("Fermer", c.x + c.w / 2, c.y + c.h / 2 + 1);
@@ -1256,12 +1330,12 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     navRail(1);
     const wr::Rect& A = layout_.content;
     const int W = C.width(), H = C.height(), m = sc(20), X = A.x + m, Y = A.y + m;
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
     C.drawString("Journal", X, Y);
     const int bw = sc(150), bh = sc(44), qw = sc(170);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     const String ver = String("Version ") + version;
     if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(36) - qw - sc(190))  // sinon : version dans Réglages
@@ -1279,16 +1353,16 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     // Essai : favoris Qobuz lus par le WiiM (sans lancer la lecture)
     const int tw = sc(190);
     logTest_ = wr::Rect{logQueue_.x - sc(12) - tw, Y, tw, bh};
-    C.loadFont(kMid);
+    useFont(C, kMid);
     const int titleRight = X + C.textWidth("Journal") + sc(16);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     if (logTest_.x < titleRight) logTest_.y = Y + bh + sc(10), logTest_.x = logClose_.right() - tw;  // portrait : dessous
     C.fillRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kCard);
     C.drawRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kTrack);
     C.drawString("Essais", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
-    C.loadFont(kTiny);
+    useFont(C, kTiny);
     C.setTextDatum(textdatum_t::top_left);
     const int top = std::max(Y + bh, logTest_.bottom()) + sc(14), lh = C.fontHeight() + sc(2);
     const int rowsFit = std::max(1, (H - top - m) / lh), textW = W - X - m;
@@ -1318,11 +1392,11 @@ void Ui::renderTouchTest(int x, int y, int count) {
     for (int gx = 0; gx <= W; gx += W / 8) C.drawFastVLine(std::min(gx, W - 1), 0, H, kCard);
     for (int gy = 0; gy <= H; gy += H / 6) C.drawFastHLine(0, std::min(gy, H - 1), W, kCard);
     C.drawRect(0, 0, W, H, kText2);
-    C.loadFont(kMid);
+    useFont(C, kMid);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
     C.drawString("Test tactile", sc(24), sc(20));
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     C.drawString("Touche l'\xC3\xA9" "cran : un rond doit appara\xC3\xAEtre sous ton doigt.", sc(24), sc(76));
     String info = "\xC3\x89" "cran " + String(W) + " x " + String(H) + "   Appuis : " + String(count);
@@ -1352,11 +1426,11 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kText);
     C.drawString(devices.empty() ? "Aucun WiiM trouv\xC3\xA9" : "Quel WiiM ?", m, m);
     int y = m + C.fontHeight() + sc(16);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     pickRects_.clear();
     if (devices.empty()) {
@@ -1377,12 +1451,12 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
             pickRects_.push_back(r);
             C.fillRoundRect(r.x, r.y, r.w, r.h, sc(16), kCard);
             C.fillCircle(r.x + sc(34), r.y + r.h / 2, sc(14), accent_);
-            C.loadFont(kMid);
+            useFont(C, kMid);
             C.setTextColor(kText);
             C.setTextDatum(textdatum_t::top_left);
             auto name = wr::wrapText(devices[i].first, r.w - sc(80), 1, measure);
             C.drawString(name.empty() ? "WiiM" : name[0].c_str(), r.x + sc(64), r.y + sc(10));
-            C.loadFont(kSmall);
+            useFont(C, kSmall);
             C.setTextColor(kText2);
             C.drawString(devices[i].second.c_str(), r.x + sc(64), r.y + r.h - sc(10) - C.fontHeight());
         }
@@ -1391,7 +1465,7 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     const int bw = sc(190), bh = sc(48), gap = sc(16);
     pickRetry_ = wr::Rect{W / 2 - gap / 2 - bw, H - m - bh, bw, bh};
     pickConfig_ = wr::Rect{W / 2 + gap / 2, H - m - bh, bw, bh};
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     for (auto* b : {&pickRetry_, &pickConfig_}) {
         C.fillRoundRect(b->x, b->y, b->w, b->h, b->h / 2, b == &pickRetry_ && devices.empty() ? accent_ : kCard);
@@ -1423,24 +1497,24 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kText);
     C.drawString("Mise \xC3\xA0 jour", m, m);
     int y = m + C.fontHeight() + sc(24);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     C.drawString("1. Sur ton ordinateur (m\xC3\xAAme Wi-Fi), ouvre :", m, y);
     y += C.fontHeight() + sc(8);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(accent_);
     C.drawString(url.c_str(), m + sc(24), y);
     y += C.fontHeight() + sc(18);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextColor(kText2);
     C.drawString("2. Saisis ce code, puis choisis le fichier wiim-remote-tab5.bin :", m, y);
     y += C.fontHeight() + sc(8);
     // Code en gros, chiffres espacés
-    C.loadFont(kBig);
+    useFont(C, kBig);
     std::string spaced;
     for (const char* c = code.c_str(); *c; ++c) {
         if (c != code.c_str()) spaced += ' ';
@@ -1454,7 +1528,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     y += ch + sc(30);
 
     // Progression ou état
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     C.setTextDatum(textdatum_t::top_left);
     if (percent >= 0) {
         const int bw = W - 2 * m, bh = sc(14);
@@ -1489,11 +1563,11 @@ void Ui::showInfo(const char* title, const String& body, const char* footer) {
     accent_ = kAccent;
     background();
     const int m = sc(40), w = C.width() - 2 * m;
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
     C.drawString(title, m, m);
-    C.loadFont(kSmall);
+    useFont(C, kSmall);
     int y = m + C.fontHeight() + sc(60);
     for (auto& l : wr::wrapText(body.c_str(), w, 12, measure)) {
         C.drawString(l.c_str(), m, y);
@@ -1531,7 +1605,7 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     const int textW = landscape ? qx - pad - 2 * m : C.width() - 2 * m;
     int y = m;
     C.setTextDatum(textdatum_t::top_left);
-    C.loadFont(kBig);
+    useFont(C, kBig);
     C.setTextColor(kText);
     C.drawString("Configuration", m, y);
     y += C.fontHeight() + sc(12);
@@ -1539,7 +1613,7 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     // Paragraphe avec retrait (sous le numéro d'étape)
     const int indent = sc(46);
     auto para = [&](const String& s, const uint8_t* font, uint32_t color, int x) {
-        C.loadFont(font);
+        useFont(C, font);
         C.setTextColor(color);
         const int lh = C.fontHeight() + sc(6);
         for (auto& l : wr::wrapText(s.c_str(), textW - (x - m), 3, measure)) {
@@ -1551,7 +1625,7 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     auto step = [&](int n) {
         const int rad = sc(15);
         C.fillCircle(m + rad, y + rad + sc(2), rad, accent_);
-        C.loadFont(kSmall);
+        useFont(C, kSmall);
         C.setTextDatum(textdatum_t::middle_center);
         C.setTextColor(kBg);
         C.drawString(String(n).c_str(), m + rad, y + rad + sc(3));

@@ -144,6 +144,9 @@ int main(int argc, char** argv) {
         wait.pending = wr::kNext;  // ⏭ envoyé, le WiiM n'a pas encore changé de morceau
         ui.render(wait);
         save(out, "28-attente.ppm");
+        ui.render(st);
+        ui.updateTransport(wait);  // même attente, rangée seule redessinée
+        save(out, "30-attente-partielle.ppm");
         ui.setFavorite(1);
         ui.setPresets(six);
         for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);

@@ -38,6 +38,8 @@ Hardware testing in progress.
   advanced sections, file name and progress on the update page.
 
 ### Changed
+- Faster screens: fonts are no longer reloaded when already loaded; on the search keyboard a key press redraws only
+  the key and the field; the waiting rings redraw only the row of playback buttons.
 - Qobuz search: the WiiM starts the search queue as soon as it is created, so the remote now puts back what was
   playing before (same track and position) or stops playback when nothing was playing.
 - Voice is now only for the search: a microphone in the search field, tap to start listening and tap the red

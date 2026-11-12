@@ -819,7 +819,7 @@ static void finishDictation(bool send) {
         renderSearch();
         return;
     }
-    g_ui.renderSearch(g_searchQuery, "", false, -1, g_searchSource, g_deezerOk, 2);
+    g_ui.updateSearchField(g_searchQuery, "", false, g_searchSource, g_deezerOk, 2);
     std::string text;
     String err;
     const std::string hint = "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
@@ -899,7 +899,7 @@ static void serviceVoice() {
     if (g_dictation) {  // recherche : on écoute jusqu'à l'appui sur ■ (ou la limite du tampon)
         if (millis() - g_voiceFrame > 100) {
             g_voiceFrame = millis();
-            g_ui.renderSearch(g_searchQuery, "", false, -1, g_searchSource, g_deezerOk, 1, g_voiceLevel);
+            g_ui.updateSearchField(g_searchQuery, "", false, g_searchSource, g_deezerOk, 1, g_voiceLevel);
         }
         if (g_voiceLen >= kVoiceMax) finishDictation(true);
         return;
@@ -1127,10 +1127,28 @@ static void openSearch() {
     renderSearch();
 }
 
+// Touche enfoncée : dessinée tout de suite, relâchée ~90 ms plus tard (mises à jour partielles de l'écran)
+static int g_keyDown = -1;
+static uint32_t g_keyDownAt = 0;
+
+static void updateSearchField() {
+    g_ui.updateSearchField(g_searchQuery, g_searchStatus, g_searchBusy, g_searchSource, g_deezerOk);
+}
+
+static void releaseKey(bool force) {
+    if (g_keyDown < 0 || (!force && millis() - g_keyDownAt < 90)) return;
+    g_ui.pressKey(g_keyDown, false);
+    g_keyDown = -1;
+}
+
 static void onSearchKey(int k) {
     if (k < 0) return;
     if (g_searchBusy && g_ui.keys()[k].kind == wr::Key::Enter) return;
     const wr::Key key = g_ui.keys()[k];
+    releaseKey(true);
+    g_ui.pressKey(k, true);  // retour visuel immédiat
+    g_keyDown = k;
+    g_keyDownAt = millis();
     sound::tap();
     switch (key.kind) {
         case wr::Key::Char:
@@ -1146,7 +1164,7 @@ static void onSearchKey(int k) {
             return;
     }
     if (key.kind != wr::Key::Enter) g_searchStatus = g_searchBusy ? g_searchStatus : String();
-    renderSearch(k);
+    updateSearchField();  // seul le champ change
 }
 
 // Résultats arrivés (tâche WiiM)
@@ -1266,7 +1284,7 @@ void loop() {
                 sound::tap();
                 g_searchSource = g_ui.hitSource(t.x, t.y);
                 g_searchStatus = "";
-                renderSearch();
+                updateSearchField();
             } else if (g_searchOpen) {
                 onSearchKey(g_ui.hitKey(t.x, t.y));
             } else {
@@ -1294,6 +1312,7 @@ void loop() {
                 }
             }
         }
+        releaseKey(false);
         serviceVoice();
         serviceWiim();
         delay(5);
@@ -1395,8 +1414,11 @@ void loop() {
         g_pendingT = -1;
         show();
     }
-    if (g_brightness > 0 && !g_ambient && (p.loading || g_pendingT >= 0) && !g_stripTouch && now - g_lastTick >= 50)
-        show();
+    if (g_brightness > 0 && !g_ambient && (p.loading || g_pendingT >= 0) && !g_stripTouch && now - g_lastTick >= 50) {
+        // Animation d'attente : seulement la rangée des boutons, sauf si un rendu complet est déjà prévu
+        g_lastTick = now;
+        if (g_dirty || modalOpen() || !g_ui.updateTransport(displayState())) show();
+    }
 
     const uint32_t idle = now - g_lastTouch;
     if (!g_ambient && !modalOpen() && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
