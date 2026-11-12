@@ -92,7 +92,7 @@ private:
     void runPlaySearchResult(int index);
     bool qobuzModel(const std::string& control, std::string& templ);
     struct Playback {
-        bool known = false, playing = false;
+        bool known = false, playing = false, muted = false;
         std::string title, ctx, listName;  // morceau en cours ; file qui le contient (si trouvée)
         int index = 0;                      // place du morceau dans cette file (1 = premier), 0 si inconnue
         uint32_t posMs = 0;

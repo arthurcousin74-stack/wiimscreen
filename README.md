@@ -54,7 +54,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   on-screen keyboard. The device gives the search to your WiiM. The WiiM does the search with its own Qobuz access
   and loads the results. The device shows the results (title, artist, album). Touch a result to play it. Before
   the first search, play one Qobuz album from the WiiM Home app. Refer to [Search Qobuz](#search-qobuz).
-  Note: the WiiM starts the results immediately. The device then puts back the music that played before.
+  Note: the WiiM starts the results immediately. The device mutes the WiiM during the search, then puts back the
+  music that played before.
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
   search, play one Deezer album from the WiiM Home app.
@@ -161,8 +162,9 @@ The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does n
 5. Wait 2 to 5 seconds. The WiiM loads the results, and the Tab5 shows them.
 6. Touch a result. The WiiM plays it.
 
-Note: the WiiM starts the first result while it loads the results. The Tab5 then puts back the music that played
-before (the same track at the same position), or stops the playback if no music played.
+Note: the WiiM starts the first result while it loads the results. The Tab5 mutes the WiiM during the search. Then
+it puts back the music that played before (the same track at the same position), or stops the playback if no music
+played, and it turns the sound on again.
 
 Note: the search finds tracks. To keep an album, play it and touch the heart button.
 

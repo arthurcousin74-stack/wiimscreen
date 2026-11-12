@@ -40,8 +40,8 @@ Hardware testing in progress.
 ### Changed
 - Faster screens: fonts are no longer reloaded when already loaded; on the search keyboard a key press redraws only
   the key and the field; the waiting rings redraw only the row of playback buttons.
-- Qobuz search: the WiiM starts the search queue as soon as it is created, so the remote now puts back what was
-  playing before (same track and position) or stops playback when nothing was playing.
+- Qobuz search: the WiiM starts the search queue as soon as it is created, so the remote mutes the WiiM during the
+  search, then puts back what was playing before (same track and position) or stops playback, then unmutes.
 - Voice is now only for the search: a microphone in the search field, tap to start listening and tap the red
   button to stop; the text heard fills the field and the search starts. No more microphone on the main screen.
 - Settings › Configuration restarts the Tab5 into setup mode instead of switching live (that froze the device);

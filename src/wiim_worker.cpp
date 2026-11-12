@@ -863,6 +863,7 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
     if (client_.status(st) != WiimError::None) return p;
     p.known = true;
     p.playing = st.playing;
+    p.muted = st.muted;
     p.posMs = st.positionMs;
     if (client_.metaInfo(m) == WiimError::None) p.title = m.title;
     // File en cours (« CurrentQueue ») et place du morceau dedans
@@ -951,6 +952,10 @@ void WiimWorker::runSearch(const String& query) {
         {"query en dernier", base + "track/search?offset=0&limit=50&query=" + enc}};
     const uint32_t t0 = millis();
     const Playback before = snapshot(control);
+    // Le WiiM lance la file de recherche dès sa création : son coupé pendant la recherche, pour ne pas
+    // entendre un morceau que l'on n'a pas choisi ; rétabli après la remise de la musique d'avant.
+    const bool muted = before.known && !before.muted &&
+                       client_.command("setPlayerCmd:mute:1") == WiimError::None;
     wr::QueueInfo best;
     for (auto& v : variants) {
         // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
@@ -983,6 +988,10 @@ void WiimWorker::runSearch(const String& query) {
         if (relevant) break;  // en rapport : terminé ; sinon, écriture suivante
     }
     restoreAfterSearch(control, before);  // le WiiM lance la file de recherche dès sa création
+    if (muted) {
+        vTaskDelay(pdMS_TO_TICKS(600));  // la musique d'avant a repris (ou la lecture est arrêtée)
+        logEvent("Recherche : son r\xC3\xA9tabli (%s)", wiimErrorName(client_.command("setPlayerCmd:mute:0")));
+    }
     logEvent("Recherche : termin\xC3\xA9" "e en %lu ms", (unsigned long)(millis() - t0));
     ev.ok = true;
     ev.tracks = best.items;

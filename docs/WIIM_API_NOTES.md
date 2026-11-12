@@ -167,7 +167,8 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
 - **The WiiM starts playing a queue as soon as it is created** (user report, 2026-11, with `QueuePolicy 0` too).
   The Qobuz search therefore notes what plays before (title, position, `CurrentQueue` and the track's place in
   it) and afterwards puts it back (`CreateQueue` + `PlayQueueWithIndex` + seek), or stops playback if nothing
-  played or the music came from outside a queue. *File du WiiM* now logs the arguments of `CreateQueue`,
+  played or the music came from outside a queue. The WiiM is muted (`setPlayerCmd:mute:1`) for the whole search and
+  unmuted after (user report: a track could still be heard). *File du WiiM* now logs the arguments of `CreateQueue`,
   `SetQueuePolicy`, `SearchQueueOnline`, `GetQueueOnline`, `BackUpQueue`, `AppendQueue`, `BrowseQueueEx`, to look
   for a way to load a queue without playing it.
 - **Verified on a real WiiM (2026-11):** a `Deezer2` queue with `SearchUrl` `https://<id>.airable.io/deezer/album/<id>`
