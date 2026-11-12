@@ -91,6 +91,14 @@ private:
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
     bool qobuzModel(const std::string& control, std::string& templ);
+    struct Playback {
+        bool known = false, playing = false;
+        std::string title, ctx, listName;  // morceau en cours ; file qui le contient (si trouvée)
+        int index = 0;                      // place du morceau dans cette file (1 = premier), 0 si inconnue
+        uint32_t posMs = 0;
+    };
+    Playback snapshot(const std::string& control);
+    void restoreAfterSearch(const std::string& control, const Playback& before);
     bool deezerModel(const std::string& control, std::string& templ);
     void runDeezerSearch(const String& query);
     void runPlayDeezer(int index);

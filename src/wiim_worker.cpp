@@ -414,6 +414,13 @@ bool WiimWorker::findPlayQueue(std::string& control, bool verbose) {
             for (auto& a : wr::parseScpdActions(scpd)) names += (names.empty() ? "" : " ") + a;
             logEvent("File : actions PlayQueue");
             logLong("", names);
+            // Arguments des actions utiles (pour trouver comment préparer une file sans la lancer)
+            for (const char* a : {"CreateQueue", "SetQueuePolicy", "SearchQueueOnline", "GetQueueOnline", "BackUpQueue",
+                                  "AppendQueue", "BrowseQueueEx"}) {
+                std::string list;
+                for (auto& g : wr::parseScpdArguments(scpd, a)) list += (list.empty() ? "" : ", ") + g;
+                if (!list.empty()) logLong((std::string(a) + "(").c_str(), list + ")");
+            }
         }
     }
     return true;
@@ -847,6 +854,69 @@ bool WiimWorker::qobuzModel(const std::string& control, std::string& templ) {
     return false;
 }
 
+// Ce qui joue avant une recherche Qobuz : le WiiM lance la file de recherche dès qu'elle est créée
+// (même avec QueuePolicy 0, constaté sur un WiiM) ; on remet ensuite la musique d'avant.
+WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
+    Playback p;
+    wr::PlayerStatus st;
+    wr::TrackMeta m;
+    if (client_.status(st) != WiimError::None) return p;
+    p.known = true;
+    p.playing = st.playing;
+    p.posMs = st.positionMs;
+    if (client_.metaInfo(m) == WiimError::None) p.title = m.title;
+    // File en cours (« CurrentQueue ») et place du morceau dedans
+    std::string ctx;
+    if (!p.title.empty() && browseQueue(control, "CurrentQueue", ctx) == 200 && !ctx.empty()) {
+        const wr::QueueInfo q = wr::parseQueueContext(ctx);
+        for (size_t k = 0; k < q.items.size(); ++k)
+            if (q.items[k].title == p.title) {
+                p.ctx = ctx;
+                p.listName = q.listName;
+                p.index = (int)k + 1;
+                break;
+            }
+    }
+    logEvent("Avant la recherche : %s \xC2\xAB %s \xC2\xBB%s", p.playing ? "lecture" : "arr\xC3\xAAt", p.title.c_str(),
+             p.index ? " (file connue)" : "");
+    return p;
+}
+
+void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& before) {
+    if (!before.known) return;
+    wr::PlayerStatus st;
+    wr::TrackMeta m;
+    if (client_.status(st) != WiimError::None) return;
+    if (client_.metaInfo(m) == WiimError::None) st.title = m.title;
+    const bool changed = st.playing && (!before.playing || st.title != before.title);
+    if (!changed) {
+        logEvent("Apr\xC3\xA8s la recherche : rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9");
+        return;
+    }
+    std::string resp;
+    if (before.playing && before.index > 0) {
+        // Remise de la file d'avant, au même morceau et à la même position
+        const char* policy = "0";
+        const int c = createQueueQuiet(control, before.ctx, policy);
+        const int p = c == 200 ? upnpRequest(control, "PlayQueueWithIndex",
+                                             wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
+                                                          {{"QueueName", before.listName},
+                                                           {"Index", std::to_string(before.index)}}),
+                                             resp)
+                               : -1;
+        if (p == 200 && before.posMs > 5000) {
+            vTaskDelay(pdMS_TO_TICKS(1500));
+            client_.command("setPlayerCmd:seek:" + String(before.posMs / 1000));
+        }
+        logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise (%d, %d)", c, p);
+    } else {
+        // Rien ne jouait (ou lecture hors file : Spotify, AirPlay…) : on arrête ce que la recherche a lancé
+        const WiimError e = client_.command(before.playing ? "setPlayerCmd:pause" : "setPlayerCmd:stop");
+        logEvent("Apr\xC3\xA8s la recherche : lecture arr\xC3\xAAt\xC3\xA9" "e (%s)", wiimErrorName(e));
+    }
+    nextPoll_ = millis();
+}
+
 void WiimWorker::runSearch(const String& query) {
     searchSource_ = 0;
     WiimEvent ev;
@@ -880,6 +950,7 @@ void WiimWorker::runSearch(const String& query) {
         {"catalog/search tracks", base + "catalog/search?query=" + enc + "&type=tracks&offset=0&limit=50"},
         {"query en dernier", base + "track/search?offset=0&limit=50&query=" + enc}};
     const uint32_t t0 = millis();
+    const Playback before = snapshot(control);
     wr::QueueInfo best;
     for (auto& v : variants) {
         // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
@@ -911,6 +982,7 @@ void WiimWorker::runSearch(const String& query) {
         }
         if (relevant) break;  // en rapport : terminé ; sinon, écriture suivante
     }
+    restoreAfterSearch(control, before);  // le WiiM lance la file de recherche dès sa création
     logEvent("Recherche : termin\xC3\xA9" "e en %lu ms", (unsigned long)(millis() - t0));
     ev.ok = true;
     ev.tracks = best.items;

@@ -30,6 +30,8 @@ struct UpnpService {
 std::vector<UpnpService> parseUpnpServices(const std::string& descriptionXml);
 // Action names of a service description (SCPD).
 std::vector<std::string> parseScpdActions(const std::string& scpdXml);
+// Arguments of one action, as "name" (in) or "->name" (out), in SCPD order.
+std::vector<std::string> parseScpdArguments(const std::string& scpdXml, const std::string& action);
 // "http://host:port" + url if url is relative; url unchanged if absolute.
 std::string upnpUrl(const std::string& base, const std::string& url);
 

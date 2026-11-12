@@ -161,6 +161,22 @@ std::vector<std::string> parseScpdActions(const std::string& scpdXml) {
     return out;
 }
 
+std::vector<std::string> parseScpdArguments(const std::string& scpdXml, const std::string& action) {
+    std::vector<std::string> out;
+    for (const std::string& a : xmlElements(scpdXml, "action")) {
+        std::string name;
+        if (!xmlElement(a, "name", name) || trim(name) != action) continue;
+        for (const std::string& arg : xmlElements(a, "argument")) {
+            std::string n, dir;
+            if (!xmlElement(arg, "name", n)) continue;
+            xmlElement(arg, "direction", dir);
+            out.push_back((trim(dir) == "out" ? "->" : "") + trim(n));
+        }
+        break;
+    }
+    return out;
+}
+
 std::string upnpUrl(const std::string& base, const std::string& url) {
     if (url.compare(0, 7, "http://") == 0 || url.compare(0, 8, "https://") == 0) return url;
     if (url.empty() || url[0] != '/') return base + "/" + url;

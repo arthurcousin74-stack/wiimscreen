@@ -636,6 +636,15 @@ static void test_upnp_description() {
     TEST_ASSERT_EQUAL(2, (int)acts.size());
     TEST_ASSERT_EQUAL_STRING("BrowseQueue", acts[0].c_str());
     TEST_ASSERT_EQUAL_STRING("CreateQueue", acts[1].c_str());
+    auto args = parseScpdArguments(
+        "<actionList><action><name>GetQueueIndex</name><argumentList><argument><name>QueueName</name>"
+        "<direction>in</direction></argument><argument><name>CurrentIndex</name><direction>out</direction>"
+        "</argument></argumentList></action></actionList>",
+        "GetQueueIndex");
+    TEST_ASSERT_EQUAL(2, (int)args.size());
+    TEST_ASSERT_EQUAL_STRING("QueueName", args[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("->CurrentIndex", args[1].c_str());
+    TEST_ASSERT_TRUE(parseScpdArguments(scpd, "Nope").empty());
 
     std::string body = soapBody("urn:schemas-wiimu-com:service:PlayQueue:1", "BrowseQueue", {{"QueueName", "A&B"}});
     TEST_ASSERT_TRUE(body.find("<u:BrowseQueue xmlns:u=\"urn:schemas-wiimu-com:service:PlayQueue:1\">") !=
