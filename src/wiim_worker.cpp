@@ -2,9 +2,11 @@
 
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 #include <algorithm>
 
+#include "ca_bundle.h"
 #include "discovery.h"
 #include "favorites.h"
 #include "log.h"
@@ -611,6 +613,77 @@ void WiimWorker::runSearchTest(const String& query) {
         upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
     }
     logEvent("Essai favoris Qobuz : termin\xC3\xA9 (rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9)");
+    runDeezerTest(control, query.length() ? query : String("Daft Punk"));
+}
+
+// Essai Deezer : recherche publique Deezer (sans clé), puis files « Deezer2 » (passerelle airable du
+// WiiM) avec l'album et le morceau trouvés, et quelques adresses de recherche airable possibles.
+void WiimWorker::runDeezerTest(const std::string& control, const String& query) {
+    std::string templ, resp;
+    if (!fav::sourceModel("Deezer2", templ)) {
+        for (auto& n : queueNames(control, false)) {
+            std::string ctx;
+            if (browseQueue(control, n, ctx) == 200 && wr::parseQueueContext(ctx).sourceName.rfind("Deezer", 0) == 0) {
+                fav::saveSourceModel(wr::parseQueueContext(ctx).sourceName, ctx);
+                templ = ctx;
+                break;
+            }
+        }
+    }
+    if (templ.empty()) {
+        logEvent("Essai Deezer : aucun mod\xC3\xA8le (lance un album Deezer depuis l'app puis touche File du WiiM)");
+        return;
+    }
+    const wr::QueueInfo model = wr::parseQueueContext(templ);
+    const std::string base = wr::urlOrigin(model.searchUrl);
+    logEvent("Essai Deezer (\xC2\xAB %s \xC2\xBB), source %s, passerelle %s", query.c_str(), model.sourceName.c_str(),
+             base.empty() ? "?" : "airable");
+    if (base.empty()) return;
+    // Recherche publique Deezer : morceaux, avec leur album
+    std::vector<wr::DeezerTrack> found;
+    {
+        WiFiClientSecure tls;
+        tls.setCACertBundle(ca_bundle_start, caBundleSize());
+        tls.setHandshakeTimeout(8);
+        HTTPClient http;
+        http.setConnectTimeout(6000);
+        http.setTimeout(10000);
+        http.setReuse(false);
+        const std::string url = "https://api.deezer.com/search?q=" + wr::urlQueryEncode(query.c_str()) + "&limit=10";
+        int code = -1;
+        if (http.begin(tls, url.c_str())) {
+            code = http.GET();
+            if (code == 200 && http.getSize() < 512 * 1024) found = wr::parseDeezerTracks(http.getString().c_str());
+            http.end();
+        }
+        logEvent("  api.deezer.com : %d, %u morceau(x)", code, (unsigned)found.size());
+        for (size_t i = 0; i < found.size() && i < 2; ++i)
+            logLong("  - ", found[i].title + " \xE2\x80\x94 " + found[i].artist + " (album " + found[i].album + ")");
+    }
+    std::vector<std::pair<std::string, std::string>> variants;
+    if (!found.empty()) {
+        variants.push_back({"album Deezer", base + "/deezer/album/" + std::to_string(found[0].albumId)});
+        variants.push_back({"morceau Deezer", base + "/deezer/track/" + std::to_string(found[0].id)});
+    }
+    const std::string enc = wr::urlQueryEncode(query.c_str());
+    variants.push_back({"recherche airable 1", base + "/deezer/search?q=" + enc});
+    variants.push_back({"recherche airable 2", base + "/deezer/search/tracks?q=" + enc});
+    for (auto& v : variants) {
+        const std::string name = std::string("wiimscreen-essai-") + std::to_string(++searchCount_ % 2);
+        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+        const char* policy = "0";
+        int create = createQueueQuiet(control, wr::queueFromTemplate(templ, name, v.second), policy);
+        logEvent("Essai %s : CreateQueue %d", v.first.c_str(), create);
+        logLong("envoy\xC3\xA9 ", v.second.substr(base.size()));  // sans l'adresse de la passerelle
+        if (create != 200) continue;
+        wr::QueueInfo q;
+        const bool ok = readQueueStable(control, name, 8, q);
+        logEvent("  %d piste(s)", ok ? q.tracks : 0);
+        for (size_t i = 0; i < q.items.size() && i < 2; ++i)
+            logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
+        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    }
+    logEvent("Essai Deezer : termin\xC3\xA9 (rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9)");
 }
 
 // ---------------------------------------------------------------------------
@@ -629,8 +702,9 @@ static bool readQueueStable(const std::string& control, const std::string& name,
         std::string back;
         if (browseQueue(control, name, back) != 200 || back.empty()) continue;
         wr::QueueInfo q = wr::parseQueueContext(back);
+        // Stable : même nombre 4 fois de suite (~3 s) et au moins 3 s d'attente (favoris : chargés lentement)
         if (q.tracks > 0 && q.tracks == last) {
-            if (++stable >= 2) break;
+            if (++stable >= 4 && (int32_t)(millis() - (until - seconds * 1000UL)) >= 3000) break;
         } else {
             stable = 0;
         }

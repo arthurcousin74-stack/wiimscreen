@@ -150,9 +150,22 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   that a search started the first result; the remote now never starts a search queue and creates it with
   `QueuePolicy 0` first — 1, then no argument, if refused. Whether 0 avoids playback: not known yet.)*
 
-- Journal › *Essai favoris*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums` (the
-  user's Qobuz favorites, if the WiiM adds its user token to the request), read back without playing. Outcome:
-  not known yet.
+- Journal › *Essais*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums`, read back
+  without playing. **First result on a real WiiM: the tracks query loaded 1 favorite track** (so the WiiM does add
+  the user's token); the read-back was probably too short (now: stable for ~3 s, 3 s minimum). Albums: not known.
+- **PlayQueue actions on a WiiM (SCPD, 2026-11):** `CreateQueue ReplaceQueue DeleteQueue BackUpQueue AppendQueue
+  BrowseQueue BrowseQueueEx SetQueueLoopMode GetQueueLoopMode SetQueuePolicy PlayQueueWithIndex
+  AppendTracksInQueue AppendTracksInQueueEx RemoveTracksInQueue MoveTracksInQueue GetKeyMapping SetKeyMapping
+  GetQueueOnline SearchQueueOnline SetQueueRecord SetSongsRecord UserRegister…` (`SearchQueueOnline` not tried).
+
+### Deezer
+
+- A Deezer album started from the WiiM Home app gives a queue with **`SourceName` `Deezer2`** and
+  `SearchUrl` **`https://<id>.airable.io/deezer/album/<Deezer album id>`** (airable: the music-service gateway the
+  WiiM uses; `<id>` looks specific to the device or account, do not publish it). 11 tracks, read with `BrowseQueue`.
+- Deezer's public search `https://api.deezer.com/search?q=…` needs no key (`wr::parseDeezerTracks`).
+- Journal › *Essais* tries, on the same gateway: `/deezer/album/<id>` and `/deezer/track/<id>` from a public
+  search, and two guesses of an airable search path. Outcome: not known yet.
 - *File du WiiM* also keeps a model of queues from other sources (`/fav/model_<source>.xml`, e.g. Deezer) for
   later work.
 

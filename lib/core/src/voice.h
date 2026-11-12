@@ -40,6 +40,13 @@ struct RadioStation {
 };
 // Réponse JSON de Radio Browser (/json/stations/search)
 std::vector<RadioStation> parseRadioBrowser(const std::string& json);
+
+// Deezer public search (api.deezer.com/search?q=…, no key): tracks with their album
+struct DeezerTrack {
+    long id = 0, albumId = 0;
+    std::string title, artist, album, cover;
+};
+std::vector<DeezerTrack> parseDeezerTracks(const std::string& json);
 // Meilleure station pour la recherche : nom le plus proche, flux direct de préférence,
 // puis la plus écoutée. -1 si aucune.
 int bestStation(const std::vector<RadioStation>& stations, const std::string& query);

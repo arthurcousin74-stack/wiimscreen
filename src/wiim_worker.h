@@ -85,6 +85,7 @@ private:
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
     void runSearchTest(const String& query);
+    void runDeezerTest(const std::string& control, const String& query);
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
     bool qobuzModel(const std::string& control, std::string& templ);

@@ -78,6 +78,8 @@ std::vector<Favorite> favoritesFromText(const std::string& text);
 // the source name, account and quality the player expects): ListName and SearchUrl replaced, track list
 // removed (the player is expected to fetch the tracks from SearchUrl). Empty string if no <PlayList>.
 std::string queueFromTemplate(const std::string& templ, const std::string& listName, const std::string& searchUrl);
+// "https://host:port" part of a URL (empty if not http/https).
+std::string urlOrigin(const std::string& url);
 // Percent-encoding for a URL query value (RFC 3986 unreserved characters kept).
 std::string urlQueryEncode(const std::string& s);
 

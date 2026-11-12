@@ -1131,7 +1131,7 @@ void loop() {
             g_logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitLogTest(t.x, t.y)) {
             sound::tap();
-            logEvent("Appui Essai favoris");
+            logEvent("Appui Essais (favoris Qobuz, Deezer)");
             g_worker.testQobuzSearch(g_state.player.artist.c_str());  // artiste en cours, sinon Miles Davis
             g_logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitSearch(t.x, t.y)) {

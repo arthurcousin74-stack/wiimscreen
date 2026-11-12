@@ -758,6 +758,25 @@ static void test_shares_word() {
     TEST_ASSERT_FALSE(sharesWord("a b", {"a b c"}));  // mots trop courts : pas de preuve
 }
 
+static void test_deezer() {
+    const std::string json =
+        "{\"data\":[{\"id\":3135556,\"readable\":true,\"title\":\"Harder, Better, Faster, Stronger\","
+        "\"duration\":224,\"artist\":{\"id\":27,\"name\":\"Daft Punk\",\"type\":\"artist\"},"
+        "\"album\":{\"id\":302127,\"title\":\"Discovery\",\"cover_medium\":\"https:\\/\\/e-cdns.dzcdn.net\\/a.jpg\","
+        "\"type\":\"album\"},\"type\":\"track\"},{\"id\":0,\"title\":\"\"}],\"total\":2,\"next\":\"x\"}";
+    auto t = parseDeezerTracks(json);
+    TEST_ASSERT_EQUAL(1, (int)t.size());  // l'objet sans id est ignoré
+    TEST_ASSERT_EQUAL(3135556, (int)t[0].id);
+    TEST_ASSERT_EQUAL(302127, (int)t[0].albumId);
+    TEST_ASSERT_EQUAL_STRING("Harder, Better, Faster, Stronger", t[0].title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Daft Punk", t[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("Discovery", t[0].album.c_str());
+    TEST_ASSERT_TRUE(parseDeezerTracks("{\"error\":{}}").empty());
+    TEST_ASSERT_EQUAL_STRING("https://123.airable.io", urlOrigin("https://123.airable.io/deezer/album/1137050721").c_str());
+    TEST_ASSERT_EQUAL_STRING("http://h:49152", urlOrigin("http://h:49152?x").c_str());
+    TEST_ASSERT_EQUAL_STRING("", urlOrigin("ftp://h/x").c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -774,6 +793,7 @@ int main() {
     RUN_TEST(test_queue_template);
     RUN_TEST(test_keyboard);
     RUN_TEST(test_shares_word);
+    RUN_TEST(test_deezer);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

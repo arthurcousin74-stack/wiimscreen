@@ -295,6 +295,32 @@ std::vector<RadioStation> parseRadioBrowser(const std::string& json) {
     return out;
 }
 
+std::vector<DeezerTrack> parseDeezerTracks(const std::string& json) {
+    std::vector<DeezerTrack> out;
+    size_t d = json.find("\"data\"");
+    if (d == std::string::npos) return out;
+    d = json.find('[', d);
+    if (d == std::string::npos) return out;
+    for (auto& obj : jsonObjects(json.substr(d + 1))) {
+        DeezerTrack t;
+        jsonInt(obj, "id", t.id);  // premier « id » : celui du morceau
+        jsonString(obj, "title", t.title);
+        size_t a = obj.find("\"artist\"");
+        if (a != std::string::npos) jsonString(obj.substr(a), "name", t.artist);
+        size_t al = obj.find("\"album\"");
+        if (al != std::string::npos) {
+            const std::string album = obj.substr(al);
+            jsonInt(album, "id", t.albumId);
+            jsonString(album, "title", t.album);
+            std::string c;
+            if (jsonString(album, "cover_medium", c) && isHttpUrl(c)) t.cover = c;
+        }
+        if (t.id > 0 && !t.title.empty()) out.push_back(t);
+        if (out.size() >= 50) break;
+    }
+    return out;
+}
+
 int bestStation(const std::vector<RadioStation>& st, const std::string& query) {
     const std::string q = normalizeText(query);
     int best = -1;

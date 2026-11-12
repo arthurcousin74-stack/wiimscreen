@@ -1241,7 +1241,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     if (logTest_.x < titleRight) logTest_.y = Y + bh + sc(10), logTest_.x = logClose_.right() - tw;  // portrait : dessous
     C.fillRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kCard);
     C.drawRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kTrack);
-    C.drawString("Essai favoris", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
+    C.drawString("Essais", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     C.loadFont(kTiny);

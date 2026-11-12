@@ -318,6 +318,14 @@ std::string queueFromTemplate(const std::string& templ, const std::string& listN
     return "<?xml version=\"1.0\"?>" + x;
 }
 
+std::string urlOrigin(const std::string& url) {
+    size_t scheme = url.find("://");
+    if (scheme == std::string::npos || (url.compare(0, scheme, "http") != 0 && url.compare(0, scheme, "https") != 0))
+        return "";
+    size_t end = url.find_first_of("/?#", scheme + 3);
+    return url.substr(0, end);
+}
+
 std::string urlQueryEncode(const std::string& s) {
     static const char* hex = "0123456789ABCDEF";
     std::string o;
