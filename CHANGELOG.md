@@ -20,7 +20,9 @@ Hardware testing in progress.
 - PC preview tool rendering the real UI to PNG; native unit tests for all hardware-free logic.
 - Navigation bar on the left (top in portrait): 🏠 main screen, ⚙ settings; also shown on the settings and log
   screens. The ambient view has its own 🏠. A 3 s press on the album art still opens the settings.
-- Settings menu: touch test and event log (for hardware bug reports).
+- Settings menu: touch test and event log (for hardware bug reports). The log wraps long lines and has a
+  *File du WiiM* button: a read-only check of the WiiM's undocumented UPnP PlayQueue service (first step towards
+  Qobuz favorites).
 - Dark, phone-friendly setup and update pages: Wi-Fi list with signal strength, show-password toggle, folded
   advanced sections, file name and progress on the update page.
 

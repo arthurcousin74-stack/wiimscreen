@@ -904,6 +904,11 @@ void loop() {
             g_logOpen = false;
             g_lastTouch = now;
             show();
+        } else if (t.wasPressed() && g_ui.hitLogQueue(t.x, t.y)) {
+            sound::tap();
+            logEvent("Appui File du WiiM");
+            g_worker.checkQueue();  // résultat dans le journal (tâche de fond)
+            g_logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
             sound::tap();
             g_logOpen = false;

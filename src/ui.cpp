@@ -973,29 +973,39 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
     C.drawString("Journal", X, Y);
+    const int bw = sc(150), bh = sc(44), qw = sc(170);
     C.loadFont(kSmall);
     C.setTextColor(kText2);
-    C.drawString((String("Version ") + version).c_str(), X + sc(150), Y + sc(6));
-    const int bw = sc(150), bh = sc(44);
+    const String ver = String("Version ") + version;
+    if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(24) - qw)  // sinon : version dans Réglages
+        C.drawString(ver.c_str(), X + sc(150), Y + sc(6));
     logClose_ = wr::Rect{W - bw - m, Y, bw, bh};
     C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
     C.drawString("Fermer", logClose_.x + bw / 2, logClose_.y + bh / 2 + 1);
-    // Lignes : police fine, deux colonnes en paysage
+    // Diagnostic de la file de lecture du WiiM (service UPnP PlayQueue)
+    logQueue_ = wr::Rect{logClose_.x - sc(12) - qw, Y, qw, bh};
+    C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
+    C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
+    C.drawString("File du WiiM", logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
+    // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
+    // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     C.loadFont(kTiny);
     C.setTextDatum(textdatum_t::top_left);
     const int top = Y + bh + sc(14), lh = C.fontHeight() + sc(2);
-    const int perCol = std::max(1, (H - top - m) / lh);
-    const int cols = W > H ? 2 : 1, colW = (W - X - m) / cols;
-    const int maxShown = perCol * cols;
-    const int first = std::max(0, (int)lines.size() - maxShown);
+    const int rowsFit = std::max(1, (H - top - m) / lh), textW = W - X - m;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
-    for (int i = first; i < (int)lines.size(); ++i) {
-        int k = i - first, col = k / perCol, row = k % perCol;
-        auto fitted = wr::wrapText(lines[i].c_str(), colW - sc(12), 1, measure);
-        C.setTextColor(i == (int)lines.size() - 1 ? kText : kText2);
-        C.drawString(fitted.empty() ? "" : fitted[0].c_str(), X + col * colW, top + row * lh);
+    std::vector<std::pair<std::string, bool>> rows;  // texte, dernière entrée
+    for (int i = (int)lines.size() - 1; i >= 0 && (int)rows.size() < rowsFit; --i) {
+        auto wrapped = wr::wrapText(lines[i].c_str(), textW, 3, measure);
+        for (int k = (int)wrapped.size() - 1; k >= 0 && (int)rows.size() < rowsFit; --k)
+            rows.emplace_back((k ? "    " : "") + wrapped[k], i == (int)lines.size() - 1);
+    }
+    for (int r = 0; r < (int)rows.size(); ++r) {
+        const auto& row = rows[rows.size() - 1 - r];
+        C.setTextColor(row.second ? kText : kText2);
+        C.drawString(row.first.c_str(), X, top + r * lh);
     }
     present();
 }

@@ -95,6 +95,33 @@ WiiM players are UPnP **MediaRenderers**. An SSDP `M-SEARCH` to `239.255.255.250
 IP to keep only WiiM/LinkPlay devices and read their name and `uuid` **[code: discovery.cpp, core.cpp]**.
 Routers with client isolation (guest networks) block this.
 
+## Play queue: UPnP `PlayQueue` service (undocumented)
+
+Not in WiiM's PDF; known from community reverse engineering **[forum]**, not yet verified by wiimscreen on a real
+WiiM (Réglages › Journal › *File du WiiM* runs a read-only check and logs what the device answers).
+
+- Plain HTTP SOAP on the UPnP port: device description at `http://<ip>:49152/description.xml` (59152 on some
+  LinkPlay players). Service type `urn:schemas-wiimu-com:service:PlayQueue:1`, control URL usually
+  `/upnp/control/PlayQueue1`, action list in `/upnp/PlayQueueSCPD.xml` **[forum]**.
+- Header `SOAPACTION: "urn:schemas-wiimu-com:service:PlayQueue:1#<Action>"`. Actions reported: `CreateQueue`,
+  `PlayQueueWithIndex`, `BrowseQueue`, `AppendTracksInQueue`, `DeleteQueue`, `ReplaceQueue`, `GetQueueIndex`,
+  `SetQueueLoopMode`… **[forum, linkplay-console]**.
+- `CreateQueue(QueueContext, QueuePolicy)`: `QueueContext` is an escaped XML `<PlayList>` with `<ListName>`,
+  `<ListInfo>` (`SourceName`, `TrackNumber`, `SearchUrl`, `Quality`…) and `<Tracks><Track1>…` (each with `URL`,
+  `Source`, `Id`, `Key`, `Metadata` = DIDL-Lite, escaped again). Then `PlayQueueWithIndex(QueueName, Index)` with
+  the **same name**; the index is 1-based **[linkplay-console]**.
+- **Qobuz**: a 2023 forum post builds a queue with `<SourceName>Qobuz</SourceName>`, a `<SearchUrl>` pointing to
+  `https://www.qobuz.com/api.json/0.2/album/get?album_id=…` (or `playlist/get?…`) and `<Login_username>`, **without
+  tracks**; the WiiM then fetches and streams the tracks with its own Qobuz login **[forum, unconfirmed]**. If this
+  holds, an album can be started from its ID alone, without any Qobuz API key on our side.
+- `BrowseQueue(QueueName)` returns the stored queue (`QueueContext`); `TotalQueue` is tried for an overview.
+  An unknown name answers HTTP 500 **[linkplay-console]**.
+
+Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-to-start-a-qobuz-playlist-and-or-wiim-preset-from-the-http-api.968/),
+[Arylic forum (SOAP example)](https://forum.arylic.com/t/http-control-multiroom-tunein/241),
+[linkplay-console PR 35](https://github.com/laozhudu/linkplay-console/pull/35),
+[wiimplay (Go)](https://pkg.go.dev/github.com/shumatech/wiimplay/upnp).
+
 ## What the local API does not do
 
 - **No catalog search** (Qobuz, Spotify, TIDAL…): search the service's own API, then play a URL or use Connect

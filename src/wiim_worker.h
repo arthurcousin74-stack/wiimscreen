@@ -47,6 +47,9 @@ public:
     void command(const String& cmd);
     void refreshPresets();
     void pollSoon();
+    // Diagnostic : lit la file de lecture du WiiM (service UPnP PlayQueue, non documenté)
+    // et écrit un résumé dans le journal ; le XML complet (secrets masqués) part sur le port série.
+    void checkQueue();
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
     bool takeReport(WiimReport& out);
@@ -60,6 +63,7 @@ private:
     void pollOnce();
     bool rediscover();
     void learnIdentity();
+    void runQueueCheck();
     void push(WiimEvent&& e);
     void notePinning(WiimError e);
     bool commandsWaiting();
@@ -73,6 +77,7 @@ private:
     uint32_t executed_ = 0;  // sous verrou
     bool presetsWanted_ = false;
     bool pollWanted_ = false;
+    bool queueWanted_ = false;
     bool hasReport_ = false;
     WiimReport report_;
     std::deque<WiimEvent> events_;

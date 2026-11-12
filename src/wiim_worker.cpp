@@ -1,7 +1,13 @@
 #include "wiim_worker.h"
 
+#include <HTTPClient.h>
+#include <WiFi.h>
+
+#include <algorithm>
+
 #include "discovery.h"
 #include "log.h"
+#include "upnp.h"
 
 // Connexion gardée ouverte (WiimClient) : un relevé coûte ~0,1 s, on peut relever souvent
 static constexpr uint32_t kPollPlayingMs = 1500;
@@ -52,6 +58,13 @@ void WiimWorker::refreshPresets() {
 void WiimWorker::pollSoon() {
     xSemaphoreTake(lock_, portMAX_DELAY);
     pollWanted_ = true;
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
+void WiimWorker::checkQueue() {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    queueWanted_ = true;
     xSemaphoreGive(lock_);
     xTaskNotifyGive(task_);
 }
@@ -229,8 +242,8 @@ void WiimWorker::run() {
             execute(cmd);
         }
         xSemaphoreTake(lock_, portMAX_DELAY);
-        bool presets = presetsWanted_, pollNow = pollWanted_;
-        presetsWanted_ = pollWanted_ = false;
+        bool presets = presetsWanted_, pollNow = pollWanted_, queue = queueWanted_;
+        presetsWanted_ = pollWanted_ = queueWanted_ = false;
         xSemaphoreGive(lock_);
         if (presets) {
             WiimEvent ev;
@@ -241,6 +254,187 @@ void WiimWorker::run() {
             notePinning(ev.error);
             push(std::move(ev));
         }
+        if (queue) runQueueCheck();
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic de la file de lecture (UPnP PlayQueue)
+
+namespace {
+
+constexpr const char* kPlayQueue = "urn:schemas-wiimu-com:service:PlayQueue:1";
+constexpr size_t kMaxBody = 192 * 1024;
+
+// Flux qui garde au plus `cap` octets (HTTPClient gère « chunked » et Content-Length)
+class CapStream : public Stream {
+public:
+    explicit CapStream(size_t cap) : cap_(cap) {}
+    size_t write(uint8_t c) override { return write(&c, 1); }
+    size_t write(const uint8_t* b, size_t n) override {
+        size_t room = data.size() < cap_ ? cap_ - data.size() : 0;
+        data.append(reinterpret_cast<const char*>(b), std::min(room, n));
+        truncated |= n > room;
+        return n;
+    }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+    std::string data;
+    bool truncated = false;
+
+private:
+    size_t cap_;
+};
+
+// GET ou POST SOAP en HTTP simple (l'UPnP du WiiM n'est pas chiffré)
+int upnpRequest(const std::string& url, const char* soapAction, const std::string& body, std::string& out,
+                bool* truncated = nullptr) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setConnectTimeout(2500);
+    http.setTimeout(6000);
+    http.setReuse(false);
+    if (!http.begin(client, url.c_str())) return -1;
+    int code;
+    if (soapAction) {
+        http.addHeader("Content-Type", "text/xml; charset=\"utf-8\"");
+        http.addHeader("SOAPACTION", (String("\"") + kPlayQueue + "#" + soapAction + "\"").c_str());
+        code = http.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(body.data())), body.size());
+    } else {
+        code = http.GET();
+    }
+    CapStream s(kMaxBody);
+    if (code > 0) http.writeToStream(&s);
+    http.end();
+    out.swap(s.data);
+    if (truncated) *truncated = s.truncated;
+    return code;
+}
+
+// Journal : lignes courtes (l'écran coupe au-delà), découpées si besoin
+void logLong(const char* label, const std::string& text) {
+    const size_t kChunk = 56;  // une ligne de l'écran du journal
+    if (text.size() <= kChunk) {
+        logEvent("  %s%s", label, text.c_str());
+        return;
+    }
+    for (size_t i = 0; i < text.size() && i < kChunk * 6; i += kChunk)
+        logEvent("  %s%s", i == 0 ? label : "  ", text.substr(i, kChunk).c_str());
+}
+
+// Copie complète sur le port série, sans jeton ni compte en clair
+void serialDump(const char* title, const std::string& xml, const std::string& user) {
+    std::string safe = wr::maskSecrets(xml);
+    if (!user.empty()) {
+        size_t p = 0;
+        const std::string masked = wr::maskAccount(user);
+        while ((p = safe.find(user, p)) != std::string::npos) safe.replace(p, user.size(), masked), p += masked.size();
+    }
+    Serial.printf("----- %s (%u octets) -----\n", title, (unsigned)safe.size());
+    for (size_t i = 0; i < safe.size(); i += 256) Serial.write(safe.data() + i, std::min<size_t>(256, safe.size() - i));
+    Serial.println("\n----- fin -----");
+}
+
+}  // namespace
+
+void WiimWorker::runQueueCheck() {
+    std::string host = cfg_.host.c_str();
+    if (host.empty()) {
+        logEvent("File : aucun WiiM choisi");
+        return;
+    }
+    size_t colon = host.find(':');
+    if (colon != std::string::npos) host.resize(colon);
+    logEvent("File du WiiM : recherche du service UPnP\xE2\x80\xA6");
+
+    // 1. Description de l'appareil : 49152 (WiiM) ou 59152 (autres LinkPlay)
+    std::string base, desc;
+    for (int port : {49152, 59152}) {
+        std::string b = "http://" + host + ":" + std::to_string(port);
+        if (upnpRequest(b + "/description.xml", nullptr, "", desc) == 200 && !desc.empty()) {
+            base = b;
+            break;
+        }
+    }
+    if (base.empty()) {
+        logEvent("File : description UPnP introuvable (ports 49152, 59152)");
+        return;
+    }
+    auto services = wr::parseUpnpServices(desc);
+    std::string types;
+    const wr::UpnpService* pq = nullptr;
+    for (auto& s : services) {
+        size_t c = s.type.rfind(":service:");
+        types += (types.empty() ? "" : ", ") + (c == std::string::npos ? s.type : s.type.substr(c + 9));
+        if (s.type == kPlayQueue) pq = &s;
+    }
+    logEvent("File : %s, %u services", base.c_str(), (unsigned)services.size());
+    logLong("", types);
+    if (!pq) {
+        logEvent("File : pas de service PlayQueue sur ce lecteur");
+        return;
+    }
+    const std::string control = wr::upnpUrl(base, pq->controlUrl);
+
+    // 2. Actions offertes (SCPD)
+    std::string scpd;
+    if (upnpRequest(wr::upnpUrl(base, pq->scpdUrl), nullptr, "", scpd) == 200) {
+        std::string names;
+        for (auto& a : wr::parseScpdActions(scpd)) names += (names.empty() ? "" : " ") + a;
+        logEvent("File : actions PlayQueue");
+        logLong("", names);
+    }
+
+    // 3. Vue d'ensemble (« TotalQueue »), puis chaque file nommée
+    auto browse = [&](const std::string& name, std::string& ctx) -> int {
+        std::string resp;
+        bool cut = false;
+        int code = upnpRequest(control, "BrowseQueue", wr::soapBody(kPlayQueue, "BrowseQueue", {{"QueueName", name}}),
+                               resp, &cut);
+        if (cut) logEvent("File : r\xC3\xA9ponse tronqu\xC3\xA9" "e \xC3\xA0 %u Ko", (unsigned)(kMaxBody / 1024));
+        std::string raw;
+        ctx = code == 200 && wr::xmlElement(resp, "QueueContext", raw) ? wr::xmlUnescape(raw) : std::string();
+        return code;
+    };
+    std::string total;
+    int code = browse("TotalQueue", total);
+    std::vector<std::string> names;
+    if (code == 200 && !total.empty()) {
+        serialDump("BrowseQueue TotalQueue", total, "");
+        for (auto& n : wr::xmlElements(total, "ListName")) {
+            std::string v = wr::xmlUnescape(n);
+            if (!v.empty() && v != "TotalQueue" && std::find(names.begin(), names.end(), v) == names.end())
+                names.push_back(v);
+        }
+        std::string list;
+        for (auto& n : names) list += (list.empty() ? "" : " | ") + n;
+        logEvent("File : %u file(s) sur le WiiM", (unsigned)names.size());
+        if (!list.empty()) logLong("", list);
+    } else {
+        logEvent("File : BrowseQueue(TotalQueue) -> %d", code);
+    }
+    // Noms vus ailleurs (app WiiM, autres projets) si la vue d'ensemble n'a rien donné
+    if (names.empty()) names = {"CurrentQueue", "USBDiskQueue", "Qobuz", "TIDAL", "Amazon"};
+
+    int shown = 0;
+    for (auto& n : names) {
+        if (shown >= 4) break;
+        std::string ctx;
+        int c = browse(n, ctx);
+        if (c != 200 || ctx.empty()) continue;
+        ++shown;
+        wr::QueueInfo q = wr::parseQueueContext(ctx);
+        serialDump(("BrowseQueue " + n).c_str(), ctx, q.user);
+        logEvent("File \xC2\xAB %s \xC2\xBB : source %s, %d piste(s)%s%s", q.listName.empty() ? n.c_str() : q.listName.c_str(),
+                 q.sourceName.empty() ? "?" : q.sourceName.c_str(), q.declaredTracks >= 0 ? q.declaredTracks : q.tracks,
+                 q.quality.empty() ? "" : ", qualit\xC3\xA9 ", q.quality.c_str());
+        if (!q.searchUrl.empty()) logLong("SearchUrl ", wr::maskSecrets(q.searchUrl));
+        if (!q.user.empty()) logEvent("  compte %s", wr::maskAccount(q.user).c_str());
+        for (auto& t : q.titles) logLong("- ", t);
+    }
+    if (!shown) logEvent("File : aucune file lisible (lance un album depuis l'app, puis r\xC3\xA9" "essaie)");
+    logEvent("File du WiiM : termin\xC3\xA9 (XML complet sur le port s\xC3\xA9rie)");
 }

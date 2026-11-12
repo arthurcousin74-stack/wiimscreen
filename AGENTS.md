@@ -26,6 +26,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | Voice intent parsing (French), speech endpointing, Radio Browser parsing, WAV header |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
+| `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
 | `test/test_core/test_main.cpp` | Unity tests for everything in `lib/core` |
 | `src/main.cpp` | Setup, main loop (touch, drawing, applying WiiM state), ambient view, voice flow, menus |
 | `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery |

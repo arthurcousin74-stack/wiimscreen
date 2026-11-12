@@ -234,6 +234,23 @@ int main(int argc, char** argv) {
         up.setActivePreset(1);
         up.render(st);
         save(out, "9-portrait.ppm");
+        std::vector<String> jl = {
+            "  812.4 s  Appui File du WiiM",
+            "  812.4 s  File du WiiM : recherche du service UPnP\xE2\x80\xA6",
+            "  812.6 s  File : http://192.168.1.50:49152, 6 services",
+            "  812.6 s    AVTransport:1, ConnectionManager:1, RenderingControl:1, PlayQueue:1, QPlay:1",
+            "  812.8 s  File : actions PlayQueue",
+            "  812.8 s    BrowseQueue CreateQueue DeleteQueue PlayQueueWithIndex AppendTracksInQueue",
+            "  813.1 s  File : 2 file(s) sur le WiiM",
+            "  813.1 s    Kind of Blue | USBDiskQueue",
+            "  813.4 s  File \xC2\xAB Kind of Blue \xC2\xBB : source Qobuz, 5 piste(s), qualit\xC3\xA9 6",
+            "  813.4 s    SearchUrl https://www.qobuz.com/api.json/0.2/album/get?album_id=",
+            "  813.4 s      0886443927087&extra=tracks",
+            "  813.4 s    compte ar***@gm***",
+            "  813.4 s    - So What",
+            "  813.5 s  File du WiiM : termin\xC3\xA9 (XML complet sur le port s\xC3\xA9rie)"};
+        up.renderLog(jl, "57-219c0bc");
+        save(out, "22-journal-portrait.ppm");
         D.deleteSprite();
         D.createSprite(1280, 720);
     }
@@ -245,6 +262,25 @@ int main(int argc, char** argv) {
 
     ui.renderMenu("57-219c0bc");
     save(out, "13-menu.ppm");
+    {
+            std::vector<String> jl = {
+            "  812.4 s  Appui File du WiiM",
+            "  812.4 s  File du WiiM : recherche du service UPnP\xE2\x80\xA6",
+            "  812.6 s  File : http://192.168.1.50:49152, 6 services",
+            "  812.6 s    AVTransport:1, ConnectionManager:1, RenderingControl:1, PlayQueue:1, QPlay:1",
+            "  812.8 s  File : actions PlayQueue",
+            "  812.8 s    BrowseQueue CreateQueue DeleteQueue PlayQueueWithIndex AppendTracksInQueue",
+            "  813.1 s  File : 2 file(s) sur le WiiM",
+            "  813.1 s    Kind of Blue | USBDiskQueue",
+            "  813.4 s  File \xC2\xAB Kind of Blue \xC2\xBB : source Qobuz, 5 piste(s), qualit\xC3\xA9 6",
+            "  813.4 s    SearchUrl https://www.qobuz.com/api.json/0.2/album/get?album_id=",
+            "  813.4 s      0886443927087&extra=tracks",
+            "  813.4 s    compte ar***@gm***",
+            "  813.4 s    - So What",
+            "  813.5 s  File du WiiM : termin\xC3\xA9 (XML complet sur le port s\xC3\xA9rie)"};
+        ui.renderLog(jl, "57-219c0bc");
+        save(out, "21-journal.ppm");
+    }
     ui.renderTouchTest(820, 470, 7);
     save(out, "18-test-tactile.ppm");
     ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");

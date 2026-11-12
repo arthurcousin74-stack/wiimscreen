@@ -7,6 +7,7 @@
 #include "dsp.h"
 #include "voice.h"
 #include "firmware.h"
+#include "upnp.h"
 
 #include <cmath>
 
@@ -593,6 +594,87 @@ static void test_firmware_stream() {
     TEST_ASSERT_EQUAL(FirmwareStream::Invalid, z.kind());
 }
 
+static void test_upnp_xml() {
+    TEST_ASSERT_EQUAL_STRING("a<b>&\"c'", xmlUnescape("a&lt;b&gt;&amp;&quot;c&apos;").c_str());
+    TEST_ASSERT_EQUAL_STRING("\xC3\xA9 \xE2\x82\xAC", xmlUnescape("&#233; &#x20AC;").c_str());
+    TEST_ASSERT_EQUAL_STRING("&unknown; & x", xmlUnescape("&unknown; & x").c_str());
+    TEST_ASSERT_EQUAL_STRING("&lt;a&gt; &amp;", xmlEscape("<a> &").c_str());
+    std::string v;
+    TEST_ASSERT_TRUE(xmlElement("<s:Body><u:X a=\"1\"><Q>v1</Q></u:X></s:Body>", "X", v));
+    TEST_ASSERT_EQUAL_STRING("<Q>v1</Q>", v.c_str());
+    TEST_ASSERT_TRUE(xmlElement("<a><Empty/><b>2</b></a>", "Empty", v));
+    TEST_ASSERT_EQUAL_STRING("", v.c_str());
+    TEST_ASSERT_FALSE(xmlElement("<a>open", "a", v));
+    TEST_ASSERT_FALSE(xmlElement("<ab>1</ab>", "a", v));  // nom exact
+    auto all = xmlElements("<l><i>1</i><i>2</i><j>x</j><i>3</i></l>", "i");
+    TEST_ASSERT_EQUAL(3, (int)all.size());
+    TEST_ASSERT_EQUAL_STRING("3", all[2].c_str());
+}
+
+static void test_upnp_description() {
+    const std::string desc =
+        "<?xml version=\"1.0\"?><root xmlns=\"urn:schemas-upnp-org:device-1-0\"><device><serviceList>"
+        "<service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>"
+        "<SCPDURL>/upnp/rendertransportSCPD.xml</SCPDURL><controlURL>/upnp/control/rendertransport1</controlURL></service>"
+        "<service>\n  <serviceType>urn:schemas-wiimu-com:service:PlayQueue:1</serviceType>\n"
+        "  <serviceId>urn:wiimu-com:serviceId:PlayQueue1</serviceId>\n  <SCPDURL>/upnp/PlayQueueSCPD.xml</SCPDURL>\n"
+        "  <controlURL>/upnp/control/PlayQueue1</controlURL>\n</service></serviceList></device></root>";
+    auto sv = parseUpnpServices(desc);
+    TEST_ASSERT_EQUAL(2, (int)sv.size());
+    TEST_ASSERT_EQUAL_STRING("urn:schemas-wiimu-com:service:PlayQueue:1", sv[1].type.c_str());
+    TEST_ASSERT_EQUAL_STRING("/upnp/control/PlayQueue1", sv[1].controlUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("/upnp/PlayQueueSCPD.xml", sv[1].scpdUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("http://10.0.0.5:49152/upnp/x", upnpUrl("http://10.0.0.5:49152", "/upnp/x").c_str());
+    TEST_ASSERT_EQUAL_STRING("http://10.0.0.5:49152/upnp/x", upnpUrl("http://10.0.0.5:49152", "upnp/x").c_str());
+    TEST_ASSERT_EQUAL_STRING("http://h/y", upnpUrl("http://10.0.0.5:49152", "http://h/y").c_str());
+
+    const std::string scpd =
+        "<scpd><actionList><action><name>BrowseQueue</name><argumentList><argument><name>QueueName</name>"
+        "<direction>in</direction></argument></argumentList></action><action><name>CreateQueue</name></action>"
+        "</actionList></scpd>";
+    auto acts = parseScpdActions(scpd);
+    TEST_ASSERT_EQUAL(2, (int)acts.size());
+    TEST_ASSERT_EQUAL_STRING("BrowseQueue", acts[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("CreateQueue", acts[1].c_str());
+
+    std::string body = soapBody("urn:schemas-wiimu-com:service:PlayQueue:1", "BrowseQueue", {{"QueueName", "A&B"}});
+    TEST_ASSERT_TRUE(body.find("<u:BrowseQueue xmlns:u=\"urn:schemas-wiimu-com:service:PlayQueue:1\">") !=
+                     std::string::npos);
+    TEST_ASSERT_TRUE(body.find("<QueueName>A&amp;B</QueueName>") != std::string::npos);
+}
+
+static void test_upnp_queue() {
+    // Réponse BrowseQueue : QueueContext échappé, métadonnées DIDL-Lite échappées deux fois
+    const std::string soap =
+        "<s:Envelope><s:Body><u:BrowseQueueResponse><QueueContext>&lt;?xml version=\"1.0\"?&gt;&lt;PlayList&gt;"
+        "&lt;ListName&gt;Album Kind of Blue&lt;/ListName&gt;&lt;ListInfo&gt;&lt;SourceName&gt;Qobuz&lt;/SourceName&gt;"
+        "&lt;requestQuality&gt;6&lt;/requestQuality&gt;&lt;TrackNumber&gt;2&lt;/TrackNumber&gt;"
+        "&lt;SearchUrl&gt;https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&amp;amp;user_auth_token=SECRET"
+        "&lt;/SearchUrl&gt;&lt;Login_username&gt;someone@example.com&lt;/Login_username&gt;&lt;/ListInfo&gt;"
+        "&lt;Tracks&gt;&lt;Track1&gt;&lt;URL&gt;u1&lt;/URL&gt;&lt;Metadata&gt;&amp;lt;DIDL-Lite&amp;gt;&amp;lt;item&amp;gt;"
+        "&amp;lt;dc:title&amp;gt;So What&amp;lt;/dc:title&amp;gt;&amp;lt;/item&amp;gt;&amp;lt;/DIDL-Lite&amp;gt;"
+        "&lt;/Metadata&gt;&lt;/Track1&gt;&lt;Track2&gt;&lt;URL&gt;u2&lt;/URL&gt;&lt;/Track2&gt;&lt;/Tracks&gt;"
+        "&lt;/PlayList&gt;</QueueContext></u:BrowseQueueResponse></s:Body></s:Envelope>";
+    std::string ctx;
+    TEST_ASSERT_TRUE(xmlElement(soap, "QueueContext", ctx));
+    QueueInfo q = parseQueueContext(xmlUnescape(ctx));
+    TEST_ASSERT_TRUE(q.ok);
+    TEST_ASSERT_EQUAL_STRING("Album Kind of Blue", q.listName.c_str());
+    TEST_ASSERT_EQUAL_STRING("Qobuz", q.sourceName.c_str());
+    TEST_ASSERT_EQUAL_STRING("6", q.quality.c_str());
+    TEST_ASSERT_EQUAL(2, q.declaredTracks);
+    TEST_ASSERT_EQUAL(2, q.tracks);
+    TEST_ASSERT_EQUAL(1, (int)q.titles.size());
+    TEST_ASSERT_EQUAL_STRING("So What", q.titles[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("someone@example.com", q.user.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&user_auth_token=***",
+                             maskSecrets(q.searchUrl).c_str());
+    TEST_ASSERT_EQUAL_STRING("a=1&mytoken=x", maskSecrets("a=1&mytoken=x").c_str());  // pas un paramètre "token"
+    TEST_ASSERT_EQUAL_STRING("so***@ex***", maskAccount(q.user).c_str());
+    TEST_ASSERT_EQUAL_STRING("ar***", maskAccount("arthur").c_str());
+    TEST_ASSERT_FALSE(parseQueueContext("<nothing/>").ok);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -602,6 +684,9 @@ int main() {
     RUN_TEST(test_meta_info);
     RUN_TEST(test_quality);
     RUN_TEST(test_http_frame);
+    RUN_TEST(test_upnp_xml);
+    RUN_TEST(test_upnp_description);
+    RUN_TEST(test_upnp_queue);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);
