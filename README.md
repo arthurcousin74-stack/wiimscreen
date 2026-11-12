@@ -8,8 +8,10 @@
 step. Keep this style when you change it. -->
 
 wiimscreen shows the album art, the track data and the presets of your WiiM on a color touchscreen. You can also
-control the playback and the volume. The device uses the local HTTP API of the WiiM. It does not use a cloud
-service or a phone app. French voice commands are optional.
+control the playback and the volume, keep your own favorites and search Qobuz. The device uses the local network
+interfaces of the WiiM (HTTP API and UPnP). It does not use a cloud service or a phone app. It does not need a key
+for a streaming service: the WiiM does the Qobuz search with its own Qobuz access. French voice commands are
+optional.
 
 The firmware is for ESP32 boards that have a touchscreen and PSRAM. The core logic does not use the hardware and has
 unit tests. The screen layout changes to fit the screen size.
@@ -28,7 +30,11 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 > **Status: beta.**
 > - The firmware compiles and the unit tests pass.
 > - The screen images in this file come from the real UI code (refer to [tools/preview](tools/preview/)).
-> - We test the firmware on a real Tab5 at this time. No other board is tested.
+> - These functions operate on a real Tab5 with a real WiiM: touch, Wi-Fi, playback status and control, the
+>   navigation bar, the WiiM queue check and the Qobuz search.
+> - These functions are not yet confirmed on real hardware: the replay of favorites, the voice commands, the
+>   visualizer and the selection between several WiiM players.
+> - No other board is tested.
 > - The screen text and the voice commands are in **French** at this time. Translations are welcome.
 >
 > If you find a problem, please [open an issue](../../issues). Tell us what works and what does not work.
@@ -39,17 +45,19 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   AirPlay, Bluetooth…) and the audio quality (*16 bits · 44.1 kHz*). Touch the progress bar to go to a different
   position in the track. A "live" badge shows for radio streams.
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
-- **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button. The device
-  keeps a copy of the WiiM play queue. The album then shows as a tile, and one touch plays it again. You do not
-  need a key for the streaming service. The device keeps a maximum of 24 favorites.
-- **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track. Your
-  WiiM does the search with its own Qobuz access. Touch a result to play it. Before the first search, play one
-  Qobuz album from the WiiM Home app.
+- **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button at the left
+  of the playback buttons. The device keeps a copy of the WiiM play queue. The album then shows as a tile with its
+  album art, and one touch plays it again. Touch the heart again to remove the album. You do not need a key for
+  the streaming service. The device keeps a maximum of 24 favorites.
+- **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track on the
+  on-screen keyboard. The device gives the search to your WiiM. The WiiM does the search with its own Qobuz access
+  and loads the results. The device shows the results (title, artist, album). Touch a result to play it. Before
+  the first search, play one Qobuz album from the WiiM Home app. Refer to [Search Qobuz](#search-qobuz).
 - **Presets as tiles** with their images. The device gets the presets from the WiiM, or you can write your own list.
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.
 - **Navigation bar** on the left side of the screen (at the top in portrait): the 🏠 button goes to the main
-  screen, the ⚙ button opens the settings.
+  screen, the magnifying glass opens the Qobuz search, the ⚙ button opens the settings.
 - **Ambient view**: after 60 seconds without a touch, the device shows a large album art and large text. You can
   read it from across the room. Touch the 🏠 button or the screen to go back.
 - **Spectrum visualizer** (optional, experimental): in the ambient view, the microphones of the device show the
@@ -62,14 +70,18 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   playback commands and the radio stations of the open [Radio Browser](https://www.radio-browser.info/) directory.
 - **Over-the-air updates**: install a new firmware from a web browser on your network. The device shows a 6-digit
   code that you must type.
+- **Diagnostics**: the *Journal* (⚙ › *Journal*) shows the last events: touches, commands and the WiiM answers.
+  The *File du WiiM* button reads the play queue of the WiiM. Use these data in bug reports.
 - **Other functions**: pick up the device to turn on the screen (IMU). The screen becomes dim when you do not use
   it. The device makes a click sound when you touch a button.
 - **Security**: the device keeps the SHA-256 fingerprint of the WiiM TLS certificate after the first connection.
   It compares the fingerprint before each request. Album art and online services use HTTPS with the Mozilla root
   certificates. The device does not show or log your passwords and keys.
 
-| Ambient view + visualizer | Radio, loading, notification | Voice |
+| Favorites (tiles with a heart) | Qobuz search | Search results |
 |---|---|---|
+| ![Favorites](docs/favoris.png) | ![Search](docs/recherche.png) | ![Results](docs/resultats.png) |
+| **Ambient view + visualizer** | **Radio, loading, notification** | **Voice** |
 | ![Ambient view](docs/ambiance.png) | ![Radio](docs/radio.png) | ![Voice](docs/voix.png) |
 | **Presets without images (page 2 of 12)** | **WiiM discovery** | **Over-the-air update** |
 | ![Presets](docs/presets.png) | ![Discovery](docs/discovery.png) | ![OTA](docs/ota.png) |
@@ -129,6 +141,19 @@ You need Chrome or Edge on a computer. You do not have to install software.
 
 A full guide in French is in [LISEZMOI.md](LISEZMOI.md).
 
+### Search Qobuz
+
+The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does not need a Qobuz key or password.
+
+1. In the WiiM Home app, play one Qobuz album. Do this one time only: the Tab5 copies the Qobuz settings of the
+   WiiM (account name, quality) from this play queue.
+2. On the Tab5, touch the magnifying glass in the left bar.
+3. Type an artist or a track, then touch **Chercher** (search).
+4. Wait 2 to 5 seconds. The WiiM loads the results, and the Tab5 shows them.
+5. Touch a result. The WiiM plays it.
+
+Note: the search finds tracks. To keep an album, play it and touch the heart button.
+
 ### Voice commands (optional)
 
 1. Make an API key at <https://platform.openai.com>.
@@ -146,9 +171,13 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 │ main.cpp      loop: touch, drawing, menus,   │  ─────────▶  │ httpapi.asp  │
 │               ambient view, voice, OTA       │  pinned TLS  │ getPlayer-   │
 │ wiim_worker   background task: polling,      │  keep-alive  │ Status, get- │
-│               command queue                  │              │ MetaInfo…    │
-│ wiim_client   TLS client, WiiM commands      │              │              │
-│ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────────────┘
+│               commands, queues, search       │              │ MetaInfo…    │
+│ wiim_client   TLS client, WiiM commands      │  UPnP SOAP   │ PlayQueue    │
+│ favorites     queue copies (LittleFS)        │  port 49152  │ (queues)     │
+│ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────┬───────┘
+│                                              │                     │ Qobuz API
+│                                              │                     ▼ (WiiM's own
+│                                              │               qobuz.com  access)
 │ art           background download of covers  │ ──▶ CDNs (album art, preset logos)
 │ ui            off-screen canvas (PSRAM) →    │
 │               MIPI-DSI panel, accent color   │
@@ -158,14 +187,31 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 └──────────────────────────────────────────────┘
 ```
 
-- **`lib/core/`** contains all the logic that does not use the hardware: WiiM response parsing, layout, accent
-  color, FFT spectrum, motion detection, voice-intent parsing and firmware-image filtering. You can test it on a PC
+- **`lib/core/`** contains all the logic that does not use the hardware: WiiM response parsing, UPnP/XML parsing
+  of the WiiM play queues, layout, on-screen keyboard, accent color, FFT spectrum, motion detection,
+  voice-intent parsing and firmware-image filtering. You can test it on a PC
   with `pio test -e native`.
 - **`src/`** contains the device firmware (Arduino-ESP32 3.x on ESP-IDF 5 through pioarduino, M5Unified and M5GFX).
 - **`tools/preview/`** compiles the real `src/ui.cpp` for a PC (M5GFX and SDL2). It makes a PNG image of each
   screen. Thus you can design the UI without the device.
-- **[docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md)** contains practical notes about the WiiM/LinkPlay HTTP API.
-  These notes add data that the official PDF does not make clear.
+- **[docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md)** contains practical notes about the WiiM/LinkPlay HTTP API
+  and about the UPnP `PlayQueue` service, which WiiM does not document. These notes add data that the official
+  PDF does not make clear. They tell what we verified on a real WiiM.
+
+### How the Qobuz search operates
+
+The WiiM has an UPnP service, `PlayQueue`, that WiiM does not document. The WiiM Home app uses it to send a play
+queue to the WiiM. A Qobuz queue contains an address of the Qobuz API (`SearchUrl`). The WiiM reads this address
+with its own Qobuz access and loads the tracks.
+
+1. The Tab5 reads a real Qobuz queue from the WiiM (`BrowseQueue`) and keeps it as a model.
+2. For a search, the Tab5 copies the model, removes the tracks and sets `SearchUrl` to a Qobuz track search
+   (`track/search?query=…`). It sends this queue to the WiiM (`CreateQueue`).
+3. The WiiM does the search and loads the results into the queue. It does not start the playback.
+4. The Tab5 reads the queue again until the number of tracks is stable, and shows the tracks.
+5. When you touch a track, the Tab5 starts the queue at this track (`PlayQueueWithIndex`).
+
+The Tab5 never connects to Qobuz and never has your Qobuz password.
 
 ## Build from source
 
@@ -215,8 +261,8 @@ To add a board:
 ## Use the project as a base
 
 - **Only the WiiM integration**: `wiim_client.*`, `discovery.*`, `wiim_worker.*` and `lib/core` are a small WiiM
-  library for ESP32. They give pinned HTTPS, keep-alive connections, discovery, background polling and a command
-  queue.
+  library for ESP32. They give pinned HTTPS, keep-alive connections, discovery, background polling, a command
+  queue, and the read and write of WiiM play queues (`lib/core/src/upnp.*`).
 - **A different player with an HTTP API**: replace `wiim_client.*` and the parsers in `lib/core/core.cpp`.
 - **A different screen**: refer to [Other ESP32 boards](#other-esp32-boards).
 
@@ -225,10 +271,13 @@ for AI coding agents.
 
 ## Security and privacy
 
-All the data stays on your local network, except for the album art, the voice commands and the radio search.
+All the data stays on your local network, except for the album art, the voice commands and the radio search. The
+Qobuz search goes from the WiiM to Qobuz: the Tab5 does not connect to Qobuz.
 For more data and to report a problem, refer to [SECURITY.md](SECURITY.md).
 
 - The TLS connection to the WiiM uses a pinned certificate.
+- The UPnP requests to the WiiM (play queues, search) use plain HTTP on your local network, as the WiiM Home app
+  does. The Journal and the serial log hide the Qobuz account name and the tokens.
 - All other HTTPS connections use the Mozilla root certificates.
 - The setup mode and the update mode start only after an action on the device. They use a random password or a
   6-digit code.
