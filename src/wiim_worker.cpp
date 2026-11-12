@@ -1,11 +1,23 @@
 #include "wiim_worker.h"
 
 #include "discovery.h"
+#include "log.h"
 
 static constexpr uint32_t kPollPlayingMs = 2500;
 static constexpr uint32_t kPollIdleMs = 4000;
 static constexpr uint32_t kAfterCommandMs = 400;  // relire l'état peu après une commande
 static const char* kVolPrefix = "setPlayerCmd:vol:";
+
+const char* wiimErrorName(WiimError e) {
+    switch (e) {
+        case WiimError::None: return "OK";
+        case WiimError::Network: return "injoignable";
+        case WiimError::PinMismatch: return "certificat inattendu";
+        case WiimError::Http: return "r\xC3\xA9ponse inattendue";
+        case WiimError::Refused: return "refus\xC3\xA9";
+    }
+    return "?";
+}
 
 void WiimWorker::begin(const Settings& s) {
     cfg_ = s;
@@ -98,7 +110,9 @@ void WiimWorker::notePinning(WiimError e) {
 }
 
 void WiimWorker::execute(const String& cmd) {
+    const uint32_t t0 = millis();
     WiimError e = client_.command(cmd);
+    logEvent("WiiM <- %s : %s (%lu ms)", cmd.c_str(), wiimErrorName(e), (unsigned long)(millis() - t0));
     notePinning(e);
     WiimEvent ev;
     ev.kind = WiimEvent::CommandDone;
@@ -119,6 +133,7 @@ bool WiimWorker::rediscover() {
     for (auto& d : discoverWiims(2000))
         if (d.uuid == cfg_.wiimUuid.c_str() && d.ip != cfg_.host.c_str()) {
             cfg_.host = d.ip.c_str();
+            logEvent("WiiM retrouv\xC3\xA9 \xC3\xA0 %s", cfg_.host.c_str());
             saveWiim(cfg_.host, cfg_.wiimUuid, cfg_.wiimName);
             client_.configure(cfg_);
             WiimEvent ev;
@@ -165,6 +180,11 @@ void WiimWorker::pollOnce() {
     }
     r.error = e;
     r.online = e == WiimError::None;
+    if (!polledOnce_ || e != lastPollError_)  // seulement les changements : pas de journal inondé
+        logEvent("Relev\xC3\xA9 du WiiM (%s) : %s%s", cfg_.host.c_str(), wiimErrorName(e),
+                 r.online ? (st.playing ? ", lecture" : ", arr\xC3\xAAt") : "");
+    polledOnce_ = true;
+    lastPollError_ = e;
     if (r.online) {
         learnIdentity();
         // Titre, artiste, album, pochette, qualité : getMetaInfo (absents de getPlayerStatus
@@ -216,6 +236,7 @@ void WiimWorker::run() {
             ev.kind = WiimEvent::Presets;
             ev.error = client_.presets(ev.presets);
             ev.ok = ev.error == WiimError::None;
+            logEvent("Presets du WiiM : %s, %u", wiimErrorName(ev.error), (unsigned)ev.presets.size());
             notePinning(ev.error);
             push(std::move(ev));
         }

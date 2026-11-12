@@ -80,4 +80,9 @@ private:
     int netFailures_ = 0;
     uint32_t lastRediscover_ = 0;
     bool identityChecked_ = false;
+    WiimError lastPollError_ = WiimError::None;
+    bool polledOnce_ = false;
 };
+
+// Nom court d'une erreur, pour le journal
+const char* wiimErrorName(WiimError e);

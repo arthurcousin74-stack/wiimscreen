@@ -205,6 +205,12 @@ int main(int argc, char** argv) {
         none.player.volume = 49;
         u0.render(none);
         save(out, "17-aucun-preset.ppm");
+        // Même écran pendant la lecture (ce que l'on voit sans preset sur le WiiM)
+        u0.setArt(&art);
+        u0.render(st);
+        save(out, "19-lecture-sans-preset.ppm");
+        u0.renderAmbient(st);
+        save(out, "20-ambiance-sans-visualiseur.ppm");
     }
 
     // Hors ligne

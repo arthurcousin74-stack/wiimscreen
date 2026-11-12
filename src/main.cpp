@@ -27,6 +27,7 @@
 #include "core.h"
 #include "discovery.h"
 #include "dsp.h"
+#include "log.h"
 #include "ota.h"
 #include "portal.h"
 #include "settings.h"
@@ -62,6 +63,8 @@ static int g_brightness = -1;
 static bool g_listening = false;  // commande vocale en cours d'écoute
 static bool g_menuOpen = false;   // menu Réglages affiché (appui long)
 static bool g_touchTest = false;  // écran de test tactile (menu Réglages)
+static bool g_logOpen = false;    // écran Journal (menu Réglages)
+static uint32_t g_logFrame = 0;
 static int g_touchCount = 0;
 static uint32_t g_touchFrame = 0;
 
@@ -133,7 +136,7 @@ static UiState displayState() {
 }
 
 static void show(int pressedPreset = -1, int pressedTransport = -1) {
-    if (g_listening || g_menuOpen || g_touchTest) return;  // écrans modaux : rien par-dessus
+    if (g_listening || g_menuOpen || g_touchTest || g_logOpen) return;  // écrans modaux : rien par-dessus
     if (pressedPreset < 0 && pressedTransport < 0 && millis() < g_flashUntil) {
         pressedPreset = g_flashPreset;
         pressedTransport = g_flashTransport;
@@ -174,9 +177,11 @@ static String errorText(WiimError e, const String& fingerprint = String()) {
 // Le bus audio passe du haut-parleur au micro (partagés sur le Tab5)
 static void enterAmbient() {
     g_ambient = true;
+    logEvent("Vue ambiance");
     if (g_settings.visualizer) {
         sound::suspend();
         g_micOn = M5.Mic.begin();
+        logEvent("Micro (visualiseur) : %s", g_micOn ? "OK" : "\xC3\xA9" "chec");
         g_micPending = false;
         g_vis.reset();
         g_ui.showLevels(g_vis.levels(), g_vis.peaks());
@@ -185,6 +190,7 @@ static void enterAmbient() {
 }
 
 static void exitAmbient() {
+    logEvent("Sortie de la vue ambiance");
     if (g_micOn) {
         M5.Mic.end();
         g_micOn = false;
@@ -463,6 +469,7 @@ static bool handleBars(int x, int y) {
     uint32_t pos;
     auto& p = g_state.player;
     if (g_ui.hitVolume(x, y, vol)) {
+        logEvent("Appui volume %d (%d,%d)", vol, x, y);
         sound::tap();
         p.volume = vol;
         p.muted = false;
@@ -471,6 +478,7 @@ static bool handleBars(int x, int y) {
         return true;
     }
     if (g_ui.hitMute(x, y)) {
+        logEvent("Appui son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", x, y);
         sound::tap();
         p.muted = !p.muted;
         g_worker.command(String("setPlayerCmd:mute:") + (p.muted ? "1" : "0"));
@@ -478,6 +486,7 @@ static bool handleBars(int x, int y) {
         return true;
     }
     if (g_ui.hitProgress(x, y, pos)) {
+        logEvent("Appui progression %lu s (%d,%d)", (unsigned long)(pos / 1000), x, y);
         sound::tap();
         p.positionMs = pos;
         g_statusAt = millis();
@@ -489,6 +498,7 @@ static bool handleBars(int x, int y) {
 }
 
 static void playPreset(int p) {
+    logEvent("Preset %d : %s", g_presets[p].slot, g_presets[p].label.c_str());
     sound::tap();
     g_activePreset = p;
     g_activeSince = millis();
@@ -565,6 +575,7 @@ static void startVoice() {
 
 static void runVoice(const std::string& text) {
     const wr::VoiceIntent in = wr::parseVoice(text, g_presets);
+    logEvent("Voix : \xC2\xAB %s \xC2\xBB -> intention %d", text.c_str(), (int)in.kind);
     const String heard = String("\xC2\xAB ") + text.c_str() + " \xC2\xBB";
     const String dash = " \xE2\x80\x94 ";
     auto& p = g_state.player;
@@ -655,6 +666,7 @@ static void finishVoice(bool send) {
     String err;
     if (!transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, voiceHint(), text,
                     err)) {
+        logEvent("Transcription : %s", err.c_str());
         sound::error();
         setMessage(err);
         show();
@@ -741,7 +753,12 @@ static void handleTap(int x, int y) {
     }
 
     int t = g_ui.hitTransport(x, y);
-    if (t < 0) return;
+    if (t < 0) {
+        logEvent("Appui hors bouton (%d,%d)", x, y);
+        return;
+    }
+    static const char* kNames[] = {"volume -", "pr\xC3\xA9" "c\xC3\xA9" "dent", "lecture/pause", "suivant", "volume +"};
+    logEvent("Appui %s (%d,%d)", kNames[t], x, y);
     sound::tap();
     auto& p = g_state.player;
     switch (t) {
@@ -757,7 +774,9 @@ static void handleTap(int x, int y) {
         case wr::kPrev: g_worker.command("setPlayerCmd:prev"); break;
         case wr::kNext: g_worker.command("setPlayerCmd:next"); break;
         case wr::kPlayPause:
-            g_worker.command("setPlayerCmd:onepause");
+            // Ce que montre l'icône, explicitement : plus fiable qu'une bascule (onepause)
+            // quand l'état affiché a un temps de retard sur le WiiM
+            g_worker.command(p.playing ? "setPlayerCmd:pause" : "setPlayerCmd:resume");
             p.playing = !p.playing;
             g_statusAt = millis();
             break;
@@ -809,8 +828,11 @@ void setup() {
     if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Premi\xC3\xA8re configuration.");
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistr\xC3\xA9" "e est invalide.");
 
+    logEvent("D\xC3\xA9marrage, version %s", FW_VERSION);
     connectWifi();
+    logEvent("Wi-Fi connect\xC3\xA9, adresse du Tab5 %s", WiFi.localIP().toString().c_str());
     if (!g_settings.host.length()) chooseWiim();  // recherche automatique du WiiM
+    logEvent("WiiM : %s %s", g_settings.host.c_str(), g_settings.wiimName.c_str());
     g_artFetcher.begin();
     g_worker.begin(g_settings);
     if (!g_settings.autoPresets()) applyPresets(g_settings.presets);  // liste saisie : tout de suite
@@ -848,6 +870,22 @@ void loop() {
         return;
     }
 
+    // Journal : rafraîchi chaque seconde ; « Fermer » pour sortir
+    if (g_logOpen) {
+        if (t.wasPressed() && g_ui.hitLogClose(t.x, t.y)) {
+            sound::tap();
+            g_logOpen = false;
+            g_lastTouch = now;
+            show();
+        } else if (now - g_logFrame > 1000) {
+            g_logFrame = now;
+            g_ui.renderLog(logLines(), FW_VERSION);
+        }
+        serviceWiim();
+        delay(5);
+        return;
+    }
+
     // Vue ambiance : n'importe quel contact (même un doigt déjà posé) ramène les commandes
     if (g_ambient && t.isPressed() && !t.wasPressed()) {
         g_lastTouch = now;
@@ -859,6 +897,7 @@ void loop() {
         g_lastTouch = now;
         if (g_brightness != kBrightOn) {
             // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
+            logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_ambient) exitAmbient();
         } else if (g_menuOpen) {
@@ -870,6 +909,11 @@ void loop() {
                 runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
                 g_menuOpen = false;
                 show();
+            } else if (c == Ui::MenuLog) {
+                g_menuOpen = false;
+                g_logOpen = true;
+                g_logFrame = now;
+                g_ui.renderLog(logLines(), FW_VERSION);
             } else if (c == Ui::MenuTouch) {
                 g_menuOpen = false;
                 g_touchTest = true;
@@ -882,6 +926,7 @@ void loop() {
         } else if (g_listening) {
             finishVoice(!g_ui.hitVoiceCancel(t.x, t.y));  // Annuler, ou « j'ai fini »
         } else if (g_ambient) {
+            logEvent("Appui en vue ambiance (%d,%d)", t.x, t.y);
             exitAmbient();  // vue ambiance : un appui ramène les commandes
             sound::tap();
         } else if (handleBars(t.x, t.y)) {
@@ -923,7 +968,7 @@ void loop() {
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && !g_listening && !g_menuOpen && !g_touchTest && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
+    if (!g_ambient && !g_listening && !g_menuOpen && !g_touchTest && !g_logOpen && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
         g_state.online)
         enterAmbient();
     if (idle > kOffMs && !p.playing) {

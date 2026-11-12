@@ -835,8 +835,8 @@ void Ui::renderMenu(const char* version) {
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height();
-    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(76), gap = sc(14);
-    const int x = (W - bw) / 2, y0 = sc(110);
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(64), gap = sc(10);
+    const int x = (W - bw) / 2, y0 = sc(100);
     C.setTextDatum(textdatum_t::bottom_center);
     C.loadFont(kBig);
     C.setTextColor(kText);
@@ -844,14 +844,16 @@ void Ui::renderMenu(const char* version) {
     menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
     menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
     menuRects_[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
+    menuRects_[MenuLog] = wr::Rect{x, y0 + 3 * (bh + gap), bw, bh};
     menuButton(C, menuRects_[MenuConfig], "Configuration", "Wi-Fi, WiiM, presets, voix",
                accent_, sc(16));
     menuButton(C, menuRects_[MenuUpdate], "Mise \xC3\xA0 jour", "Installer un nouveau firmware par le Wi-Fi", kText2,
                sc(16));
     menuButton(C, menuRects_[MenuTouch], "Test tactile", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt",
                kText2, sc(16));
+    menuButton(C, menuRects_[MenuLog], "Journal", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic", kText2, sc(16));
     const int cw = sc(150), ch = sc(44);
-    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuTouch].bottom() + sc(24), cw, ch};
+    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuLog].bottom() + sc(20), cw, ch};
     const wr::Rect& c = menuRects_[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
     C.loadFont(kSmall);
@@ -861,6 +863,43 @@ void Ui::renderMenu(const char* version) {
     C.setTextDatum(textdatum_t::bottom_right);
     C.setTextColor(kText2);
     C.drawString((String("Version ") + version).c_str(), W - sc(20), H - sc(14));
+    present();
+}
+
+// Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin
+void Ui::renderLog(const std::vector<String>& lines, const char* version) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    C.fillScreen(kBg);
+    const int W = C.width(), H = C.height(), m = sc(20);
+    C.loadFont(kMid);
+    C.setTextDatum(textdatum_t::top_left);
+    C.setTextColor(kText);
+    C.drawString("Journal", m, m);
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    C.drawString((String("Version ") + version).c_str(), m + sc(150), m + sc(6));
+    const int bw = sc(150), bh = sc(44);
+    logClose_ = wr::Rect{W - bw - m, m, bw, bh};
+    C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Fermer", logClose_.x + bw / 2, logClose_.y + bh / 2 + 1);
+    // Lignes : police fine, deux colonnes en paysage
+    C.loadFont(kTiny);
+    C.setTextDatum(textdatum_t::top_left);
+    const int top = m + bh + sc(14), lh = C.fontHeight() + sc(2);
+    const int perCol = std::max(1, (H - top - m) / lh);
+    const int cols = W > H ? 2 : 1, colW = (W - 2 * m) / cols;
+    const int maxShown = perCol * cols;
+    const int first = std::max(0, (int)lines.size() - maxShown);
+    auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
+    for (int i = first; i < (int)lines.size(); ++i) {
+        int k = i - first, col = k / perCol, row = k % perCol;
+        auto fitted = wr::wrapText(lines[i].c_str(), colW - sc(12), 1, measure);
+        C.setTextColor(i == (int)lines.size() - 1 ? kText : kText2);
+        C.drawString(fitted.empty() ? "" : fitted[0].c_str(), m + col * colW, top + row * lh);
+    }
     present();
 }
 
@@ -963,7 +1002,7 @@ int Ui::hitPicker(int x, int y) const {
 }
 
 Ui::MenuChoice Ui::hitMenu(int x, int y) const {
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
     return MenuNone;
 }
