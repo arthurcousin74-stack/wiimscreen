@@ -1,22 +1,28 @@
 # wiimscreen
 
-**Touchscreen remote and "now playing" display for WiiM music streamers, running on the M5Stack Tab5 (ESP32-P4).**
+**Open-source touchscreen remote and "now playing" display for WiiM music streamers, running on ESP32.**
 
 *Version française : [LISEZMOI.md](LISEZMOI.md)*
 
-Album art, track info, presets, playback and volume on a 5" color screen next to your WiiM — controlled entirely
+Album art, track info, presets, playback and volume on a color touchscreen next to your WiiM — controlled entirely
 over the WiiM's local HTTP API, no cloud and no phone needed. Optional French voice commands.
+
+The firmware is written for ESP32 boards with a touchscreen and PSRAM (Arduino-ESP32 3.x, M5Unified/M5GFX), with a
+hardware-free, unit-tested core and a layout that scales with the screen. **So far it has only been built and
+tested for the [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5)** (ESP32-P4, 5" 1280×720): that is the
+supported board today, and the one the downloads and the guide below are for. Ports to other boards are welcome —
+see [Other ESP32 boards](#other-esp32-boards).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Firmware build](https://github.com/arthurcousin74-stack/wiimscreen/actions/workflows/firmware.yml/badge.svg)](https://github.com/arthurcousin74-stack/wiimscreen/actions/workflows/firmware.yml)
-![Platform: ESP32-P4](https://img.shields.io/badge/platform-ESP32--P4-orange)
-![Device: M5Stack Tab5](https://img.shields.io/badge/device-M5Stack%20Tab5-black)
+![Platform: ESP32](https://img.shields.io/badge/platform-ESP32-orange)
+![Tested on: M5Stack Tab5](https://img.shields.io/badge/tested%20on-M5Stack%20Tab5-black)
 
 ![Now playing on the M5Stack Tab5](docs/apercu.png)
 
 > **Status: beta.** The firmware builds, its logic is covered by native unit tests, and every screen above is
-> rendered from the real UI code (see [tools/preview](tools/preview/)). First tests on physical hardware are in
-> progress — please [open an issue](../../issues) with what works and what doesn't on your setup.
+> rendered from the real UI code (see [tools/preview](tools/preview/)). Testing on physical hardware (Tab5 only) is
+> in progress — please [open an issue](../../issues) with what works and what doesn't on your setup.
 > The on-screen text and voice commands are currently in **French** (translations welcome).
 
 ## Features
@@ -28,15 +34,15 @@ over the WiiM's local HTTP API, no cloud and no phone needed. Optional French vo
   swipe for more; the playing preset is highlighted.
 - **One volume control** with direct tap-to-set, mute, and ±.
 - **Ambient view** after 60 s idle: big cover and text readable across the room; optional (experimental)
-  **spectrum visualizer** driven by the Tab5 microphones (processed on-device, nothing recorded or sent).
+  **spectrum visualizer** driven by the device's microphones (processed on-device, nothing recorded or sent).
 - **Zero-config WiiM discovery**: finds WiiM players on the network (SSDP + `getStatusEx`), lets you pick one,
   and follows it if its IP address changes.
-- **Setup from a phone**: scan a QR code shown on the Tab5, pick your Wi-Fi, done.
+- **Setup from a phone**: scan a QR code shown on the screen, pick your Wi-Fi, done.
 - **Voice commands** (optional, French, via OpenAI speech-to-text): *« Joue FIP »*, *« Mets France Culture »*,
   *« Plus fort »*, *« Volume 30 »*, *« Suivant »*. Matches your presets, playback commands, and any station of the
   open [Radio Browser](https://www.radio-browser.info/) directory.
 - **Over-the-air updates** from a browser on your network (6-digit code shown on the device).
-- **Pick up to wake**, screen dimming, click sounds.
+- **Pick up to wake** (IMU), screen dimming, click sounds.
 - **Security-minded**: the WiiM's self-signed TLS certificate is pinned on first use (SHA-256); album art and
   online services use HTTPS verified against Mozilla's root CAs; secrets are never echoed back or logged.
 
@@ -48,12 +54,18 @@ over the WiiM's local HTTP API, no cloud and no phone needed. Optional French vo
 
 ## Hardware
 
-- **[M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5)**: ESP32-P4, 5" 1280×720 touch IPS, 32 MB PSRAM,
-  ESP32-C6 for Wi-Fi 6 (2.4 GHz), dual microphones, speaker. The battery is optional (USB-C power is fine).
-- **A WiiM streamer** (Mini, Pro, Pro Plus, Amp, Ultra…). Other LinkPlay-based players that expose
-  `httpapi.asp` will likely work too.
+**Players**: WiiM streamers (Mini, Pro, Pro Plus, Amp, Ultra…). Other LinkPlay-based players that expose
+`httpapi.asp` will likely work too.
 
-## Quick start
+**Boards**:
+
+| Board | Status |
+|---|---|
+| [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5) — ESP32-P4, 5" 1280×720 touch IPS, 32 MB PSRAM, ESP32-C6 Wi-Fi (2.4 GHz), microphones, speaker | **Supported, the only board tested so far** (beta). Battery optional. |
+| Other ESP32-S3 / ESP32-P4 boards with a touchscreen and PSRAM | Not tested. Should be portable — see [Other ESP32 boards](#other-esp32-boards). |
+| M5Stack PaperS3 (e-ink) | An early version of this project ran on it (see git history); not maintained. |
+
+## Quick start (M5Stack Tab5)
 
 1. **Get the firmware**: download `wiim-remote-tab5.bin` from the [latest release](../../releases)
    (or from the newest [Actions](../../actions) run, artifact `wiim-remote-tab5`).
@@ -75,7 +87,7 @@ writing, i.e. a few cents a month).
 ## How it works
 
 ```
- M5Stack Tab5 (ESP32-P4)                                       WiiM streamer
+ ESP32 board (tested: M5Stack Tab5)                            WiiM streamer
 ┌──────────────────────────────────────────────┐   HTTPS      ┌──────────────┐
 │ main.cpp      loop: touch, drawing, menus,   │  ─────────▶  │ httpapi.asp  │
 │               ambient view, voice, OTA       │  pinned TLS  │ getPlayer-   │
@@ -95,7 +107,7 @@ writing, i.e. a few cents a month).
 - **`lib/core/`** contains all logic that does not need hardware: WiiM response parsing, layout, accent-color
   extraction, FFT spectrum, motion detection, voice-intent parsing, firmware-image filtering. It is tested on a PC
   with `pio test -e native`.
-- **`src/`** is the device firmware (Arduino on ESP-IDF via pioarduino, M5Unified/M5GFX).
+- **`src/`** is the device firmware (Arduino-ESP32 3.x on ESP-IDF 5 via pioarduino, M5Unified/M5GFX).
 - **`tools/preview/`** compiles the real `src/ui.cpp` for a PC (M5GFX + SDL2) and renders every screen to PNG,
   so the UI can be designed without the device.
 - **[docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md)**: practical notes on the WiiM/LinkPlay HTTP API
@@ -118,15 +130,33 @@ SDL_VIDEODRIVER=dummy .pio/build/preview/program images/ out/   # images/: cover
 python tools/preview/topng.py out/*.ppm
 ```
 
+## Other ESP32 boards
+
+Only the Tab5 has been tested. The code is organised so that other ESP32 boards need a small amount of glue, not a
+rewrite:
+
+- **Portable as is**: `lib/core` (parsing, layout, colors, FFT, voice intents — plain C++17, no Arduino headers),
+  `wiim_worker`, `wiim_client`, `discovery`, `art`, `voice_service`, `portal`, `ota`, `settings` (Arduino-ESP32 3.x
+  Wi-Fi, TLS, WebServer, NVS).
+- **Screen and input**: `ui.cpp` draws with M5GFX and `main.cpp` reads touch, IMU, mic and speaker through
+  M5Unified, so boards supported by M5Unified/M5GFX (M5Stack CoreS3, Tab5…) are the easiest targets; others need a
+  display driver config (LovyanGFX/M5GFX `LGFX` class). `computeLayout()` scales with any resolution and its tests
+  check 1280×720, 720×1280 and 960×540 for overlaps and touch-target sizes; add yours to the tests.
+- **Tab5-specific bits to adapt**: the Wi-Fi SDIO pins to the ESP32-C6 (`WiFi.setPins(...)` in `main.cpp`, remove
+  it on boards with native Wi-Fi), the microphone and speaker sharing one I2S bus (`sound.cpp`), and the
+  `[env:tab5]` board settings in `platformio.ini`.
+- **Resources**: the off-screen canvas is 16-bit and full-screen (≈ 1.8 MB at 1280×720, ≈ 300 KB at 480×320), so
+  PSRAM is needed; TLS and album art decoding also want PSRAM. Microphone, IMU and speaker are optional features.
+
+To add a board: create a `[env:<board>]` in `platformio.ini`, keep board differences behind small `#if` blocks or a
+board header, and say in your pull request what you verified on the hardware.
+
 ## Using it as a base
 
-The project is meant to be reused. Typical starting points:
-
-- **Another screen or board** (e.g. CoreS3, ESP32-S3 displays): `lib/core` is hardware-free; `computeLayout()`
-  scales with the screen; Tab5-specific bits are the Wi-Fi SDIO pins (`main.cpp`), the shared mic/speaker bus
-  (`sound.cpp`) and the panel size. An earlier version of this project ran on the e-ink M5PaperS3 (see git history).
+- **Just the WiiM integration**: `wiim_client.*`, `discovery.*`, `wiim_worker.*` and `lib/core` form a small WiiM
+  library for ESP32 (pinned HTTPS, keep-alive, discovery, background polling, command queue).
 - **Another player with an HTTP API**: replace `wiim_client.*` and the parsers in `lib/core/core.cpp`.
-- **Just the WiiM integration**: `wiim_client.*`, `discovery.*` and `lib/core` form a small WiiM library for ESP32.
+- **Another screen**: see [Other ESP32 boards](#other-esp32-boards).
 
 See [AGENTS.md](AGENTS.md) for architecture, conventions and pitfalls (useful for humans and AI coding agents).
 
@@ -138,10 +168,10 @@ the WiiM, CA-verified HTTPS elsewhere, setup and update modes only reachable aft
 
 ## Contributing
 
-Bug reports with your WiiM model and the firmware version (shown in the *Réglages* menu) are very welcome, as are
-translations, ports to other boards and UI improvements. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports with your WiiM model, your board and the firmware version (shown in the *Réglages* menu, gear button)
+are very welcome, as are hardware test reports, ports to other ESP32 boards, translations and UI improvements. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
 [MIT](LICENSE) © wiimscreen contributors. Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-Not affiliated with WiiM / Linkplay or M5Stack.
+Not affiliated with WiiM / Linkplay, M5Stack or Espressif.

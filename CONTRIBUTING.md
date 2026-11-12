@@ -1,14 +1,15 @@
 # Contributing
 
-Thanks for helping! Bug reports, hardware test results, translations, ports to other boards and UI ideas are all
-welcome.
+Thanks for helping! Bug reports, hardware test results, translations, ports to other ESP32 boards and UI ideas are all
+welcome. Only the M5Stack Tab5 has been tested so far, so reports from real hardware are especially useful.
 
 ## Reporting a problem
 
 Open an issue with:
 
+- your **board** (only the M5Stack Tab5 is tested so far),
 - your **WiiM model** and its firmware version (WiiM Home app),
-- the **wiimscreen version** (bottom of the *Réglages* menu: hold the album art 3 s),
+- the **wiimscreen version** (bottom of the *Réglages* menu: gear button left of the playback controls),
 - what you did, what you expected, what happened — a photo of the screen helps,
 - if possible, the serial log (`pio device monitor`, 115200 baud).
 
@@ -21,6 +22,12 @@ Open an issue with:
 4. Say in the pull request what you verified **on real hardware** and what you did not.
 
 Keep pull requests focused: one feature or fix at a time.
+
+## Porting to another board
+
+See [Other ESP32 boards](README.md#other-esp32-boards) in the README. Add a `[env:<board>]` in `platformio.ini`,
+keep board differences small and isolated (pins, audio bus, panel), add the screen size to the `checkLayout` tests,
+and include photos of the running screens in your pull request.
 
 ## Translations
 

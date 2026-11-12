@@ -6,8 +6,16 @@ body:
     id: version
     attributes:
       label: wiimscreen version
-      description: Bottom of the Réglages menu (hold the album art 3 s)
+      description: Bottom of the Réglages menu (gear button left of the playback controls)
       placeholder: e.g. v0.1.0 or 57-219c0bc
+    validations:
+      required: true
+  - type: input
+    id: board
+    attributes:
+      label: Board
+      description: Only the M5Stack Tab5 is tested so far; reports from other boards are welcome too.
+      placeholder: e.g. M5Stack Tab5
     validations:
       required: true
   - type: input

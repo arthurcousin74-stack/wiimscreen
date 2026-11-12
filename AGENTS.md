@@ -1,7 +1,8 @@
 # AGENTS.md
 
 Guide for AI coding agents and human contributors working on wiimscreen.
-What the project is: [README.md](README.md). WiiM API facts: [docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md).
+What the project is: [README.md](README.md) — a WiiM remote for ESP32 touchscreen boards; **only the M5Stack Tab5
+has been built for and tested**, so "the device" below means the Tab5 unless stated otherwise. WiiM API facts: [docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md).
 
 ## Commands
 
@@ -76,6 +77,6 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 
 ## Status / not verified on hardware yet
 
-Built and unit-tested; screens verified via the PC preview. Not yet confirmed on a physical Tab5: Wi-Fi via the
+Built and unit-tested; screens verified via the PC preview. No other board has been tried. Not yet confirmed on a physical Tab5: Wi-Fi via the
 C6, microphones (visualizer, voice), speaker volume levels, SSDP discovery, `setPlayerCmd:play:<url>` encoding,
 OTA end to end, HTTP keep-alive with the WiiM (falls back to a new connection per request). Prefer small, testable changes and note what was verified on real hardware in commit messages.

@@ -1,8 +1,11 @@
-# Télécommande WiiM pour M5Stack Tab5
+# wiimscreen — télécommande WiiM sur ESP32
 
 *English: [README.md](README.md)*
 
-Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qui pilote un streamer WiiM sur le réseau local.
+Firmware libre (MIT) pour cartes ESP32 à écran tactile, qui pilote un streamer WiiM sur le réseau local et affiche ce
+qui est en cours de lecture. **Pour l'instant, seul le M5Stack Tab5** (ESP32-P4, écran tactile couleur 5" 1280×720)
+**a été testé** : c'est la carte prise en charge, et celle de ce guide. Le portage vers d'autres cartes ESP32 est
+décrit dans le [README](README.md#other-esp32-boards) (en anglais).
 
 ![Écran principal](docs/apercu.png)
 
