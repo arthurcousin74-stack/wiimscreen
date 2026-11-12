@@ -307,6 +307,23 @@ static void restartIntoPortal(const String& reason) {
     ESP.restart();
 }
 
+// Mise en veille. Le toucher du Tab5 ne peut pas réveiller l'ESP32-P4 d'un sommeil profond (son interruption
+// arrive sur GPIO23, et seules GPIO0-15 réveillent le P4) : on éteint donc le Tab5. Sur batterie, l'impulsion
+// PWROFF coupe l'alimentation et le bouton d'alimentation le rallume ; sur USB, M5Unified passe en sommeil
+// profond sans source de réveil (redémarrage par le bouton ou en débranchant).
+static void stopListening();  // plus bas, avec la voix
+
+static void goToSleep(const char* why) {
+    logEvent("Mise en veille (%s)", why);
+    if (g_listening) stopListening();
+    sound::confirm();
+    g_ui.showInfo("Mise en veille", "Le Tab5 s'\xC3\xA9teint. Appuie sur son bouton d'alimentation pour le rallumer.");
+    setBrightness(kBrightOn);
+    delay(2500);
+    setBrightness(0);
+    M5.Power.powerOff();  // ne revient pas (coupure, ou sommeil profond)
+}
+
 // ------------------------------------------------------------------- presets
 
 static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
@@ -1402,6 +1419,9 @@ void loop() {
                 g_touchTest = true;
                 g_touchCount = 0;
                 g_ui.renderTouchTest(-1, -1, 0);
+            } else if (c == Ui::MenuSleep) {
+                g_menuOpen = false;
+                goToSleep("demand\xC3\xA9" "e depuis R\xC3\xA9glages");
             } else if (c == Ui::MenuClose) {
                 g_menuOpen = false;
                 show();
@@ -1466,6 +1486,9 @@ void loop() {
     if (!g_ambient && !modalOpen() && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
         g_state.online)
         enterAmbient();
+    // Mise en veille (réglage) : sans appui ni lecture depuis sleepMin minutes
+    if (g_settings.sleepMin > 0 && !p.playing && !modalOpen() && idle > (uint32_t)g_settings.sleepMin * 60000UL)
+        goToSleep("automatique");
     if (idle > kOffMs && !p.playing) {
         if (g_ambient) exitAmbient();  // micro coupé avec l'écran
         setBrightness(0);

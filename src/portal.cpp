@@ -115,7 +115,13 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
     h += F("</select></div><div><label>Visualiseur</label><select name=visu>");
     h += option("1", "Activ\xC3\xA9", s.visualizer);
     h += option("0", "D\xC3\xA9sactiv\xC3\xA9", !s.visualizer);
-    h += F("</select></div></div><small>HTTPS est conseill\xC3\xA9. Visualiseur (exp\xC3\xA9rimental) : en vue ambiance, le micro anime un spectre. Le son est "
+    h += F("</select></div></div><div class=row><div><label>Mise en veille</label><select name=sleep>");
+    h += option("0", "Jamais", s.sleepMin == 0);
+    h += option("30", "Apr\xC3\xA8s 30 min", s.sleepMin == 30);
+    h += option("60", "Apr\xC3\xA8s 1 h", s.sleepMin == 60);
+    h += option("120", "Apr\xC3\xA8s 2 h", s.sleepMin == 120);
+    h += F("</select></div><div></div></div><small>Mise en veille : sans appui et sans musique, le Tab5 s'\xC3\xA9teint ; le "
+           "bouton d'alimentation le rallume. HTTPS est conseill\xC3\xA9. Visualiseur (exp\xC3\xA9rimental) : en vue ambiance, le micro anime un spectre. Le son est "
            "analys\xC3\xA9 sur place, jamais enregistr\xC3\xA9 ni envoy\xC3\xA9.</small></div></details>");
 
     // --- Commande vocale
@@ -222,6 +228,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.beep = constrain(server.arg("beep").toInt(), 0, 3);
         next.visualizer = server.arg("visu") != "0";
         next.motionWake = server.arg("motion") != "0";
+        next.sleepMin = constrain(server.arg("sleep").toInt(), 0, 240);
         String key = server.arg("oaikey");
         key.trim();
         if (key.length()) next.openaiKey = key;

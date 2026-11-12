@@ -1289,8 +1289,8 @@ void Ui::renderMenu(const char* version) {
     navRail(1);
     const wr::Rect& A = layout_.content;
     const int W = A.w, H = C.height();
-    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(64), gap = sc(10);
-    const int x = A.x + (W - bw) / 2, y0 = A.y + sc(100);
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(58), gap = sc(8);
+    const int x = A.x + (W - bw) / 2, y0 = A.y + sc(92);
     C.setTextDatum(textdatum_t::bottom_center);
     useFont(C, kBig);
     C.setTextColor(kText);
@@ -1306,8 +1306,11 @@ void Ui::renderMenu(const char* version) {
     menuButton(C, menuRects_[MenuTouch], "Test tactile", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt",
                kText2, sc(16));
     menuButton(C, menuRects_[MenuLog], "Journal", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic", kText2, sc(16));
+    menuRects_[MenuSleep] = wr::Rect{x, y0 + 4 * (bh + gap), bw, bh};
+    menuButton(C, menuRects_[MenuSleep], "Mise en veille", "\xC3\x89teindre ; le bouton d'alimentation rallume", kText2,
+               sc(16));
     const int cw = sc(150), ch = sc(44);
-    menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuLog].bottom() + sc(20), cw, ch};
+    menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuSleep].bottom() + sc(14), cw, ch};
     const wr::Rect& c = menuRects_[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
     useFont(C, kSmall);
@@ -1484,7 +1487,7 @@ int Ui::hitPicker(int x, int y) const {
 }
 
 Ui::MenuChoice Ui::hitMenu(int x, int y) const {
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 6; ++i)
         if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
     return MenuNone;
 }

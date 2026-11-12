@@ -82,6 +82,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Never switch to the setup portal (AP mode + Wi-Fi scan) while the app runs**: with the Wi-Fi connected and the
   network tasks active it froze the Tab5 (seen on hardware). `restartIntoPortal()` stores the request in NVS and
   restarts; `setup()` runs the portal before connecting, like the first configuration.
+- **Deep sleep cannot wake on touch on the Tab5**: the touch INT is GPIO23 and only GPIO0–15 wake the ESP32-P4 from
+  deep sleep (M5Unified defines no Tab5 wake pin). `goToSleep()` uses `M5.Power.powerOff()`: PWROFF pulse (true off
+  on battery, power button turns it on), else deep sleep with no wake source. Wake behaviour on USB: not verified.
 - Navigation bar: `Layout::rail/navHome/navSettings/content`; screens that show it call `Ui::navRail()` and lay
   out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
 - **Fonts**: always `useFont(C, kX)` in `ui.cpp`, never `C.loadFont()` directly: M5GFX re-parses the VLW header on

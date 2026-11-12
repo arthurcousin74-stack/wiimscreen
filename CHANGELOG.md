@@ -8,6 +8,8 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Sleep: Settings › *Mise en veille* turns the Tab5 off; optional automatic sleep after 30 min / 1 h / 2 h without
+  touch or music (setup page, default never). The power button turns it on again (touch cannot wake the P4).
 - Deezer favorite albums as tiles (experimental): Deezer token asked to the WiiM (`GetUserInfo`), albums from
   `api.deezer.com/user/me/albums`, played through the WiiM's airable gateway. *File du WiiM* lists the linked services.
 - Qobuz favorite albums as tiles (with covers) and a "Favoris Qobuz" tile for favorite tracks.

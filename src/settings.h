@@ -21,6 +21,7 @@ struct Settings {
     int beep = 2;        // bips : 0 désactivés, 1 discrets, 2 normaux, 3 forts
     bool visualizer = false;  // vue ambiance : spectre du son de la pièce (micro) — expérimental
     bool motionWake = true;  // soulever / déplacer le Tab5 rallume l'écran
+    int sleepMin = 0;        // mise en veille (extinction) après N minutes sans appui ni lecture ; 0 = jamais
     String openaiKey;        // commande vocale : clé API OpenAI (vide = pas de bouton micro)
     String sttModel = "gpt-4o-mini-transcribe";  // modèle de transcription OpenAI
 

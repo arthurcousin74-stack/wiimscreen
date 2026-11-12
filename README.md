@@ -84,6 +84,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Diagnostics**: the *Journal* (⚙ › *Journal*) shows the last events: touches, commands and the WiiM answers.
   The *File du WiiM* button reads the play queues of the WiiM and the actions of its queue service. The *Essais*
   button tests the Qobuz favorites and the Deezer albums. Use these data in bug reports.
+- **Sleep**: ⚙ › *Mise en veille* turns off the Tab5 at once. In the setup page, you can also set an automatic
+  sleep (after 30 min, 1 h or 2 h without a touch and without music; the default is "never"). Push the power button
+  to turn the Tab5 on again. Note: a touch on the screen cannot wake the Tab5 from this sleep.
 - **Other functions**: pick up the device to turn on the screen (IMU). The screen becomes dim when you do not use
   it. The device makes a click sound when you touch a button.
 - **Security**: the device keeps the SHA-256 fingerprint of the WiiM TLS certificate after the first connection.

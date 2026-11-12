@@ -86,7 +86,7 @@ public:
     int hitDots(int x, int y) const;                       // -1 / +1 : page précédente / suivante
 
     // Menu de l'appui long : configuration, mise à jour, fermer
-    enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuTouch, MenuLog, MenuClose };
+    enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuTouch, MenuLog, MenuSleep, MenuClose };
     void renderMenu(const char* version);
     MenuChoice hitMenu(int x, int y) const;
 
@@ -188,7 +188,7 @@ private:
     // Commande vocale
     bool voiceOn_ = false;
     wr::Rect cancelRect_;
-    wr::Rect menuRects_[5];
+    wr::Rect menuRects_[6];
     wr::Rect logClose_;
     wr::Rect logQueue_;  // Journal : bouton « File du WiiM »
     wr::Rect logTest_;   // Journal : bouton « Essai recherche »
