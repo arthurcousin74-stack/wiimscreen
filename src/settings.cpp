@@ -49,6 +49,44 @@ bool loadSettings(Settings& s) {
     return true;
 }
 
+std::string settingsToBackup(const Settings& s) {
+    std::vector<std::pair<std::string, std::string>> f = {
+        {"ssid", s.ssid.c_str()},         {"pass", s.pass.c_str()},       {"host", s.host.c_str()},
+        {"wiimuuid", s.wiimUuid.c_str()}, {"wiimname", s.wiimName.c_str()}, {"https", s.https ? "1" : "0"},
+        {"fp", s.fingerprint.c_str()},    {"presets", s.presetsText.c_str()}, {"rotation", std::to_string(s.rotation)},
+        {"volstep", std::to_string(s.volStep)}, {"beep", std::to_string(s.beep)}, {"visu2", s.visualizer ? "1" : "0"},
+        {"motion", s.motionWake ? "1" : "0"},   {"sleep", std::to_string(s.sleepMin)},
+        {"oaikey", s.openaiKey.c_str()},  {"sttmodel", s.sttModel.c_str()}};
+    return wr::encodeFields(f);
+}
+
+bool settingsFromBackup(const std::string& text, Settings& s) {
+    Settings r = s;
+    for (auto& kv : wr::decodeFields(text)) {
+        const std::string& k = kv.first;
+        const String v = kv.second.c_str();
+        if (k == "ssid") r.ssid = v;
+        else if (k == "pass") r.pass = v;
+        else if (k == "host") r.host = v;
+        else if (k == "wiimuuid") r.wiimUuid = v;
+        else if (k == "wiimname") r.wiimName = v;
+        else if (k == "https") r.https = v != "0";
+        else if (k == "fp") r.fingerprint = v;
+        else if (k == "presets") r.presetsText = v;
+        else if (k == "rotation") r.rotation = constrain(v.toInt(), 0, 3);
+        else if (k == "volstep") r.volStep = constrain(v.toInt(), 1, 20);
+        else if (k == "beep") r.beep = constrain(v.toInt(), 0, 3);
+        else if (k == "visu2") r.visualizer = v == "1";
+        else if (k == "motion") r.motionWake = v != "0";
+        else if (k == "sleep") r.sleepMin = constrain(v.toInt(), 0, 240);
+        else if (k == "oaikey") r.openaiKey = v;
+        else if (k == "sttmodel") r.sttModel = v.length() ? v : String("gpt-4o-mini-transcribe");
+    }
+    if (!r.configured()) return false;
+    s = r;
+    return true;
+}
+
 void saveSettings(const Settings& s) {
     Preferences p;
     p.begin(kNamespace, false);

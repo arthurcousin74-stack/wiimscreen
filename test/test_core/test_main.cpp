@@ -845,6 +845,18 @@ static void test_qobuz_json() {
     TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\"}", acc));
 }
 
+static void test_fields() {
+    std::vector<std::pair<std::string, std::string>> f = {
+        {"ssid", "Livebox-A3F2"}, {"pass", "p\\a\tss\nword"}, {"presets", "1=FIP\n2=Nova"}, {"empty", ""}};
+    auto back = decodeFields(encodeFields(f) + "broken line\n");
+    TEST_ASSERT_EQUAL(4, (int)back.size());
+    TEST_ASSERT_EQUAL_STRING("p\\a\tss\nword", back[1].second.c_str());  // échappements gardés
+    TEST_ASSERT_EQUAL_STRING("1=FIP\n2=Nova", back[2].second.c_str());
+    TEST_ASSERT_EQUAL_STRING("empty", back[3].first.c_str());
+    TEST_ASSERT_EQUAL_STRING("", back[3].second.c_str());
+    TEST_ASSERT_TRUE(decodeFields("").empty());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -863,6 +875,7 @@ int main() {
     RUN_TEST(test_shares_word);
     RUN_TEST(test_deezer);
     RUN_TEST(test_qobuz_json);
+    RUN_TEST(test_fields);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

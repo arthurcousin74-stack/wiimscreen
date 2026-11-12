@@ -154,6 +154,10 @@ You need Chrome or Edge on a computer. You do not have to install software.
 4. Type the code and select the new `.bin` file.
 5. Click **Installer** (install). The Tab5 restarts with the new firmware.
 
+Note: an update keeps your settings (Wi-Fi, WiiM, OpenAI key, options) and your favorites. A complete USB flash at
+address `0x0` erases the settings area, but the Tab5 also keeps a copy of the settings with the favorites. At the
+next start, it puts the settings back from this copy. To erase everything, use "Erase flash" in esptool-js.
+
 A full guide in French is in [LISEZMOI.md](LISEZMOI.md).
 
 ### Search Qobuz

@@ -92,6 +92,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Partial redraws** keep taps responsive: a full frame pushes ~1.8 MB. `pressKey()`, `updateSearchField()`,
   `updateTransport()` and `updateProgress()` redraw one area over `bg_` (clip) and send it with `presentRect()`.
   The waiting rings animate with `updateTransport()` only.
+- **Settings survive a full USB flash**: the merged image written at `0x0` pads over the NVS (0x9000), so
+  `setup()` keeps a copy in LittleFS (`fav::saveSettingsBackup`, `settingsToBackup`) and restores it when the NVS
+  is empty. Add new settings to `settingsToBackup()` / `settingsFromBackup()` too.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 

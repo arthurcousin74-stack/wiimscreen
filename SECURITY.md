@@ -19,6 +19,6 @@ wiimscreen runs on a home network and talks to a WiiM player, a few HTTPS servic
 | WiiM play queues (UPnP) | Plain HTTP SOAP on the LAN (port 49152), like the WiiM Home app; read/write of play queues only. The Qobuz account name is masked in logs. |
 | Qobuz and Deezer access | The WiiM hands out its Qobuz app ID and user token to any LAN client (UPnP `GetUserInfo`, no authentication — a property of the WiiM, not of wiimscreen). The same applies to a Deezer token if the WiiM gives one. wiimscreen keeps them **in RAM only** (never in NVS, LittleFS, logs or on screen), sends them only to `www.qobuz.com` / `api.deezer.com` over verified HTTPS, and asks again when Qobuz refuses them. |
 | Microphone | Active only in the ambient view (visualizer, processed on-device) or while dictating a search (audio sent to OpenAI only then). |
-| Secrets | Stored in the ESP32's NVS (not encrypted); never logged. An OpenAI key with spending limits is recommended. |
+| Secrets | Stored in the ESP32's NVS (not encrypted), with a backup copy in LittleFS (`/settings.bak`, not encrypted) so that a full USB flash does not lose them; never logged. An OpenAI key with spending limits is recommended. "Erase flash" removes both. |
 
 Known limitations worth improving: trust-on-first-use for the WiiM certificate, unsigned OTA images, NVS encryption.

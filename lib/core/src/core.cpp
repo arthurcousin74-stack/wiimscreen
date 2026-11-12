@@ -617,6 +617,51 @@ Layout computeLayout(int width, int height, int presetCount) {
     return L;
 }
 
+static std::string escapeField(const std::string& s) {
+    std::string o;
+    for (char c : s) {
+        if (c == '\\') o += "\\\\";
+        else if (c == '\t') o += "\\t";
+        else if (c == '\n') o += "\\n";
+        else if (c != '\r') o += c;
+    }
+    return o;
+}
+
+static std::string unescapeField(const std::string& s) {
+    std::string o;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] != '\\' || i + 1 >= s.size()) {
+            o += s[i];
+            continue;
+        }
+        char e = s[++i];
+        o += e == 't' ? '\t' : e == 'n' ? '\n' : e;
+    }
+    return o;
+}
+
+std::string encodeFields(const std::vector<std::pair<std::string, std::string>>& fields) {
+    std::string o;
+    for (auto& f : fields) o += escapeField(f.first) + "\t" + escapeField(f.second) + "\n";
+    return o;
+}
+
+std::vector<std::pair<std::string, std::string>> decodeFields(const std::string& text) {
+    std::vector<std::pair<std::string, std::string>> out;
+    size_t p = 0;
+    while (p < text.size()) {
+        size_t e = text.find('\n', p);
+        if (e == std::string::npos) e = text.size();
+        const std::string line = text.substr(p, e - p);
+        p = e + 1;
+        size_t t = line.find('\t');
+        if (t == std::string::npos || t == 0) continue;  // ligne abîmée : ignorée
+        out.emplace_back(unescapeField(line.substr(0, t)), unescapeField(line.substr(t + 1)));
+    }
+    return out;
+}
+
 std::vector<Key> keyboardLayout(const Rect& area) {
     std::vector<Key> keys;
     const int g = std::max(4, area.w / 120);

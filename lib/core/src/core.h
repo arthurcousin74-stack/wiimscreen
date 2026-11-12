@@ -172,6 +172,11 @@ struct Layout {
     Rect content;      // reste de l'écran, à côté de la barre
 };
 
+// Champs clé/valeur en texte (une ligne « clé<TAB>valeur » ; \\, tabulation et retour à la ligne échappés) :
+// copie de secours des réglages, hors de la zone que réécrit un flash USB complet.
+std::string encodeFields(const std::vector<std::pair<std::string, std::string>>& fields);
+std::vector<std::pair<std::string, std::string>> decodeFields(const std::string& text);
+
 // Les dimensions suivent la taille de l'écran (référence : 540 px sur le petit côté).
 Layout computeLayout(int width, int height, int presetCount);
 

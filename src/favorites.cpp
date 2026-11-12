@@ -141,6 +141,19 @@ bool sourceModel(const std::string& source, std::string& out) {
     return g_ok && readFile(modelPath(source).c_str(), out) && !out.empty();
 }
 
+bool saveSettingsBackup(const std::string& text) {
+    Guard g;
+    if (!g_ok) return false;
+    std::string old;
+    if (readFile("/settings.bak", old) && old == text) return true;  // inchangée : pas d'écriture
+    return writeFile("/settings.bak", text);
+}
+
+bool settingsBackup(std::string& out) {
+    Guard g;
+    return g_ok && readFile("/settings.bak", out) && !out.empty();
+}
+
 bool hasQobuzModel() {
     Guard g;
     return g_ok && LittleFS.exists("/fav/qobuz_template.xml");

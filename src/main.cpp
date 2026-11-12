@@ -1127,7 +1127,17 @@ void setup() {
     WiFi.setPins(kSdioClk, kSdioCmd, kSdioD0, kSdioD1, kSdioD2, kSdioD3, kSdioRst);
     setBrightness(kBrightOn);
 
+    // Réglages : NVS ; copie de secours dans LittleFS (favoris), qu'un flash USB complet n'efface pas
+    g_favOk = fav::begin();
     bool presetsOk = loadSettings(g_settings);
+    bool restored = false;
+    std::string backup;
+    if (!g_settings.configured() && g_favOk && fav::settingsBackup(backup) && settingsFromBackup(backup, g_settings)) {
+        saveSettings(g_settings);  // NVS effacée (flash USB) : réglages remis depuis la copie
+        presetsOk = loadSettings(g_settings);
+        restored = true;
+    }
+    if (g_settings.configured() && g_favOk) fav::saveSettingsBackup(settingsToBackup(g_settings));
     sound::begin(g_settings.beep);
     g_ui.begin(g_settings);
     g_ui.setVisualizer(g_settings.visualizer);
@@ -1139,6 +1149,7 @@ void setup() {
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistr\xC3\xA9" "e est invalide.");
 
     logEvent("D\xC3\xA9marrage, version %s", FW_VERSION);
+    if (restored) logEvent("R\xC3\xA9glages remis depuis la copie de secours (Wi-Fi, WiiM, cl\xC3\xA9, options)");
     connectWifi();
     logEvent("Wi-Fi connect\xC3\xA9, adresse du Tab5 %s", WiFi.localIP().toString().c_str());
     if (!g_settings.host.length()) chooseWiim();  // recherche automatique du WiiM

@@ -8,6 +8,8 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Settings backup in LittleFS: a full USB flash (merged image at 0x0, which overwrites the NVS) no longer loses the
+  Wi-Fi, WiiM, OpenAI key and options; they are restored at the next start. OTA updates already kept them.
 - Sleep: Settings › *Mise en veille* turns the Tab5 off; optional automatic sleep after 30 min / 1 h / 2 h without
   touch or music (setup page, default never). The power button turns it on again (touch cannot wake the P4).
 - Deezer favorite albums as tiles (experimental): Deezer token asked to the WiiM (`GetUserInfo`), albums from

@@ -39,6 +39,9 @@ bool presetsTextIsAuto(const String& text);
 
 // Charge les réglages ; renvoie false si la liste de presets est invalide.
 bool loadSettings(Settings& s);
+// Réglages en champs texte (copie de secours dans LittleFS) et retour ; inconnus ignorés
+std::string settingsToBackup(const Settings& s);
+bool settingsFromBackup(const std::string& text, Settings& s);
 void saveSettings(const Settings& s);
 void saveFingerprint(const String& hex);
 // WiiM trouvé sur le réseau (ou nouvelle adresse du même WiiM)
