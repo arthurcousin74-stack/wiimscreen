@@ -140,6 +140,10 @@ int main(int argc, char** argv) {
         ui.setFavorite(2);
         ui.render(st);
         save(out, "23-favoris.ppm");
+        UiState wait = st;
+        wait.pending = wr::kNext;  // ⏭ envoyé, le WiiM n'a pas encore changé de morceau
+        ui.render(wait);
+        save(out, "28-attente.ppm");
         ui.setFavorite(1);
         ui.setPresets(six);
         for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);

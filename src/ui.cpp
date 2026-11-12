@@ -396,12 +396,16 @@ void Ui::transport(const UiState& st, int pressed) {
         C.fillCircle(cx, cy, r.w / 2, pressed == which ? kCardHi : kCard);
         if (which == wr::kPrev) prevIcon(C, cx, cy, r.w / 6, icon);
         else nextIcon(C, cx, cy, r.w / 6, icon);
+        if (st.pending == which) {  // commande envoyée, le WiiM n'a pas encore changé de morceau
+            const int a = (int)((millis() / 3) % 360);
+            C.fillArc(cx, cy, r.w / 2 + sc(2), r.w / 2 + sc(6), a, a + 100, accent_);
+        }
     }
     const wr::Rect& r = layout_.transport[wr::kPlayPause];
     const int cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = r.w / 2;
     C.fillCircle(cx, cy, R + sc(7), mix(bgAt(cy), accent_, 0.25f));  // halo
     C.fillCircle(cx, cy, R, pressed == wr::kPlayPause ? kText : (st.online ? accent_ : kCardHi));
-    if (st.player.loading) {
+    if (st.player.loading || st.pending == wr::kPlayPause) {
         const int a = (int)((millis() / 4) % 360);
         C.fillArc(cx, cy, R + sc(3), R + sc(7), a, a + 100, kText);
     }

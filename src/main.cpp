@@ -138,12 +138,39 @@ static void setBrightness(int b) {
 }
 
 // État affiché : la position avance entre deux relevés pendant la lecture
+// Commande en attente de confirmation : anneau tournant sur le bouton (sinon l'appui semble ignoré
+// pendant que le WiiM réagit). Levée quand le relevé montre le changement, sur erreur, ou après 10 s.
+enum class Await { None, Track, Playing, Music };
+static int g_pendingT = -1;          // bouton concerné (wr::kPrev, kNext, kPlayPause)
+static Await g_await = Await::None;  // ce que l'on attend du WiiM
+static uint32_t g_pendingSince = 0, g_pendingSeq = 0;
+static std::string g_pendingTitle;   // morceau affiché au moment de l'appui
+static bool g_pendingPlaying = false;
+static uint32_t g_pendingPos = 0;    // position au moment de l'appui (⏮ peut reprendre le même morceau)
+
+static void markPending(int button, Await what, bool viaEvent = false);
+static void show();
+
 static UiState displayState() {
     UiState s = g_state;
+    s.pending = g_pendingT;
     auto& p = s.player;
     if (p.playing && p.durationMs > 0)
         p.positionMs = std::min(p.durationMs, p.positionMs + (millis() - g_statusAt));
     return s;
+}
+
+static void markPending(int button, Await what, bool viaEvent) {
+    g_pendingT = button;
+    g_await = what;
+    g_pendingSince = millis();
+    // Commande passée par la file : confirmée par un relevé commencé après elle. Favori ou résultat de
+    // recherche (autre chemin) : seulement après l'évènement de fin (FavPlayed).
+    g_pendingSeq = viaEvent ? UINT32_MAX : g_worker.queued();
+    g_pendingTitle = g_state.player.title;
+    g_pendingPlaying = g_state.player.playing;  // déjà basculé pour lecture/pause
+    g_pendingPos = displayState().player.positionMs;
+    show();
 }
 
 // Affichage différé : show() marque l'écran à redessiner, renderNow() le dessine une
@@ -430,12 +457,28 @@ static void applyReport(const WiimReport& r) {
 static void serviceWiim() {
     WiimReport r;
     // Relevé commencé avant la dernière commande : il annulerait l'affichage optimiste
-    if (g_worker.takeReport(r) && r.cmdSeq >= g_worker.queued()) applyReport(r);
+    if (g_worker.takeReport(r) && r.cmdSeq >= g_worker.queued()) {
+        applyReport(r);
+        // Confirmation de la commande en attente
+        if (g_pendingT >= 0 && r.online && r.cmdSeq >= g_pendingSeq) {
+            const auto& pl = r.player;
+            bool done = false;
+            if (g_await == Await::Track)
+                done = pl.title != g_pendingTitle || (g_pendingPos > 5000 && pl.positionMs < 3000);
+            else if (g_await == Await::Playing) done = pl.playing == g_pendingPlaying;
+            else if (g_await == Await::Music) done = pl.playing && !pl.loading && pl.title != g_pendingTitle;
+            if (done) {
+                g_pendingT = -1;
+                show();
+            }
+        }
+    }
 
     WiimEvent ev;
     while (g_worker.takeEvent(ev)) {
         switch (ev.kind) {
             case WiimEvent::CommandDone:
+                if (ev.error != WiimError::None) g_pendingT = -1;
                 if (ev.error != WiimError::None && ev.error != WiimError::PinMismatch) {
                     sound::error();
                     setMessage(errorText(ev.error));
@@ -459,7 +502,9 @@ static void serviceWiim() {
                 break;
             case WiimEvent::SearchDone: onSearchDone(ev); break;
             case WiimEvent::FavPlayed:
+                if (g_pendingT >= 0) g_pendingSeq = g_worker.queued();  // les relevés suivants peuvent confirmer
                 if (!ev.ok) {
+                    g_pendingT = -1;
                     sound::error();
                     g_activePreset = -1;
                     g_ui.setActivePreset(-1);
@@ -592,8 +637,13 @@ static void playPreset(int p) {
     g_activeSince = millis();
     g_activeMode = -1;
     g_ui.setActivePreset(p);
-    if (!g_presets[p].favId.empty()) g_worker.playFavorite(g_presets[p].favId.c_str());  // file enregistrée
-    else g_worker.command("MCUKeyShortClick:" + String(g_presets[p].slot));
+    if (!g_presets[p].favId.empty()) {
+        g_worker.playFavorite(g_presets[p].favId.c_str());  // file enregistrée
+        markPending(wr::kPlayPause, Await::Music, true);
+    } else {
+        g_worker.command("MCUKeyShortClick:" + String(g_presets[p].slot));
+        markPending(wr::kPlayPause, Await::Music);
+    }
     flash(p, -1);
 }
 
@@ -900,14 +950,18 @@ static void handleTap(int x, int y) {
             g_worker.command("setPlayerCmd:vol:" + String(v));
             break;
         }
-        case wr::kPrev: g_worker.command("setPlayerCmd:prev"); break;
-        case wr::kNext: g_worker.command("setPlayerCmd:next"); break;
+        case wr::kPrev:
+        case wr::kNext:
+            g_worker.command(t == wr::kPrev ? "setPlayerCmd:prev" : "setPlayerCmd:next");
+            markPending(t, Await::Track);
+            break;
         case wr::kPlayPause:
             // Ce que montre l'icône, explicitement : plus fiable qu'une bascule (onepause)
             // quand l'état affiché a un temps de retard sur le WiiM
             g_worker.command(p.playing ? "setPlayerCmd:pause" : "setPlayerCmd:resume");
             p.playing = !p.playing;
             g_statusAt = millis();
+            markPending(t, Await::Playing);
             break;
     }
     flash(-1, t);
@@ -1123,6 +1177,7 @@ void loop() {
                     g_ui.renderResults(g_searchQuery, g_searchResults, g_resultsPage, "", r);  // ligne enfoncée
                     logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
                     g_worker.playSearchResult(r);
+                    markPending(wr::kPlayPause, Await::Music, true);
                     setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title).c_str(), 4000);
                     g_resultsOpen = false;
                     show();
@@ -1233,7 +1288,12 @@ void loop() {
         else show();
     }
     // Chargement : anneau qui tourne autour du bouton lecture (~20 images/s)
-    if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
+    if (g_pendingT >= 0 && now - g_pendingSince > 10000) {  // le WiiM n'a rien confirmé : on arrête d'attendre
+        g_pendingT = -1;
+        show();
+    }
+    if (g_brightness > 0 && !g_ambient && (p.loading || g_pendingT >= 0) && !g_stripTouch && now - g_lastTick >= 50)
+        show();
 
     const uint32_t idle = now - g_lastTouch;
     if (!g_ambient && !modalOpen() && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&

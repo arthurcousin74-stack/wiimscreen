@@ -556,6 +556,20 @@ static int sendQueue(const std::string& control, const std::string& ctx, const s
 
 static bool readQueueStable(const std::string& control, const std::string& name, int seconds, wr::QueueInfo& out);
 
+// Crée une file sans demander à la lire : QueuePolicy 0, puis 1 (exemple connu), puis sans l'argument
+// si le WiiM refuse. `policy` reçoit la valeur acceptée.
+static int createQueueQuiet(const std::string& control, const std::string& ctx, const char*& policy) {
+    std::string resp;
+    for (const char* p : {"0", "1"}) {
+        policy = p;
+        int c = upnpRequest(control, "CreateQueue",
+                            wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", p}}), resp);
+        if (c == 200) return c;
+    }
+    policy = "absent";
+    return upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
+}
+
 void WiimWorker::testQobuzSearch(const String& query) {
     xSemaphoreTake(lock_, portMAX_DELAY);
     searchTest_ = query.length() ? query : String("Miles Davis");
@@ -583,9 +597,9 @@ void WiimWorker::runSearchTest(const String& query) {
         const std::string name = std::string("wiimscreen-essai-") + std::to_string(++searchCount_ % 2);
         upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
         const std::string ctx = wr::queueFromTemplate(templ, name, v.second);
-        int create = upnpRequest(control, "CreateQueue",
-                                 wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
-        logEvent("Essai %s : CreateQueue %d", v.first, create);
+        const char* policy = "0";
+        int create = createQueueQuiet(control, ctx, policy);
+        logEvent("Essai %s : CreateQueue %d (QueuePolicy %s)", v.first, create, policy);
         logLong("envoy\xC3\xA9 ", v.second);
         if (create != 200) continue;
         wr::QueueInfo q;
@@ -695,23 +709,15 @@ void WiimWorker::runSearch(const String& query) {
         upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
         const std::string& url = v.second;
         const std::string ctx = wr::queueFromTemplate(templ, name, url);
-        int create = upnpRequest(control, "CreateQueue",
-                                 wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
-        if (create != 200)
-            create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
-                                 resp);
-        logEvent("Recherche \xC2\xAB %s \xC2\xBB (%s) : CreateQueue %d", query.c_str(), v.first, create);
+        const char* policy = "0";
+        int create = createQueueQuiet(control, ctx, policy);
+        logEvent("Recherche \xC2\xAB %s \xC2\xBB (%s) : CreateQueue %d (QueuePolicy %s)", query.c_str(), v.first, create,
+                 policy);
         logLong("envoy\xC3\xA9 ", url);
         if (create != 200) continue;
         wr::QueueInfo q;
-        bool played = false;
-        bool found = readBack(name, 8, q);
-        if (!found) {
-            played = upnpRequest(control, "PlayQueueWithIndex",
-                                 wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),
-                                 resp) == 200;
-            found = played && readBack(name, 8, q);
-        }
+        const bool played = false;  // jamais de lecture automatique : on attend que l'on choisisse un morceau
+        bool found = readBack(name, 10, q);
         if (found) logLong(q.searchUrl == url ? "relu (identique) " : "relu ", wr::maskSecrets(q.searchUrl));
         std::vector<std::string> texts;
         for (auto& t : q.items) texts.insert(texts.end(), {t.title, t.artist, t.album});

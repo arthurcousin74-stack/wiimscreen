@@ -16,6 +16,7 @@ struct UiState {
     bool online = false;
     String message;    // notification temporaire (erreur, info), affichée en haut
     int battery = -1;  // % ou -1 si inconnu / pas de batterie
+    int pending = -1;  // bouton de lecture dont la commande attend la confirmation du WiiM (anneau tournant)
 };
 
 // Affichage sur l'écran couleur du Tab5 (1280×720).
