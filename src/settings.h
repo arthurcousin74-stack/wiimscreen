@@ -42,3 +42,7 @@ void saveSettings(const Settings& s);
 void saveFingerprint(const String& hex);
 // WiiM trouvé sur le réseau (ou nouvelle adresse du même WiiM)
 void saveWiim(const String& host, const String& uuid, const String& name);
+// Mode configuration au prochain démarrage (le basculer à chaud, Wi-Fi connecté et tâches réseau
+// actives, figeait le Tab5) ; takePortalRequest() le lit et l'efface.
+void requestPortal(const String& reason);
+bool takePortalRequest(String& reason);

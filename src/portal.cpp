@@ -1,6 +1,7 @@
 #include "portal.h"
 
 #include <DNSServer.h>
+#include <M5Unified.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <esp_system.h>
@@ -169,6 +170,7 @@ static String donePage(const String& ssid) {
 }
 
 void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
+    ui.showInfo("Configuration", "Pr\xC3\xA9paration : recherche des r\xC3\xA9seaux Wi-Fi\xE2\x80\xA6");
     WiFi.disconnect(true);
     WiFi.mode(WIFI_AP_STA);
 
@@ -265,11 +267,21 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     });
     server.begin();
 
-    ui.showPortal(apName, apPass, url, reason);
+    // Déjà configuré : un appui sur l'écran annule (redémarrage normal, rien n'est modifié)
+    const bool canCancel = s.configured();
+    ui.showPortal(apName, apPass, url,
+                  canCancel ? reason + " Touche l'\xC3\xA9" "cran du Tab5 pour annuler." : reason);
 
+    const uint32_t shownAt = millis();
     for (;;) {
         dns.processNextRequest();
         server.handleClient();
+        M5.update();
+        if (canCancel && millis() - shownAt > 1500 && M5.Touch.getDetail().wasPressed()) {
+            ui.showInfo("Configuration", "Annul\xC3\xA9" "e : red\xC3\xA9marrage\xE2\x80\xA6");
+            delay(400);
+            ESP.restart();
+        }
         delay(2);
     }
 }

@@ -38,6 +38,8 @@ Hardware testing in progress.
   advanced sections, file name and progress on the update page.
 
 ### Changed
+- Settings › Configuration restarts the Tab5 into setup mode instead of switching live (that froze the device);
+  a tap on the screen cancels setup mode when the Tab5 is already configured.
 - Loading feedback: after ⏮/⏭, play/pause, a preset, a favorite or a search result, a ring turns around the
   button until the WiiM reports the change (10 s at most).
 - Search never starts playback by itself: queues are created with `QueuePolicy 0` first, and the remote no

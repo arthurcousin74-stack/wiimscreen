@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
     ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");
     save(out, "14-mise-a-jour.ppm");
 
-    ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Première configuration.");
+    ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Reconfiguration demand\xC3\xA9" "e. Touche l'\xC3\xA9" "cran du Tab5 pour annuler.");
     save(out, "8-configuration.ppm");
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée
     // (sans conséquence sur l'appareil, où l'interface n'est jamais détruite)

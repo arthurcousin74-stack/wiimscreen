@@ -76,6 +76,22 @@ void saveFingerprint(const String& hex) {
     p.end();
 }
 
+void requestPortal(const String& reason) {
+    Preferences p;
+    p.begin(kNamespace, false);
+    p.putString("portal", reason.length() ? reason : String("Reconfiguration"));
+    p.end();
+}
+
+bool takePortalRequest(String& reason) {
+    Preferences p;
+    p.begin(kNamespace, false);
+    reason = p.getString("portal", "");
+    if (reason.length()) p.remove("portal");
+    p.end();
+    return reason.length() > 0;
+}
+
 void saveWiim(const String& host, const String& uuid, const String& name) {
     Preferences p;
     p.begin(kNamespace, false);

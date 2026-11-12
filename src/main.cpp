@@ -293,6 +293,16 @@ static void serviceMotion(uint32_t now) {
     if (g_ambient) exitAmbient();
 }
 
+// Mode configuration : par un redémarrage, jamais à chaud (le Wi-Fi du Tab5 passe par l'ESP32-C6 ;
+// couper la connexion et chercher les réseaux pendant que les tâches réseau tournent figeait l'appareil).
+static void restartIntoPortal(const String& reason) {
+    logEvent("Configuration : red\xC3\xA9marrage en mode configuration");
+    requestPortal(reason);
+    g_ui.showInfo("Configuration", "Le Tab5 red\xC3\xA9marre en mode configuration\xE2\x80\xA6");
+    delay(600);
+    ESP.restart();
+}
+
 // ------------------------------------------------------------------- presets
 
 static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
@@ -589,7 +599,7 @@ static void chooseWiim() {
                     return;
                 }
                 if (c == Ui::PickRetry) sound::tap(), retry = true;
-                if (c == Ui::PickConfig) runSetupPortal(g_settings, g_ui, "Saisis l'adresse IP du WiiM.");
+                if (c == Ui::PickConfig) restartIntoPortal("Saisis l'adresse IP du WiiM.");
             }
             delay(20);
         }
@@ -990,7 +1000,7 @@ static void connectWifi() {
         }
         if (shownError && M5.Touch.getDetail().wasPressed()) {
             sound::tap();
-            runSetupPortal(g_settings, g_ui, "Le Wi-Fi \xC2\xAB " + g_settings.ssid + " \xC2\xBB est injoignable.");
+            restartIntoPortal("Le Wi-Fi \xC2\xAB " + g_settings.ssid + " \xC2\xBB est injoignable.");
         }
         delay(20);
     }
@@ -1010,6 +1020,8 @@ void setup() {
     g_ui.setVisualizer(g_settings.visualizer);
     g_ui.setVoiceEnabled(g_settings.voiceEnabled());
 
+    String portalReason;
+    if (takePortalRequest(portalReason)) runSetupPortal(g_settings, g_ui, portalReason);  // demandé avant le redémarrage
     if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Premi\xC3\xA8re configuration.");
     if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistr\xC3\xA9" "e est invalide.");
 
@@ -1241,7 +1253,7 @@ void loop() {
             Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
             if (c != Ui::MenuNone) sound::tap();
             if (c == Ui::MenuConfig) {
-                runSetupPortal(g_settings, g_ui, "Reconfiguration demand\xC3\xA9" "e.");  // redémarre
+                restartIntoPortal("Reconfiguration demand\xC3\xA9" "e.");  // redémarre
             } else if (c == Ui::MenuUpdate) {
                 runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
                 g_menuOpen = false;
