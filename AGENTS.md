@@ -74,6 +74,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   (keep-alive, closed after 8 s idle; `httpFrame()` in `lib/core` decides when a response is complete) and retries
   once on a fresh connection if a reused one returns nothing. Reports that started before the latest command
   are discarded (`cmdSeq`) so they don't undo the optimistic state.
+- Navigation bar: `Layout::rail/navHome/navSettings/content`; screens that show it call `Ui::navRail()` and lay
+  out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 

@@ -764,11 +764,18 @@ static void handleTap(int x, int y) {
         startVoice();
         return;
     }
-    if (g_ui.hitHome(x, y)) {  // Accueil : retour à la première page de presets
+    if (g_ui.hitHome(x, y)) {  // Accueil (barre) : déjà ici, retour à la première page de presets
         logEvent("Appui Accueil (%d,%d)", x, y);
         sound::tap();
         g_ui.setPage(0);
         show();
+        return;
+    }
+    if (g_ui.hitSettings(x, y)) {  // Réglages (barre)
+        logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
+        sound::tap();
+        g_menuOpen = true;
+        g_ui.renderMenu(FW_VERSION);
         return;
     }
 
@@ -892,11 +899,17 @@ void loop() {
 
     // Journal : rafraîchi chaque seconde ; « Fermer » pour sortir
     if (g_logOpen) {
-        if (t.wasPressed() && g_ui.hitLogClose(t.x, t.y)) {
+        if (t.wasPressed() && (g_ui.hitLogClose(t.x, t.y) || g_ui.hitHome(t.x, t.y))) {
             sound::tap();
             g_logOpen = false;
             g_lastTouch = now;
             show();
+        } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
+            sound::tap();
+            g_logOpen = false;
+            g_menuOpen = true;
+            g_lastTouch = now;
+            g_ui.renderMenu(FW_VERSION);
         } else if (now - g_logFrame > 1000) {
             g_logFrame = now;
             g_ui.renderLog(logLines(), FW_VERSION);
@@ -920,6 +933,10 @@ void loop() {
             logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_ambient) exitAmbient();
+        } else if (g_menuOpen && g_ui.hitHome(t.x, t.y)) {
+            sound::tap();  // Accueil : fermer les réglages
+            g_menuOpen = false;
+            show();
         } else if (g_menuOpen) {
             Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
             if (c != Ui::MenuNone) sound::tap();

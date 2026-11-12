@@ -58,7 +58,8 @@ public:
     void setVoiceEnabled(bool on) { voiceOn_ = on; }
     void renderVoice(VoicePhase phase, float level);  // level : 0..1
     bool hitMic(int x, int y) const;
-    bool hitHome(int x, int y) const;  // bouton Accueil (vue commandes ou vue ambiance)
+    bool hitHome(int x, int y) const;      // Accueil : barre de navigation, ou bouton de la vue ambiance
+    bool hitSettings(int x, int y) const;  // Réglages : barre de navigation
     bool hitVoiceCancel(int x, int y) const;
     // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
     // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
@@ -127,6 +128,8 @@ private:
     void drawBars();
     void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
+    void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
+    void navRail(int active);  // 0 Accueil, 1 Réglages
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -161,6 +164,7 @@ private:
     View view_ = View::Other;  // dernier écran affiché (pour les mises à jour partielles)
     wr::Rect ambProg_;          // ligne de progression de la vue ambiance
     wr::Rect homeRect_;         // bouton Accueil de la vue ambiance
+    bool railShown_ = false;    // barre de navigation à l'écran
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

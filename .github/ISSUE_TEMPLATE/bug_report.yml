@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: wiimscreen version
-      description: Bottom of the Réglages menu (hold the album art 3 s)
+      description: Bottom of the Réglages menu (⚙ button in the left bar)
       placeholder: e.g. v0.1.0 or 57-219c0bc
     validations:
       required: true

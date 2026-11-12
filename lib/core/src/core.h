@@ -149,13 +149,13 @@ enum Transport { kVolDown = 0, kPrev, kPlayPause, kNext, kVolUp, kTransportCount
 // progression, les commandes de lecture et le volume ; les presets en tuiles
 // (pochette + nom) sur une bande en bas, par pages.
 // Portrait : la même pile, pochette en haut, presets sur deux rangées.
+// Barre de navigation (Accueil en haut, Réglages en bas) : à gauche en paysage, en haut en portrait.
 struct Layout {
     Rect art;       // pochette, carrée (appui long sur elle ou les textes : configuration)
     Rect info;      // puces (source, qualité), titre, artiste, album
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
     Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
-    Rect home;      // bouton Accueil, à l'autre bout de la rangée
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
     Rect volBar;    // curseur de volume
@@ -163,6 +163,10 @@ struct Layout {
     std::vector<Rect> presets;  // emplacements d'une page
     int perPage = 0;
     Rect dots;      // indicateur de pages
+    Rect rail;         // barre de navigation
+    Rect navHome;      // Accueil (écran principal)
+    Rect navSettings;  // Réglages
+    Rect content;      // reste de l'écran, à côté de la barre
 };
 
 // Les dimensions suivent la taille de l'écran (référence : 540 px sur le petit côté).

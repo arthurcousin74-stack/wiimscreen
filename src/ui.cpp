@@ -582,17 +582,14 @@ void Ui::toast(const String& msg) {
 void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     ambientShown_ = false;
     view_ = View::Controls;
+    railShown_ = true;
     progDuration_ = st.player.durationMs;
     background();
     roundedPush(art_, layout_.art.x, layout_.art.y, sc(16), true, 0);
     info(st);
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
-    {  // Accueil : maison au bout gauche de la rangée (le micro est au bout droit)
-        const wr::Rect& g = layout_.home;
-        canvas_.fillCircle(g.x + g.w / 2, g.y + g.h / 2, g.w / 2, kCard);
-        homeIcon(g.x + g.w / 2, g.y + g.h / 2, g.w / 4, kText2, kCard);
-    }
+    navRail(0);
     if (voiceOn_) {
         const wr::Rect& m = layout_.mic;
         canvas_.fillCircle(m.x + m.w / 2, m.y + m.h / 2, m.w / 2, kCard);
@@ -694,6 +691,7 @@ void Ui::renderAmbient(const UiState& st) {
     if (visEnabled_) drawBars();
     ambientShown_ = true;
     view_ = View::Ambient;
+    railShown_ = false;
     present();
 }
 
@@ -743,6 +741,38 @@ void Ui::micIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     (void)bg;
 }
 
+// Barre de navigation : Accueil en haut, Réglages en bas ; l'écran affiché est en couleur
+void Ui::navRail(int active) {
+    auto& C = canvas_;
+    const wr::Rect& r = layout_.rail;
+    C.fillRect(r.x, r.y, r.w, r.h, 0x0A0B0Eu);
+    if (r.h > r.w) C.drawFastVLine(r.right() - 1, r.y, r.h, kCard);
+    else C.drawFastHLine(r.x, r.bottom() - 1, r.w, kCard);
+    const wr::Rect* items[] = {&layout_.navHome, &layout_.navSettings};
+    for (int i = 0; i < 2; ++i) {
+        const wr::Rect& b = *items[i];
+        const int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+        const bool on = i == active;
+        const uint32_t bg = on ? accent_ : kCard, fg = on ? kBg : kText2;
+        C.fillCircle(cx, cy, b.w / 2, bg);
+        if (i == 0) homeIcon(cx, cy, b.w / 4, fg, bg);
+        else gearIcon(cx, cy, b.w / 4, fg, bg);
+    }
+    railShown_ = true;
+}
+
+// Engrenage : dents en couronne, disque, trou central
+void Ui::gearIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
+    auto& C = canvas_;
+    const int teeth = 8, tr = std::max(2, r / 4);
+    for (int k = 0; k < teeth; ++k) {
+        float a = k * 2 * 3.14159265f / teeth;
+        C.fillCircle(cx + (int)std::lround(std::cos(a) * r), cy + (int)std::lround(std::sin(a) * r), tr, c);
+    }
+    C.fillCircle(cx, cy, r * 85 / 100, c);
+    C.fillCircle(cx, cy, r * 38 / 100, bg);
+}
+
 // Maison : toit, corps, porte
 void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     auto& C = canvas_;
@@ -755,6 +785,7 @@ void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
 void Ui::renderVoice(VoicePhase phase, float level) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height();
@@ -809,11 +840,19 @@ bool Ui::hitMic(int x, int y) const {
 
 bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }
 
+// Boutons de la barre : toute la largeur de la barre compte, et un peu autour
+static bool hitNav(const wr::Rect& rail, const wr::Rect& b, int pad, int x, int y) {
+    if (rail.h > rail.w) return x >= rail.x && x < rail.right() && y >= b.y - pad && y < b.bottom() + pad;
+    return y >= rail.y && y < rail.bottom() && x >= b.x - pad && x < b.right() + pad;
+}
+
 bool Ui::hitHome(int x, int y) const {
     if (view_ == View::Ambient) return homeRect_.contains(x, y);
-    const wr::Rect& g = layout_.home;
-    const int pad = sc(10);
-    return view_ == View::Controls && wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
+    return railShown_ && hitNav(layout_.rail, layout_.navHome, sc(16), x, y);
+}
+
+bool Ui::hitSettings(int x, int y) const {
+    return railShown_ && view_ != View::Ambient && hitNav(layout_.rail, layout_.navSettings, sc(16), x, y);
 }
 
 int Ui::hitPreset(int x, int y) const {
@@ -883,15 +922,18 @@ static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const 
 void Ui::renderMenu(const char* version) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     background();
-    const int W = C.width(), H = C.height();
+    navRail(1);
+    const wr::Rect& A = layout_.content;
+    const int W = A.w, H = C.height();
     const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(64), gap = sc(10);
-    const int x = (W - bw) / 2, y0 = sc(100);
+    const int x = A.x + (W - bw) / 2, y0 = A.y + sc(100);
     C.setTextDatum(textdatum_t::bottom_center);
     C.loadFont(kBig);
     C.setTextColor(kText);
-    C.drawString("R\xC3\xA9glages", W / 2, y0 - sc(20));
+    C.drawString("R\xC3\xA9glages", A.x + W / 2, y0 - sc(20));
     menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
     menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
     menuRects_[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
@@ -904,7 +946,7 @@ void Ui::renderMenu(const char* version) {
                kText2, sc(16));
     menuButton(C, menuRects_[MenuLog], "Journal", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic", kText2, sc(16));
     const int cw = sc(150), ch = sc(44);
-    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuLog].bottom() + sc(20), cw, ch};
+    menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuLog].bottom() + sc(20), cw, ch};
     const wr::Rect& c = menuRects_[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
     C.loadFont(kSmall);
@@ -913,7 +955,7 @@ void Ui::renderMenu(const char* version) {
     C.drawString("Fermer", c.x + c.w / 2, c.y + c.h / 2 + 1);
     C.setTextDatum(textdatum_t::bottom_right);
     C.setTextColor(kText2);
-    C.drawString((String("Version ") + version).c_str(), W - sc(20), H - sc(14));
+    C.drawString((String("Version ") + version).c_str(), C.width() - sc(20), H - sc(14));
     present();
 }
 
@@ -921,18 +963,21 @@ void Ui::renderMenu(const char* version) {
 void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     C.fillScreen(kBg);
-    const int W = C.width(), H = C.height(), m = sc(20);
+    navRail(1);
+    const wr::Rect& A = layout_.content;
+    const int W = C.width(), H = C.height(), m = sc(20), X = A.x + m, Y = A.y + m;
     C.loadFont(kMid);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
-    C.drawString("Journal", m, m);
+    C.drawString("Journal", X, Y);
     C.loadFont(kSmall);
     C.setTextColor(kText2);
-    C.drawString((String("Version ") + version).c_str(), m + sc(150), m + sc(6));
+    C.drawString((String("Version ") + version).c_str(), X + sc(150), Y + sc(6));
     const int bw = sc(150), bh = sc(44);
-    logClose_ = wr::Rect{W - bw - m, m, bw, bh};
+    logClose_ = wr::Rect{W - bw - m, Y, bw, bh};
     C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
@@ -940,9 +985,9 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     // Lignes : police fine, deux colonnes en paysage
     C.loadFont(kTiny);
     C.setTextDatum(textdatum_t::top_left);
-    const int top = m + bh + sc(14), lh = C.fontHeight() + sc(2);
+    const int top = Y + bh + sc(14), lh = C.fontHeight() + sc(2);
     const int perCol = std::max(1, (H - top - m) / lh);
-    const int cols = W > H ? 2 : 1, colW = (W - 2 * m) / cols;
+    const int cols = W > H ? 2 : 1, colW = (W - X - m) / cols;
     const int maxShown = perCol * cols;
     const int first = std::max(0, (int)lines.size() - maxShown);
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
@@ -950,7 +995,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
         int k = i - first, col = k / perCol, row = k % perCol;
         auto fitted = wr::wrapText(lines[i].c_str(), colW - sc(12), 1, measure);
         C.setTextColor(i == (int)lines.size() - 1 ? kText : kText2);
-        C.drawString(fitted.empty() ? "" : fitted[0].c_str(), m + col * colW, top + row * lh);
+        C.drawString(fitted.empty() ? "" : fitted[0].c_str(), X + col * colW, top + row * lh);
     }
     present();
 }
@@ -959,6 +1004,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
 void Ui::renderTouchTest(int x, int y, int count) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     C.fillScreen(kBg);
     const int W = C.width(), H = C.height();
@@ -993,6 +1039,7 @@ void Ui::renderTouchTest(int x, int y, int count) {
 void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& devices) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
     background();
@@ -1064,6 +1111,7 @@ Ui::MenuChoice Ui::hitMenu(int x, int y) const {
 void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
@@ -1128,6 +1176,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
 void Ui::showInfo(const char* title, const String& body, const char* footer) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;
@@ -1154,6 +1203,7 @@ void Ui::showInfo(const char* title, const String& body, const char* footer) {
 void Ui::showPortal(const String& apName, const String& apPass, const String& url, const String& reason) {
     ambientShown_ = false;
     view_ = View::Other;
+    railShown_ = false;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;

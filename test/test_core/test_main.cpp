@@ -322,7 +322,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.home, L.volume};
+                                L.transport[kNext], L.mic, L.volume, L.navHome, L.navSettings};
     if (n > 0) blocks.push_back(L.strip);
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -330,6 +330,13 @@ static void checkLayout(int W, int H, int n) {
         for (size_t j = i + 1; j < blocks.size(); ++j) TEST_ASSERT_FALSE(blocks[i].intersects(blocks[j]));
     }
     TEST_ASSERT_EQUAL(L.art.w, L.art.h);
+    // Barre de navigation : boutons dedans, rien d'autre ne la touche
+    for (const Rect& r : {L.navHome, L.navSettings}) {
+        TEST_ASSERT_TRUE(r.x >= L.rail.x && r.right() <= L.rail.right() && r.y >= L.rail.y && r.bottom() <= L.rail.bottom());
+        TEST_ASSERT_TRUE(r.h >= 44 * std::min(W, H) / 540);
+    }
+    for (const Rect& r : {L.art, L.info, L.progress, L.volume, L.strip, L.transport[kPrev], L.mic})
+        TEST_ASSERT_FALSE(r.intersects(L.rail));
     // Éléments de la pilule de volume : dedans, dans l'ordre, sans chevauchement
     for (const Rect& r : {L.transport[kVolDown], L.mute, L.volBar, L.transport[kVolUp]}) {
         TEST_ASSERT_TRUE(r.x >= L.volume.x && r.right() <= L.volume.right());

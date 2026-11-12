@@ -42,6 +42,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Presets as tiles** with their images. The device gets the presets from the WiiM, or you can write your own list.
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.
+- **Navigation bar** on the left side of the screen (at the top in portrait): the 🏠 button goes to the main
+  screen, the ⚙ button opens the settings.
 - **Ambient view**: after 60 seconds without a touch, the device shows a large album art and large text. You can
   read it from across the room. Touch the 🏠 button or the screen to go back.
 - **Spectrum visualizer** (optional, experimental): in the ambient view, the microphones of the device show the
@@ -113,7 +115,7 @@ You need Chrome or Edge on a computer. You do not have to install software.
 
 ### Update the firmware later
 
-1. On the Tab5, push and hold the album art for 3 seconds.
+1. On the Tab5, touch the ⚙ button in the left bar.
 2. Select **Mise à jour** (update). The Tab5 shows an address and a 6-digit code.
 3. On a computer on the same network, open the address in a web browser.
 4. Type the code and select the new `.bin` file.
@@ -124,7 +126,7 @@ A full guide in French is in [LISEZMOI.md](LISEZMOI.md).
 ### Voice commands (optional)
 
 1. Make an API key at <https://platform.openai.com>.
-2. Open the setup page (push and hold the album art for 3 seconds, then **Configuration**).
+2. Open the setup page (touch ⚙ in the left bar, then **Configuration**).
 3. Paste the key in **Commande vocale**.
 
 Note: the device sends the sound to OpenAI only while the microphone listens. The cost was approximately
@@ -230,8 +232,8 @@ For more data and to report a problem, refer to [SECURITY.md](SECURITY.md).
 
 We welcome these contributions:
 
-- Bug reports. Give your WiiM model, your board and the firmware version. To see the version, push and hold the
-  album art for 3 seconds. The version shows at the bottom of the *Réglages* menu.
+- Bug reports. Give your WiiM model, your board and the firmware version. To see the version, touch ⚙ in the left
+  bar. The version shows at the bottom of the *Réglages* menu.
 - Test reports from real hardware.
 - Ports to other ESP32 boards.
 - Translations.

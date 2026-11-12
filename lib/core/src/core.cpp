@@ -532,45 +532,62 @@ Layout computeLayout(int width, int height, int presetCount) {
     auto sc = [ref](int v) { return v * ref / 540; };
     const bool landscape = width >= height;
     const int m = sc(18), gap = sc(12);
+    const int volH = sc(48), playD = sc(76), sideD = sc(60), progH = sc(30);
+
+    // --- Barre de navigation : à gauche (paysage) ou en haut (portrait)
+    const int railW = sc(76);
+    if (landscape) {
+        L.rail = Rect{0, 0, railW, height};
+        L.navHome = Rect{(railW - sideD) / 2, m, sideD, sideD};
+        L.navSettings = Rect{(railW - sideD) / 2, height - m - sideD, sideD, sideD};
+        L.content = Rect{railW, 0, width - railW, height};
+    } else {
+        L.rail = Rect{0, 0, width, railW};
+        L.navHome = Rect{m, (railW - sideD) / 2, sideD, sideD};
+        L.navSettings = Rect{width - m - sideD, (railW - sideD) / 2, sideD, sideD};
+        L.content = Rect{0, railW, width, height - railW};
+    }
+    const int X0 = landscape ? L.content.x - sc(4) : 0;  // la barre a déjà sa marge
+    const int Y0 = L.content.y;
+    const int W = width - X0;
 
     // --- Bande des presets : tuiles (image + nom), une ou deux rangées par page
     const int tileH = sc(136), dotsH = sc(16);
     const int rows = landscape ? 1 : 2;
     const int minTileW = sc(130);
-    const int cols = std::max(2, std::min(6, (width - 2 * m + gap) / (minTileW + gap)));
+    const int cols = std::max(2, std::min(6, (W - 2 * m + gap) / (minTileW + gap)));
     L.perPage = presetCount > 0 ? cols * rows : 0;
     int stripH = 0;
     if (presetCount > 0) {
         stripH = rows * tileH + (rows - 1) * gap;
         const int dotsY = height - m - dotsH;
-        L.dots = Rect{m, dotsY, width - 2 * m, dotsH};
-        L.strip = Rect{m, dotsY - stripH, width - 2 * m, stripH};
-        const int tileW = (width - 2 * m - (cols - 1) * gap) / cols;
+        L.dots = Rect{X0 + m, dotsY, W - 2 * m, dotsH};
+        L.strip = Rect{X0 + m, dotsY - stripH, W - 2 * m, stripH};
+        const int tileW = (W - 2 * m - (cols - 1) * gap) / cols;
         for (int i = 0; i < std::min(presetCount, L.perPage); ++i) {
             int r = i / cols, c = i % cols;
-            L.presets.push_back(Rect{m + c * (tileW + gap), L.strip.y + r * (tileH + gap), tileW, tileH});
+            L.presets.push_back(Rect{X0 + m + c * (tileW + gap), L.strip.y + r * (tileH + gap), tileW, tileH});
         }
     }
-    const int topY = m;
+    const int topY = Y0 + m;
     const int topBottom = presetCount > 0 ? L.strip.y - gap : height - m;
 
     // --- Pile de droite (paysage) ou du bas (portrait) : hauteurs fixes
-    const int volH = sc(48), playD = sc(76), sideD = sc(60), progH = sc(30);
     const int infoMinH = sc(150);
     const int stackH = infoMinH + sc(6) + progH + sc(12) + playD + sc(12) + volH;
 
     int colX, colW, colY;
     if (landscape) {
-        int side = std::min(topBottom - topY, width * 42 / 100);
-        L.art = Rect{m, topY + (topBottom - topY - side) / 2, side, side};
+        int side = std::min(topBottom - topY, W * 40 / 100);
+        L.art = Rect{X0 + m, topY + (topBottom - topY - side) / 2, side, side};
         colX = L.art.right() + sc(28);
         colW = width - m - colX;
         colY = topY;
     } else {
-        int side = std::min(width - 2 * m, topBottom - topY - gap - stackH);
-        L.art = Rect{(width - side) / 2, topY, side, side};
-        colX = m;
-        colW = width - 2 * m;
+        int side = std::min(W - 2 * m, topBottom - topY - gap - stackH);
+        L.art = Rect{X0 + (W - side) / 2, topY, side, side};
+        colX = X0 + m;
+        colW = W - 2 * m;
         colY = L.art.bottom() + gap;
     }
     // Du bas vers le haut : volume, commandes, progression ; le reste pour les textes
@@ -581,7 +598,6 @@ Layout computeLayout(int width, int height, int presetCount) {
     L.transport[kPrev] = Rect{cx - playD / 2 - sc(30) - sideD, playCy - sideD / 2, sideD, sideD};
     L.transport[kNext] = Rect{cx + playD / 2 + sc(30), playCy - sideD / 2, sideD, sideD};
     L.mic = Rect{colX + colW - sideD, playCy - sideD / 2, sideD, sideD};
-    L.home = Rect{colX, playCy - sideD / 2, sideD, sideD};
     L.progress = Rect{colX, L.transport[kPlayPause].y - sc(12) - progH, colW, progH};
     L.info = Rect{colX, colY, colW, L.progress.y - sc(6) - colY};
 

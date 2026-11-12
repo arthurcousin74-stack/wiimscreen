@@ -86,4 +86,4 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == v0.* || "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" dist/wiim-remote-tab5.bin dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --title "wiimscreen $GITHUB_REF_NAME" $PRE \
-            --notes "Firmware for the M5Stack Tab5. Flash wiim-remote-tab5.bin at address 0x0 (see README), or install it over Wi-Fi: hold the album art 3 s > Mise à jour. Only the Tab5 is tested so far. Changes: see CHANGELOG.md."
+            --notes "Firmware for the M5Stack Tab5. Flash wiim-remote-tab5.bin at address 0x0 (see README), or install it over Wi-Fi: ⚙ button > Mise à jour. Only the Tab5 is tested so far. Changes: see CHANGELOG.md."
