@@ -35,6 +35,10 @@ Hardware testing in progress.
   advanced sections, file name and progress on the update page.
 
 ### Changed
+- Loading feedback: after ⏮/⏭, play/pause, a preset, a favorite or a search result, a ring turns around the
+  button until the WiiM reports the change (10 s at most).
+- Search never starts playback by itself: queues are created with `QueuePolicy 0` first, and the remote no
+  longer starts the queue when results are slow.
 - The main screen always keeps its preset row. Without presets on the WiiM, the row explains how to add them
   (before, the screen looked like the ambient view, so the home button seemed to do nothing).
 - All WiiM networking runs in a background task; the screen never waits for the network.

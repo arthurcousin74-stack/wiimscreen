@@ -146,7 +146,9 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
     **fills the queue without `PlayQueueWithIndex`** (nothing plays until a result is chosen), but
     **progressively** (1–2 tracks after ~1 s, 7 after ~6 s): read it back until the count is stable.
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
-  WiiM fills it before playing is not known yet), then starts it if it stays empty.
+  WiiM fills it before playing is not known yet), then starts it if it stays empty. *(Changed: the user reported
+  that a search started the first result; the remote now never starts a search queue and creates it with
+  `QueuePolicy 0` first — 1, then no argument, if refused. Whether 0 avoids playback: not known yet.)*
 
 - Journal › *Essai favoris*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums` (the
   user's Qobuz favorites, if the WiiM adds its user token to the request), read back without playing. Outcome:
