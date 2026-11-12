@@ -200,7 +200,7 @@ QueueInfo parseQueueContext(const std::string& xml) {
             std::string t;
             if (!xmlElement(tracks, "Track" + std::to_string(n), t)) break;
             ++q.tracks;
-            if (q.titles.size() < 3) {
+            if (q.titles.size() < 200) {
                 std::string meta;
                 if (xmlElement(t, "Metadata", meta)) {
                     // DIDL-Lite échappé une ou deux fois selon l'émetteur
@@ -213,6 +213,63 @@ QueueInfo parseQueueContext(const std::string& xml) {
         }
     }
     return q;
+}
+
+std::string queueKey(const QueueInfo& q) {
+    if (!q.searchUrl.empty()) {
+        std::string u = q.searchUrl;
+        size_t qm = u.find('?');
+        if (qm == std::string::npos) return u;
+        std::string base = u.substr(0, qm + 1), kept;
+        size_t p = qm + 1;
+        while (p <= u.size()) {
+            size_t e = u.find('&', p);
+            if (e == std::string::npos) e = u.size();
+            std::string param = u.substr(p, e - p);
+            std::string name = param.substr(0, param.find('='));
+            if (!param.empty() && name != "offset" && name != "limit") kept += (kept.empty() ? "" : "&") + param;
+            p = e + 1;
+        }
+        return base + kept;
+    }
+    return q.sourceName + "|" + q.listName;
+}
+
+static std::string clean(const std::string& s) {
+    std::string o;
+    for (char c : s) o += (c == '\t' || c == '\n' || c == '\r') ? ' ' : c;
+    return o;
+}
+
+std::string favoritesToText(const std::vector<Favorite>& list) {
+    std::string o;
+    for (auto& f : list)
+        o += clean(f.id) + "\t" + clean(f.key) + "\t" + clean(f.title) + "\t" + clean(f.artist) + "\t" +
+             clean(f.source) + "\t" + clean(f.artUrl) + "\n";
+    return o;
+}
+
+std::vector<Favorite> favoritesFromText(const std::string& text) {
+    std::vector<Favorite> out;
+    size_t p = 0;
+    while (p < text.size()) {
+        size_t e = text.find('\n', p);
+        if (e == std::string::npos) e = text.size();
+        std::string line = text.substr(p, e - p);
+        p = e + 1;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        std::vector<std::string> f;
+        size_t a = 0;
+        while (true) {
+            size_t t = line.find('\t', a);
+            f.push_back(line.substr(a, t == std::string::npos ? std::string::npos : t - a));
+            if (t == std::string::npos) break;
+            a = t + 1;
+        }
+        if (f.size() < 6 || f[0].empty()) continue;  // ligne abîmée : ignorée
+        out.push_back(Favorite{f[0], f[1], f[2], f[3], f[4], f[5]});
+    }
+    return out;
 }
 
 std::string maskSecrets(const std::string& text) {

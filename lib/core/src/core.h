@@ -15,6 +15,7 @@ struct Preset {
     int slot = 0;
     std::string label;
     std::string picUrl;  // image du preset (getPresetInfo), vide si aucune
+    std::string favId;   // favori enregistré sur la télécommande (file du WiiM), vide pour un preset du WiiM
 };
 
 // Une ligne par preset : "1=Radio Swiss Jazz". Lignes vides et commentaires (#) ignorés.
@@ -156,6 +157,7 @@ struct Layout {
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
     Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
+    Rect fav;       // bouton ♥ (favori), à l'autre bout de la rangée
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
     Rect volBar;    // curseur de volume

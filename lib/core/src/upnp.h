@@ -47,9 +47,26 @@ struct QueueInfo {
     std::string quality;       // requestQuality or Quality
     int declaredTracks = -1;   // TrackNumber, -1 if absent
     int tracks = 0;            // <TrackN> elements present
-    std::vector<std::string> titles;  // first track titles (from the DIDL-Lite metadata)
+    std::vector<std::string> titles;  // track titles (from the DIDL-Lite metadata), 200 at most
 };
 QueueInfo parseQueueContext(const std::string& xml);
+
+// Identity of a queue, to recognise the same album/playlist again: the SearchUrl without its paging
+// parameters (offset, limit) for streaming services, otherwise source + list name.
+std::string queueKey(const QueueInfo& q);
+
+// A queue saved on the remote ("favorite"), replayed later with CreateQueue + PlayQueueWithIndex.
+struct Favorite {
+    std::string id;      // file name of the saved QueueContext
+    std::string key;     // queueKey()
+    std::string title;   // album / playlist name shown on the tile
+    std::string artist;
+    std::string source;  // SourceName (Qobuz…)
+    std::string artUrl;  // cover
+};
+// Index file: one favorite per line, fields separated by tabs (tabs/newlines removed from values).
+std::string favoritesToText(const std::vector<Favorite>& list);
+std::vector<Favorite> favoritesFromText(const std::string& text);
 
 // Replaces the values of token/secret/password/signature query parameters by "***".
 std::string maskSecrets(const std::string& text);

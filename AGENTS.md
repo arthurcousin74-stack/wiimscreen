@@ -38,6 +38,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/settings.*` | NVS-backed settings |
+| `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue` |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
 
 ## Conventions

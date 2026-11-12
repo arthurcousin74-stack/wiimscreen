@@ -39,6 +39,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   AirPlay, Bluetooth…) and the audio quality (*16 bits · 44.1 kHz*). Touch the progress bar to go to a different
   position in the track. A "live" badge shows for radio streams.
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
+- **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button. The device
+  keeps a copy of the WiiM play queue. The album then shows as a tile, and one touch plays it again. You do not
+  need a key for the streaming service. The device keeps a maximum of 24 favorites.
 - **Presets as tiles** with their images. The device gets the presets from the WiiM, or you can write your own list.
   Each page shows 6 presets. Swipe to see the next page. A frame shows the preset that plays.
 - **Volume**: touch the volume bar to set the volume. You can also mute or use the − and + buttons.

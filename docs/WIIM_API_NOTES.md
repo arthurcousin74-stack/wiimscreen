@@ -97,8 +97,14 @@ Routers with client isolation (guest networks) block this.
 
 ## Play queue: UPnP `PlayQueue` service (undocumented)
 
-Not in WiiM's PDF; known from community reverse engineering **[forum]**, not yet verified by wiimscreen on a real
-WiiM (Réglages › Journal › *File du WiiM* runs a read-only check and logs what the device answers).
+Not in WiiM's PDF; known from community reverse engineering **[forum]**. Réglages › Journal › *File du WiiM* runs a
+read-only check and logs what the device answers.
+
+**Seen on a real WiiM (wiimscreen, 2026-11):** `description.xml` on port 49152 lists the PlayQueue service;
+`BrowseQueue` returns the queue started from the WiiM Home app for a Qobuz album, with `<SourceName>Qobuz`, a
+`<SearchUrl>` `https://www.qobuz.com/api.json/0.2/album/get?album_id=<id>&offset=0&limit=50` **and** the track list
+(`<Track1>`… with DIDL-Lite titles). The same queue answered under several names. Replaying a saved queue
+(`CreateQueue` + `PlayQueueWithIndex`, used by the favorites) is not confirmed yet.
 
 - Plain HTTP SOAP on the UPnP port: device description at `http://<ip>:49152/description.xml` (59152 on some
   LinkPlay players). Service type `urn:schemas-wiimu-com:service:PlayQueue:1`, control URL usually

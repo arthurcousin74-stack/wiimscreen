@@ -121,8 +121,30 @@ int main(int argc, char** argv) {
     ui.setArt(&art);
     ui.setActivePreset(1);
     ui.setVoiceEnabled(true);
+    ui.setFavorite(1);  // ♥ vide : ajouter l'album en cours
     ui.render(st);
     save(out, "1-lecture.ppm");
+    {
+        // Presets du WiiM suivis de favoris de la télécommande (petit cœur), album en cours déjà favori
+        std::vector<wr::Preset> mix(six.begin(), six.begin() + 3);
+        wr::Preset f1{101, "Kind of Blue (Legacy Edition)", "x"};
+        f1.favId = "a1";
+        wr::Preset f2{102, "Babylon (Music from the Motion Picture)", ""};
+        f2.favId = "a2";
+        mix.push_back(f1);
+        mix.push_back(f2);
+        ui.setPresets(mix);
+        for (int i = 0; i < 3; ++i) ui.setPresetArt(i, &thumbs[i]);
+        ui.setPresetArt(3, &thumbs[3]);
+        ui.setActivePreset(3);
+        ui.setFavorite(2);
+        ui.render(st);
+        save(out, "23-favoris.ppm");
+        ui.setFavorite(1);
+        ui.setPresets(six);
+        for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);
+        ui.setActivePreset(1);
+    }
 
     // Commande vocale : écoute, puis transcription
     ui.renderVoice(Ui::VoicePhase::Listening, 1.0f);  // pleine voix : anneaux au maximum
@@ -207,6 +229,7 @@ int main(int argc, char** argv) {
         save(out, "17-aucun-preset.ppm");
         // Même écran pendant la lecture (ce que l'on voit sans preset sur le WiiM)
         u0.setArt(&art);
+        u0.setFavorite(1);
         u0.render(st);
         save(out, "19-lecture-sans-preset.ppm");
         u0.renderAmbient(st);

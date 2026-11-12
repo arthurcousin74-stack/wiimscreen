@@ -323,7 +323,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.volume, L.navHome, L.navSettings};
+                                L.transport[kNext], L.mic, L.fav, L.volume, L.navHome, L.navSettings};
     blocks.push_back(L.strip);  // toujours là, même sans preset
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -675,6 +675,30 @@ static void test_upnp_queue() {
     TEST_ASSERT_FALSE(parseQueueContext("<nothing/>").ok);
 }
 
+static void test_favorites() {
+    QueueInfo q;
+    q.searchUrl = "https://www.qobuz.com/api.json/0.2/album/get?album_id=mlw3bkxusda&offset=0&limit=50";
+    TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=mlw3bkxusda", queueKey(q).c_str());
+    q.searchUrl = "https://x/playlist/get?limit=50&playlist_id=7&extra=tracks";
+    TEST_ASSERT_EQUAL_STRING("https://x/playlist/get?playlist_id=7&extra=tracks", queueKey(q).c_str());
+    QueueInfo r;
+    r.sourceName = "OnlineMusic";
+    r.listName = "custom_radio";
+    TEST_ASSERT_EQUAL_STRING("OnlineMusic|custom_radio", queueKey(r).c_str());
+
+    std::vector<Favorite> list = {{"f1", "k1", "Babylon (Music from\tthe Motion Picture)", "Justin Hurwitz", "Qobuz",
+                                   "https://static.qobuz.com/a.jpg"},
+                                  {"f2", "k2", "Kind of Blue", "", "Qobuz", ""}};
+    std::string text = favoritesToText(list);
+    auto back = favoritesFromText(text + "broken line\n\n");
+    TEST_ASSERT_EQUAL(2, (int)back.size());
+    TEST_ASSERT_EQUAL_STRING("Babylon (Music from the Motion Picture)", back[0].title.c_str());  // tabulation retirée
+    TEST_ASSERT_EQUAL_STRING("Justin Hurwitz", back[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://static.qobuz.com/a.jpg", back[0].artUrl.c_str());
+    TEST_ASSERT_EQUAL_STRING("", back[1].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("k2", back[1].key.c_str());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -687,6 +711,7 @@ int main() {
     RUN_TEST(test_upnp_xml);
     RUN_TEST(test_upnp_description);
     RUN_TEST(test_upnp_queue);
+    RUN_TEST(test_favorites);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

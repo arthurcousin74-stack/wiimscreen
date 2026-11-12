@@ -28,10 +28,10 @@ struct WiimReport {
 };
 
 struct WiimEvent {
-    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity };
+    enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed };
     Kind kind = CommandDone;
     WiimError error = WiimError::None;
-    String text;  // commande ; empreinte vue (PinMismatch) ; nouvelle adresse (Moved)
+    String text;  // commande ; empreinte vue (PinMismatch) ; nouvelle adresse (Moved) ; favori ou erreur
     bool ok = false;
     std::vector<wr::Preset> presets;
     String uuid, name;  // Identity
@@ -50,6 +50,10 @@ public:
     // Diagnostic : lit la file de lecture du WiiM (service UPnP PlayQueue, non documenté)
     // et écrit un résumé dans le journal ; le XML complet (secrets masqués) part sur le port série.
     void checkQueue();
+    // Favoris : copie la file du WiiM qui contient le morceau `title` (évènement FavSaved) ;
+    // rejoue un favori enregistré (évènement FavPlayed). Non bloquant.
+    void saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl);
+    void playFavorite(const String& id);
 
     // Thread principal : dernier relevé (s'il est nouveau) et évènements
     bool takeReport(WiimReport& out);
@@ -64,6 +68,13 @@ private:
     bool rediscover();
     void learnIdentity();
     void runQueueCheck();
+    struct FavRequest {
+        bool wanted = false;
+        String title, artist, album, artUrl;
+    };
+    bool findPlayQueue(std::string& control, bool verbose);
+    void runSaveFavorite(const FavRequest& r);
+    void runPlayFavorite(const String& id);
     void push(WiimEvent&& e);
     void notePinning(WiimError e);
     bool commandsWaiting();
@@ -78,6 +89,9 @@ private:
     bool presetsWanted_ = false;
     bool pollWanted_ = false;
     bool queueWanted_ = false;
+    FavRequest favSave_;
+    String favPlay_;
+    std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;
     std::deque<WiimEvent> events_;

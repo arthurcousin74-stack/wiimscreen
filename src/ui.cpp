@@ -500,6 +500,11 @@ void Ui::tile(int slot, int index, bool pressed) {
         C.setTextColor(kText);
         C.drawString(ini.c_str(), ax + side / 2, ay + side / 2 + 1);
     }
+    if (!presets_[index].favId.empty()) {  // favori de la télécommande : petit cœur dans le coin
+        const int d = sc(26), hx = ax + sc(4), hy = ay + sc(4);
+        C.fillRoundRect(hx, hy, d, d, sc(8), kBg);
+        heartIcon(hx + d / 2, hy + d / 2 - sc(1), sc(7), accent_);
+    }
     if (active) {  // petite icône d'égaliseur dans le coin de l'image
         const int d = sc(30), ex = ax + side - d - sc(4), ey = ay + sc(4);
         C.fillRoundRect(ex, ey, d, d, sc(8), kBg);
@@ -582,6 +587,13 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
     navRail(0);
+    if (favState_ > 0) {
+        const wr::Rect& f = layout_.fav;
+        const bool on = favState_ == 2;
+        canvas_.fillCircle(f.x + f.w / 2, f.y + f.h / 2, f.w / 2, on ? accent_ : kCard);
+        heartIcon(f.x + f.w / 2, f.y + f.h / 2, f.w / 4, on ? kBg : (favState_ == 3 ? kTrack : kText));
+        if (!on) heartIcon(f.x + f.w / 2, f.y + f.h / 2 - 1, f.w / 4 - sc(4), favState_ == 3 ? kText2 : kCard);
+    }
     if (voiceOn_) {
         const wr::Rect& m = layout_.mic;
         canvas_.fillCircle(m.x + m.w / 2, m.y + m.h / 2, m.w / 2, kCard);
@@ -596,6 +608,22 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     pageDots();
     toast(st.message);
     present();
+}
+
+// Cœur : deux disques et une pointe
+void Ui::heartIcon(int cx, int cy, int s, uint32_t c) {
+    auto& C = canvas_;
+    const int r = s / 2 + 1;
+    C.fillCircle(cx - r + 1, cy - s / 4, r, c);
+    C.fillCircle(cx + r - 1, cy - s / 4, r, c);
+    C.fillTriangle(cx - 2 * r + 1, cy - s / 8, cx + 2 * r - 1, cy - s / 8, cx, cy + s, c);
+}
+
+bool Ui::hitFav(int x, int y) const {
+    if (view_ != View::Controls || favState_ <= 0) return false;
+    const wr::Rect& g = layout_.fav;
+    const int pad = sc(10);
+    return wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
 }
 
 // Bande des presets vide : dire pourquoi, et comment la remplir
@@ -617,12 +645,12 @@ void Ui::emptyStrip() {
     C.loadFont(kMid);
     C.setTextColor(kText);
     int y = r.y + sc(22);
-    C.drawString(wr::wrapText("Aucun favori sur ce WiiM", tw, 1, measure)[0].c_str(), tx, y);
+    C.drawString(wr::wrapText("Aucun favori pour l'instant", tw, 1, measure)[0].c_str(), tx, y);
     y += C.fontHeight() + sc(8);
     C.loadFont(kSmall);
     C.setTextColor(kText2);
-    for (auto& l : wr::wrapText("Dans l'app WiiM Home, enregistre tes albums, playlists et radios en presets "
-                                "(12 au plus) : ils appara\xC3\xAEtront ici avec leur pochette.",
+    for (auto& l : wr::wrapText("Pendant qu'un album ou une playlist joue, touche le bouton favori (\xC3\xA0 gauche des commandes) "
+                                "pour l'ajouter ici.",
                                 tw, 3, measure)) {
         if (y + C.fontHeight() > r.bottom() - sc(10)) break;
         C.drawString(l.c_str(), tx, y);

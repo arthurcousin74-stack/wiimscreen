@@ -27,6 +27,7 @@
 #include "core.h"
 #include "discovery.h"
 #include "dsp.h"
+#include "favorites.h"
 #include "log.h"
 #include "ota.h"
 #include "portal.h"
@@ -47,6 +48,10 @@ static ArtImage g_art;           // pochette affichée
 static std::string g_artWanted;  // adresse de la pochette attendue ("" = aucune)
 
 static std::vector<wr::Preset> g_presets;              // presets affichés
+static std::vector<wr::Preset> g_wiimPresets;          // presets du WiiM (ou saisis), sans les favoris
+static bool g_favOk = false;                            // mémoire des favoris disponible
+static bool g_favBusy = false;                          // enregistrement d'un favori en cours
+static std::vector<wr::Favorite> g_favs;
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
 static bool g_presetsFromWiim = false;
 static uint32_t g_lastPresetFetch = 0;
@@ -143,6 +148,8 @@ static void show() { g_dirty = true; }
 
 static bool modalOpen() { return g_listening || g_menuOpen || g_touchTest || g_logOpen; }
 
+static int favoriteState();  // plus bas, avec les favoris
+
 static void renderNow() {
     if (!g_dirty || modalOpen()) return;  // écrans modaux : rien par-dessus (rendu à leur fermeture)
     g_dirty = false;
@@ -155,6 +162,7 @@ static void renderNow() {
         pressedTransport = g_flashTransport;
     }
     g_lastTick = now;
+    g_ui.setFavorite(favoriteState());
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
 }
@@ -252,7 +260,8 @@ static void serviceMotion(uint32_t now) {
 static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl) return false;
+        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl || a[i].favId != b[i].favId)
+            return false;
     return true;
 }
 
@@ -267,6 +276,41 @@ static void applyPresets(const std::vector<wr::Preset>& list) {
         if (it != g_presetImages.end()) g_ui.setPresetArt((int)i, &it->second);
         else g_artFetcher.request(url);
     }
+}
+
+// Tuiles : presets du WiiM, puis favoris enregistrés sur la télécommande
+static void refreshTiles() {
+    g_favs = g_favOk ? fav::list() : std::vector<wr::Favorite>();
+    std::vector<wr::Preset> list = g_wiimPresets;
+    for (size_t i = 0; i < g_favs.size(); ++i) {
+        wr::Preset p;
+        p.slot = 100 + (int)i;
+        p.label = g_favs[i].title;
+        p.picUrl = g_favs[i].artUrl;
+        p.favId = g_favs[i].id;
+        list.push_back(p);
+    }
+    if (samePresets(list, g_presets)) return;
+    applyPresets(list);
+    show();
+}
+
+// Favori correspondant à ce qui joue (même album, même artiste)
+static std::string currentFavorite() {
+    const UiState& st = g_state;
+    const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
+    if (album.empty()) return "";
+    const std::string a = wr::normalizeText(album), artist = wr::normalizeText(st.player.artist);
+    for (auto& f : g_favs)
+        if (wr::normalizeText(f.title) == a && (f.artist.empty() || artist.empty() || wr::normalizeText(f.artist) == artist))
+            return f.id;
+    return "";
+}
+
+static int favoriteState() {
+    if (!g_favOk || !g_state.online || g_state.player.title.empty()) return 0;
+    if (g_favBusy) return 3;
+    return currentFavorite().empty() ? 1 : 2;
 }
 
 // Réponse de getPresetInfo : presets du WiiM (noms et images), ou liste saisie
@@ -285,9 +329,8 @@ static void onPresets(bool ok, const std::vector<wr::Preset>& fromWiim) {
                 for (auto& w : fromWiim)
                     if (w.slot == p.slot) p.picUrl = w.picUrl;
     }
-    if (samePresets(list, g_presets)) return;
-    applyPresets(list);
-    show();
+    g_wiimPresets = list;
+    refreshTiles();
 }
 
 static void requestPresets() {
@@ -393,6 +436,28 @@ static void serviceWiim() {
                 }
                 break;
             case WiimEvent::Presets: onPresets(ev.ok, ev.presets); break;
+            case WiimEvent::FavSaved:
+                g_favBusy = false;
+                if (ev.ok) {
+                    sound::confirm();
+                    refreshTiles();
+                    setMessage("\xC2\xAB " + ev.text + " \xC2\xBB ajout\xC3\xA9 aux favoris", 5000);
+                } else {
+                    sound::error();
+                    setMessage("Favori non enregistr\xC3\xA9 : " + ev.text);
+                }
+                show();
+                break;
+            case WiimEvent::FavPlayed:
+                if (!ev.ok) {
+                    sound::error();
+                    g_activePreset = -1;
+                    g_ui.setActivePreset(-1);
+                    setMessage("Favori : " + ev.text);
+                }
+                g_worker.pollSoon();
+                show();
+                break;
             case WiimEvent::Pinned:
                 setMessage("Certificat du WiiM enregistr\xC3\xA9");
                 show();
@@ -517,7 +582,8 @@ static void playPreset(int p) {
     g_activeSince = millis();
     g_activeMode = -1;
     g_ui.setActivePreset(p);
-    g_worker.command("MCUKeyShortClick:" + String(g_presets[p].slot));
+    if (!g_presets[p].favId.empty()) g_worker.playFavorite(g_presets[p].favId.c_str());  // file enregistrée
+    else g_worker.command("MCUKeyShortClick:" + String(g_presets[p].slot));
     flash(p, -1);
 }
 
@@ -764,6 +830,26 @@ static void handleTap(int x, int y) {
         startVoice();
         return;
     }
+    if (g_ui.hitFav(x, y)) {  // ♥ : ajouter ce qui joue aux favoris, ou l'en retirer
+        if (g_favBusy) return;
+        sound::tap();
+        const std::string id = currentFavorite();
+        if (!id.empty()) {
+            fav::remove(id);
+            logEvent("Favori retir\xC3\xA9 (%s)", id.c_str());
+            refreshTiles();
+            setMessage("Retir\xC3\xA9 des favoris", 4000);
+        } else {
+            const UiState& st = g_state;
+            const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
+            logEvent("Appui Favori : %s", album.c_str());
+            g_favBusy = true;
+            g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
+            setMessage("Ajout aux favoris\xE2\x80\xA6", 15000);
+        }
+        show();
+        return;
+    }
     if (g_ui.hitHome(x, y)) {  // Accueil (barre) : déjà ici, retour à la première page de presets
         logEvent("Appui Accueil (%d,%d)", x, y);
         sound::tap();
@@ -861,8 +947,11 @@ void setup() {
     if (!g_settings.host.length()) chooseWiim();  // recherche automatique du WiiM
     logEvent("WiiM : %s %s", g_settings.host.c_str(), g_settings.wiimName.c_str());
     g_artFetcher.begin();
+    g_favOk = fav::begin();
+    logEvent("Favoris : %s, %u", g_favOk ? "OK" : "m\xC3\xA9moire indisponible", (unsigned)fav::list().size());
     g_worker.begin(g_settings);
-    if (!g_settings.autoPresets()) applyPresets(g_settings.presets);  // liste saisie : tout de suite
+    if (!g_settings.autoPresets()) g_wiimPresets = g_settings.presets;  // liste saisie : tout de suite
+    refreshTiles();
     requestPresets();
     g_state.online = true;  // jusqu'au premier relevé (une seconde environ)
     g_state.battery = batteryLevel();

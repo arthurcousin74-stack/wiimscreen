@@ -20,6 +20,9 @@ Hardware testing in progress.
 - PC preview tool rendering the real UI to PNG; native unit tests for all hardware-free logic.
 - Navigation bar on the left (top in portrait): 🏠 main screen, ⚙ settings; also shown on the settings and log
   screens. The ambient view has its own 🏠. A 3 s press on the album art still opens the settings.
+- Favorites: the button left of the playback controls saves the album or playlist that plays (a copy of the
+  WiiM's play queue, no streaming-service key needed); favorites appear as tiles after the WiiM presets (small
+  heart badge) and replay with one tap. Touch the button again on a favorite album to remove it. Up to 24.
 - Settings menu: touch test and event log (for hardware bug reports). The log wraps long lines and has a
   *File du WiiM* button: a read-only check of the WiiM's undocumented UPnP PlayQueue service (first step towards
   Qobuz favorites).
