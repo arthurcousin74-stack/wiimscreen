@@ -65,7 +65,8 @@ static bool g_headerPressed = false;
 static uint32_t g_lastTouch = 0;
 static bool g_ambient = false;
 static int g_brightness = -1;
-static bool g_listening = false;  // commande vocale en cours d'écoute
+static bool g_listening = false;  // micro en cours d'écoute
+static bool g_dictation = false;  // écoute pour la recherche (arrêt par un appui, pas par la fin de phrase)
 static bool g_menuOpen = false;   // menu Réglages affiché (appui long)
 static bool g_touchTest = false;  // écran de test tactile (menu Réglages)
 static bool g_logOpen = false;    // écran Journal (menu Réglages)
@@ -692,13 +693,17 @@ static void stopListening() {
     }
 }
 
-static void startVoice() {
+static void renderSearch(int pressedKey = -1);
+
+static void startVoice(bool dictation = false) {
     if (!g_settings.voiceEnabled()) return;
+    g_dictation = dictation;
     if (!g_voiceBuf)
         g_voiceBuf = static_cast<int16_t*>(heap_caps_malloc(kVoiceMax * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!g_voiceBuf) {
         setMessage("M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter");
-        show();
+        if (dictation) g_searchStatus = "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter", renderSearch();
+        else show();
         return;
     }
     const auto& p = g_state.player;
@@ -712,7 +717,8 @@ static void startVoice() {
     if (!M5.Mic.begin()) {
         stopListening();
         setMessage("Micro indisponible");
-        show();
+        if (dictation) g_dictation = false, g_searchStatus = "Micro indisponible", renderSearch();
+        else show();
         return;
     }
     g_listening = true;
@@ -721,7 +727,8 @@ static void startVoice() {
     g_endpoint = wr::SpeechEndpoint();
     g_micPending = false;
     g_micCur = 0;
-    g_ui.renderVoice(Ui::VoicePhase::Listening, 0);
+    if (g_dictation) renderSearch();
+    else g_ui.renderVoice(Ui::VoicePhase::Listening, 0);
 }
 
 static void runVoice(const std::string& text) {
@@ -801,7 +808,50 @@ static void runVoice(const std::string& text) {
     show();
 }
 
+static void runSearchQuery();
+
+// Dictée de la recherche : la phrase entendue devient le texte cherché, puis la recherche part
+static void finishDictation(bool send) {
+    stopListening();
+    g_dictation = false;
+    if (!send || g_voiceLen < kMicRate / 3) {
+        g_searchStatus = send ? String("Je n'ai rien entendu") : String();
+        renderSearch();
+        return;
+    }
+    g_ui.renderSearch(g_searchQuery, "", false, -1, g_searchSource, g_deezerOk, 2);
+    std::string text;
+    String err;
+    const std::string hint = "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
+                             "fran\xC3\xA7" "ais ou en anglais.";
+    if (!transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, hint, text, err)) {
+        logEvent("Transcription : %s", err.c_str());
+        sound::error();
+        g_searchStatus = err;
+        renderSearch();
+        return;
+    }
+    // Ponctuation et guillemets ajoutés par la transcription retirés
+    while (!text.empty() && strchr(" .,;:!?\"'", text.back())) text.pop_back();
+    size_t a = 0;
+    while (a < text.size() && strchr(" \"'", text[a])) ++a;
+    text = text.substr(a, 60);
+    logEvent("Dict\xC3\xA9" "e : \xC2\xAB %s \xC2\xBB", text.c_str());
+    g_searchQuery = text;
+    g_searchStatus = "";
+    if (text.empty()) {
+        g_searchStatus = "Je n'ai rien compris";
+        renderSearch();
+        return;
+    }
+    runSearchQuery();
+}
+
 static void finishVoice(bool send) {
+    if (g_dictation) {
+        finishDictation(send);
+        return;
+    }
     stopListening();
     if (!send) {
         show();
@@ -846,6 +896,14 @@ static void serviceVoice() {
     g_voiceLen += n;
     const auto state = g_endpoint.feed(rms);
     g_voiceLevel = std::max(std::min(1.0f, rms * 10), g_voiceLevel * 0.8f);
+    if (g_dictation) {  // recherche : on écoute jusqu'à l'appui sur ■ (ou la limite du tampon)
+        if (millis() - g_voiceFrame > 100) {
+            g_voiceFrame = millis();
+            g_ui.renderSearch(g_searchQuery, "", false, -1, g_searchSource, g_deezerOk, 1, g_voiceLevel);
+        }
+        if (g_voiceLen >= kVoiceMax) finishDictation(true);
+        return;
+    }
     if (millis() - g_voiceFrame > 80) {  // ~12 images/s : l'anneau suit la voix
         g_voiceFrame = millis();
         g_ui.renderVoice(Ui::VoicePhase::Listening, g_voiceLevel);
@@ -896,10 +954,6 @@ static void handleTap(int x, int y) {
         g_stripStartX = x;
         g_stripPreset = g_ui.hitPreset(x, y);
         if (g_stripPreset >= 0) show();  // tuile montrée enfoncée tant que le doigt reste
-        return;
-    }
-    if (g_ui.hitMic(x, y)) {
-        startVoice();
         return;
     }
     if (g_ui.hitFav(x, y)) {  // ♥ : ajouter ce qui joue aux favoris, ou l'en retirer
@@ -1045,8 +1099,24 @@ void setup() {
 
 // ------------------------------------------------------------ recherche Qobuz
 
-static void renderSearch(int pressedKey = -1) {
+static void renderSearch(int pressedKey) {
     g_ui.renderSearch(g_searchQuery, g_searchStatus, g_searchBusy, pressedKey, g_searchSource, g_deezerOk);
+}
+
+// Lance la recherche du texte saisi ou dicté
+static void runSearchQuery() {
+    std::string q = g_searchQuery;
+    while (!q.empty() && q.back() == ' ') q.pop_back();
+    if (q.empty() || g_searchBusy) {
+        renderSearch();
+        return;
+    }
+    logEvent("Recherche %s : %s", g_searchSource == 1 ? "Deezer" : "Qobuz", q.c_str());
+    g_searchBusy = true;
+    g_searchStatus = g_searchSource == 1 ? String("Recherche sur Deezer\xE2\x80\xA6")
+                                         : String("Recherche sur Qobuz par ton WiiM\xE2\x80\xA6");
+    g_worker.search(q.c_str(), g_searchSource);
+    renderSearch();
 }
 
 static void openSearch() {
@@ -1071,17 +1141,9 @@ static void onSearchKey(int k) {
             break;
         case wr::Key::Back: g_searchQuery = wr::utf8PopBack(g_searchQuery); break;
         case wr::Key::Clear: g_searchQuery.clear(); break;
-        case wr::Key::Enter: {
-            std::string q = g_searchQuery;
-            while (!q.empty() && q.back() == ' ') q.pop_back();
-            if (q.empty() || g_searchBusy) break;
-            logEvent("Recherche Qobuz : %s", q.c_str());
-            g_searchBusy = true;
-            g_searchStatus = g_searchSource == 1 ? String("Recherche sur Deezer\xE2\x80\xA6")
-                                                 : String("Recherche sur Qobuz par ton WiiM\xE2\x80\xA6");
-            g_worker.search(q.c_str(), g_searchSource);
-            break;
-        }
+        case wr::Key::Enter:
+            runSearchQuery();
+            return;
     }
     if (key.kind != wr::Key::Enter) g_searchStatus = g_searchBusy ? g_searchStatus : String();
     renderSearch(k);
@@ -1181,7 +1243,17 @@ void loop() {
         if (t.wasPressed()) {
             g_lastTouch = now;
             if (g_brightness != kBrightOn) setBrightness(kBrightOn);
-            else if (g_ui.hitHome(t.x, t.y)) {
+            else if (g_listening && g_dictation) {
+                // Pendant la dictée : ■ termine ; Accueil ou Réglages annulent ; le reste est ignoré
+                if (g_ui.hitMic(t.x, t.y)) {
+                    sound::tap();
+                    finishDictation(true);
+                } else if (g_ui.hitHome(t.x, t.y) || g_ui.hitSettings(t.x, t.y)) {
+                    finishDictation(false);
+                }
+            } else if (g_searchOpen && g_ui.hitMic(t.x, t.y)) {
+                if (!g_searchBusy) startVoice(true);  // bip, puis écoute jusqu'à ■
+            } else if (g_ui.hitHome(t.x, t.y)) {
                 sound::tap();
                 g_searchOpen = g_resultsOpen = false;
                 show();
@@ -1222,6 +1294,7 @@ void loop() {
                 }
             }
         }
+        serviceVoice();
         serviceWiim();
         delay(5);
         return;

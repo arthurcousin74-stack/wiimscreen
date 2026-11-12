@@ -13,7 +13,7 @@ décrit dans le [README](README.md#other-esp32-boards) (en anglais).
 - **Couleurs tirées de la pochette** : la lueur du fond, le bouton lecture et les barres prennent la teinte dominante de l'album
 - **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur
 - **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
-- **Commande vocale** (facultative, en français) : bouton micro → « Joue FIP », « Mets France Culture », « Plus fort », « Volume 30 », « Suivant ». Tes presets, les commandes de lecture, et n'importe quelle radio de l'annuaire libre Radio Browser
+- **Recherche à la voix** (facultative) : sur l'écran de recherche, touche le micro dans le champ, dis un artiste, un morceau ou un album, puis touche le bouton rouge : le texte s'écrit et la recherche part (Qobuz ou Deezer)
 - **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
 - **Vue ambiance** : après 60 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
 - **Visualiseur** (expérimental, à activer dans la configuration) : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
@@ -59,7 +59,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
    ```
 4. **Enregistrer** : la télécommande redémarre, se connecte et affiche l'interface. Le premier échange enregistre le certificat du WiiM (« Certificat du WiiM enregistré »).
 
-## 4. Commande vocale (facultatif)
+## 4. Recherche à la voix (facultatif)
 
 ![Écoute](docs/voix.png)
 
@@ -67,20 +67,16 @@ La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reco
 
 1. Crée un compte sur https://platform.openai.com, ajoute quelques dollars de crédit, puis crée une clé API (*API keys* > *Create new secret key*).
 2. Ouvre la configuration du Tab5 (bouton ⚙ en bas de la barre de gauche → **Configuration**) et colle la clé dans **Commande vocale : clé API OpenAI**.
-3. Un bouton micro apparaît à droite des commandes de lecture.
+3. Un bouton micro apparaît dans le champ de l'écran de recherche (loupe de la barre de gauche).
 
 **Coût** : modèle `gpt-4o-mini-transcribe`, facturé à la durée d'audio (environ 0,3 centime de dollar la minute au moment de l'écriture) ; une phrase dure quelques secondes, soit quelques centimes par mois même en usage quotidien.
 
-**Ce qui est envoyé** : uniquement le son enregistré pendant l'écoute (8 s au plus) et la liste des noms de tes presets (pour aider la transcription), à OpenAI ; puis, pour une radio, le nom cherché à Radio Browser. Le micro est coupé le reste du temps. La clé reste dans la mémoire du Tab5 et n'est jamais réaffichée dans la page de configuration.
+**Ce qui est envoyé** : uniquement le son enregistré pendant l'écoute (8 s au plus), à OpenAI ; puis le texte cherché, au WiiM (Qobuz) ou à Deezer. Le micro est coupé le reste du temps. La clé reste dans la mémoire du Tab5 et n'est jamais réaffichée dans la page de configuration.
 
-**Utilisation** : touche le micro, attends le bip, parle. L'écoute s'arrête toute seule après la phrase (ou touche l'écran) ; « Annuler » abandonne. Pendant l'écoute, la musique est baissée puis remise à son volume.
+**Utilisation** : sur l'écran de recherche, touche le micro, attends le bip, dis un artiste, un morceau ou un album, puis touche le **bouton rouge** pour finir. Le texte entendu s'écrit dans le champ et la recherche part. 🏠 ou ⚙ abandonnent. Pendant l'écoute, la musique est baissée puis remise à son volume.
 
-| Tu dis | Résultat |
-|---|---|
-| « Joue FIP », « Mets Radio Swiss Jazz », « Preset numéro 3 » | Lance le preset (nom approché accepté) |
-| « Mets France Culture », « Je veux écouter Nova » | Cherche la radio dans Radio Browser et la lance sur le WiiM |
-| « Pause », « Reprends », « Suivant », « Précédent » | Commandes de lecture |
-| « Plus fort », « Moins fort », « Volume 30 », « Coupe le son », « Remets le son » | Volume |
+Exemples : « Stromae », « Daft Punk Discovery », « Ma meilleure ennemie ». Les résultats s'affichent comme pour une
+recherche tapée au clavier ; touche celui à écouter.
 
 **Reconfigurer plus tard** : bouton ⚙ (barre de gauche), puis **Configuration**.
 

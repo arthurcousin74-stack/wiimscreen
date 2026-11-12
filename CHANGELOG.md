@@ -38,6 +38,8 @@ Hardware testing in progress.
   advanced sections, file name and progress on the update page.
 
 ### Changed
+- Voice is now only for the search: a microphone in the search field, tap to start listening and tap the red
+  button to stop; the text heard fills the field and the search starts. No more microphone on the main screen.
 - Settings › Configuration restarts the Tab5 into setup mode instead of switching live (that froze the device);
   a tap on the screen cancels setup mode when the Tab5 is already configured.
 - Loading feedback: after ⏮/⏭, play/pause, a preset, a favorite or a search result, a ring turns around the

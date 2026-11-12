@@ -316,6 +316,8 @@ int main(int argc, char** argv) {
             {"Day Dreaming", "Aretha Franklin", "Young, Gifted and Black", ""}};
         ui.renderSearch("aretha frank", "", false, 20, 1, true);
         save(out, "24-recherche.ppm");
+        ui.renderSearch("", "", false, -1, 0, true, 1, 0.6f);  // dictée en cours
+        save(out, "29-dictee.ppm");
         ui.renderResults("aretha franklin", found, 0, "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer");
         save(out, "25-resultats.ppm");
     }

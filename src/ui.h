@@ -106,8 +106,9 @@ public:
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
     // source 0 Qobuz, 1 Deezer ; sources : afficher le choix Qobuz | Deezer
+    // mic : 0 micro au repos, 1 écoute (level 0..1), 2 transcription en cours (si la voix est configurée)
     void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1, int source = 0,
-                      bool sources = false);
+                      bool sources = false, int mic = 0, float level = 0);
     int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, -1 ailleurs
     int hitKey(int x, int y) const;      // indice dans keys(), ou -1
     const std::vector<wr::Key>& keys() const { return keys_; }
@@ -198,6 +199,7 @@ private:
     int resultsFirst_ = 0, resultsPerPage_ = 1;
     wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
     wr::Rect srcRects_[2];  // choix Qobuz | Deezer du clavier
+    wr::Rect micRect_;      // micro (dictée) du champ de recherche
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

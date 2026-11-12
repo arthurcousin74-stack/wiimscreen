@@ -598,11 +598,6 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
         heartIcon(f.x + f.w / 2, f.y + f.h / 2, f.w / 4, on ? kBg : (favState_ == 3 ? kTrack : kText));
         if (!on) heartIcon(f.x + f.w / 2, f.y + f.h / 2 - 1, f.w / 4 - sc(4), favState_ == 3 ? kText2 : kCard);
     }
-    if (voiceOn_) {
-        const wr::Rect& m = layout_.mic;
-        canvas_.fillCircle(m.x + m.w / 2, m.y + m.h / 2, m.w / 2, kCard);
-        micIcon(m.x + m.w / 2, m.y + m.h / 2, m.w / 4, st.online ? kText : 0x5A5D66u, kCard);
-    }
     volumePill(st, pressedTransport);
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
         int i = page_ * layout_.perPage + (int)slot;
@@ -838,7 +833,7 @@ bool Ui::hitSearch(int x, int y) const {
 
 // Clavier de recherche : champ de texte, état, touches
 void Ui::renderSearch(const std::string& query, const String& status, bool busy, int pressedKey, int source,
-                      bool sources) {
+                      bool sources, int mic, float level) {
     ambientShown_ = false;
     view_ = View::Other;
     railShown_ = false;
@@ -853,10 +848,34 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
     C.fillRoundRect(X, fy, W, fh, fh / 2, kCard);
     C.drawRoundRect(X, fy, W, fh, fh / 2, accent_);
     searchIcon(X + fh / 2, fy + fh / 2, sc(12), kText2, kCard);
+    // Micro (dictée) au bout du champ : touche pour écouter, touche encore (■) pour finir
+    micRect_ = wr::Rect{};
+    int micW = 0;
+    if (voiceOn_) {
+        const int d = fh - sc(10);
+        micRect_ = wr::Rect{X + W - sc(5) - d, fy + sc(5), d, d};
+        const int cx = micRect_.x + d / 2, cy = micRect_.y + d / 2;
+        if (mic == 1) {  // écoute : carré « stop » rouge, anneau qui suit la voix
+            const int ring = d / 2 + (int)(sc(10) * std::min(1.0f, level));
+            C.fillCircle(cx, cy, ring, mix(kCard, kRed, 0.35f));
+            C.fillCircle(cx, cy, d / 2, kRed);
+            C.fillRoundRect(cx - d / 6, cy - d / 6, d / 3, d / 3, sc(3), kText);
+        } else {
+            C.fillCircle(cx, cy, d / 2, mic == 2 ? kCardHi : accent_);
+            micIcon(cx, cy, d / 4, mic == 2 ? kText2 : kBg, mic == 2 ? kCardHi : accent_);
+        }
+        micW = d + sc(10);
+    }
     C.loadFont(kMid);
     C.setTextDatum(textdatum_t::middle_left);
-    const int tx = X + fh, tw = W - fh - sc(24);
-    if (query.empty()) {
+    const int tx = X + fh, tw = W - fh - sc(24) - micW;
+    if (mic == 1 || mic == 2) {
+        C.setTextColor(mic == 1 ? kText : kText2);
+        const char* say = mic == 1 ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6 touche le bouton rouge quand tu as fini"
+                                   : "Transcription\xE2\x80\xA6";
+        C.loadFont(kSmall);
+        C.drawString(wr::wrapText(say, tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
+    } else if (query.empty()) {
         C.setTextColor(kText2);
         C.drawString(wr::wrapText("Artiste, morceau, album\xE2\x80\xA6", tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
     } else {
@@ -1100,11 +1119,10 @@ void Ui::renderVoice(VoicePhase phase, float level) {
 
 // -------------------------------------------------------------------- zones
 
-bool Ui::hitMic(int x, int y) const {
-    if (!voiceOn_) return false;
-    const wr::Rect& m = layout_.mic;
-    const int pad = sc(10);
-    return wr::Rect{m.x - pad, m.y - pad, m.w + 2 * pad, m.h + 2 * pad}.contains(x, y);
+bool Ui::hitMic(int x, int y) const {  // micro de la recherche (le seul)
+    if (!voiceOn_ || micRect_.w == 0) return false;
+    const int pad = sc(8);
+    return wr::Rect{micRect_.x - pad, micRect_.y - pad, micRect_.w + 2 * pad, micRect_.h + 2 * pad}.contains(x, y);
 }
 
 bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }

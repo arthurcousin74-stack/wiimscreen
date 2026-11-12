@@ -10,7 +10,7 @@ step. Keep this style when you change it. -->
 wiimscreen shows the album art, the track data and the presets of your WiiM on a color touchscreen. You can also
 control the playback and the volume, keep your own favorites and search Qobuz. The device uses the local network
 interfaces of the WiiM (HTTP API and UPnP). It does not use a cloud service or a phone app. It does not need a key
-for a streaming service: the WiiM does the Qobuz search with its own Qobuz access. French voice commands are
+for a streaming service: the WiiM does the Qobuz search with its own Qobuz access. Voice search (French, OpenAI speech-to-text) is
 optional.
 
 The firmware is for ESP32 boards that have a touchscreen and PSRAM. The core logic does not use the hardware and has
@@ -32,10 +32,10 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 > - The screen images in this file come from the real UI code (refer to [tools/preview](tools/preview/)).
 > - These functions operate on a real Tab5 with a real WiiM: touch, Wi-Fi, playback status and control, the
 >   navigation bar, the WiiM queue check and the Qobuz search.
-> - These functions are not yet confirmed on real hardware: the replay of favorites, the voice commands, the
+> - These functions are not yet confirmed on real hardware: the replay of favorites, the voice search, the
 >   visualizer and the selection between several WiiM players.
 > - No other board is tested.
-> - The screen text and the voice commands are in **French** at this time. Translations are welcome.
+> - The screen text and the voice search are in **French** at this time. Translations are welcome.
 >
 > If you find a problem, please [open an issue](../../issues). Tell us what works and what does not work.
 
@@ -68,9 +68,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Automatic WiiM discovery**: the device finds the WiiM players on your network (SSDP and `getStatusEx`). You
   select one player. If the IP address of the player changes, the device finds it again.
 - **Setup from a phone**: scan the QR code on the screen, select your Wi-Fi network and save.
-- **Voice commands** (optional, French, with OpenAI speech-to-text): for example *« Joue FIP »*,
-  *« Mets France Culture »*, *« Plus fort »*, *« Volume 30 »*, *« Suivant »*. The device finds your presets, the
-  playback commands and the radio stations of the open [Radio Browser](https://www.radio-browser.info/) directory.
+- **Voice search** (optional, with OpenAI speech-to-text): on the search screen, touch the microphone in the
+  search field and say an artist, a track or an album. Touch the red button when you stop. The device writes what
+  you said in the field and starts the search.
 - **Over-the-air updates**: install a new firmware from a web browser on your network. The device shows a 6-digit
   code that you must type.
 - **Diagnostics**: the *Journal* (⚙ › *Journal*) shows the last events: touches, commands and the WiiM answers.
@@ -157,11 +157,14 @@ The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does n
 
 Note: the search finds tracks. To keep an album, play it and touch the heart button.
 
-### Voice commands (optional)
+### Voice search (optional)
 
 1. Make an API key at <https://platform.openai.com>.
-2. Open the setup page (touch ⚙ in the left bar, then **Configuration**).
-3. Paste the key in **Commande vocale**.
+2. Open the setup page (touch ⚙ in the left bar, then **Configuration**). The Tab5 restarts in setup mode.
+3. Paste the key in **Commande vocale**, then save.
+4. On the search screen, touch the microphone in the search field. Wait for the beep.
+5. Say an artist, a track or an album.
+6. Touch the red button. The Tab5 writes the text and starts the search.
 
 Note: the device sends the sound to OpenAI only while the microphone listens. The cost was approximately
 $0.003 for each minute of sound when we wrote this file. This is a few cents each month.
@@ -274,7 +277,7 @@ for AI coding agents.
 
 ## Security and privacy
 
-All the data stays on your local network, except for the album art, the voice commands and the radio search. The
+All the data stays on your local network, except for the album art, the voice search and the Deezer search. The
 Qobuz search goes from the WiiM to Qobuz: the Tab5 does not connect to Qobuz.
 For more data and to report a problem, refer to [SECURITY.md](SECURITY.md).
 
@@ -284,7 +287,7 @@ For more data and to report a problem, refer to [SECURITY.md](SECURITY.md).
 - All other HTTPS connections use the Mozilla root certificates.
 - The setup mode and the update mode start only after an action on the device. They use a random password or a
   6-digit code.
-- The microphone operates only in the ambient view (visualizer) or when you give a voice command.
+- The microphone operates only in the ambient view (visualizer) or while you dictate a search.
 
 ## Contributing
 
