@@ -135,13 +135,26 @@ static UiState displayState() {
     return s;
 }
 
-static void show(int pressedPreset = -1, int pressedTransport = -1) {
-    if (g_listening || g_menuOpen || g_touchTest || g_logOpen) return;  // écrans modaux : rien par-dessus
-    if (pressedPreset < 0 && pressedTransport < 0 && millis() < g_flashUntil) {
-        pressedPreset = g_flashPreset;
+// Affichage différé : show() marque l'écran à redessiner, renderNow() le dessine une
+// seule fois par tour de boucle, même si plusieurs changements sont arrivés.
+static bool g_dirty = false;
+
+static void show() { g_dirty = true; }
+
+static bool modalOpen() { return g_listening || g_menuOpen || g_touchTest || g_logOpen; }
+
+static void renderNow() {
+    if (!g_dirty || modalOpen()) return;  // écrans modaux : rien par-dessus (rendu à leur fermeture)
+    g_dirty = false;
+    const uint32_t now = millis();
+    // Bouton enfoncé : tuile sous le doigt, ou court effet après un appui
+    int pressedPreset = (g_stripTouch && !g_stripDragged) ? g_stripPreset : -1;
+    int pressedTransport = -1;
+    if (now < g_flashUntil) {
+        if (pressedPreset < 0) pressedPreset = g_flashPreset;
         pressedTransport = g_flashTransport;
     }
-    g_lastTick = millis();
+    g_lastTick = now;
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
 }
@@ -744,11 +757,18 @@ static void handleTap(int x, int y) {
         g_stripDragged = false;
         g_stripStartX = x;
         g_stripPreset = g_ui.hitPreset(x, y);
-        if (g_stripPreset >= 0) show(g_stripPreset);
+        if (g_stripPreset >= 0) show();  // tuile montrée enfoncée tant que le doigt reste
         return;
     }
     if (g_ui.hitMic(x, y)) {
         startVoice();
+        return;
+    }
+    if (g_ui.hitSettings(x, y)) {
+        logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
+        sound::tap();
+        g_menuOpen = true;
+        g_ui.renderMenu(FW_VERSION);
         return;
     }
 
@@ -926,7 +946,7 @@ void loop() {
         } else if (g_listening) {
             finishVoice(!g_ui.hitVoiceCancel(t.x, t.y));  // Annuler, ou « j'ai fini »
         } else if (g_ambient) {
-            logEvent("Appui en vue ambiance (%d,%d)", t.x, t.y);
+            logEvent("Appui en vue ambiance (%d,%d)%s", t.x, t.y, g_ui.hitHome(t.x, t.y) ? " : Accueil" : "");
             exitAmbient();  // vue ambiance : un appui ramène les commandes
             sound::tap();
         } else if (handleBars(t.x, t.y)) {
@@ -963,7 +983,11 @@ void loop() {
     }
     // Progression : une image par seconde pendant la lecture (écran allumé)
     const auto& p = g_state.player;
-    if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) show();
+    // Seule la ligne de progression est redessinée si rien d'autre n'a changé (~3 % de l'écran)
+    if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) {
+        if (!g_dirty && !modalOpen() && g_ui.updateProgress(displayState())) g_lastTick = now;
+        else show();
+    }
     // Chargement : anneau qui tourne autour du bouton lecture (~20 images/s)
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
@@ -977,5 +1001,6 @@ void loop() {
     } else if (idle > kDimMs && g_brightness == kBrightOn) {
         setBrightness(kBrightDim);
     }
+    renderNow();
     delay(5);
 }

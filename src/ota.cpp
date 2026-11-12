@@ -8,26 +8,37 @@
 
 #include "firmware.h"
 #include "version.h"
+#include "web_style.h"
 
-static const char kPage[] PROGMEM = R"HTML(<!doctype html><html lang=fr><head><meta charset=utf-8>
-<meta name=viewport content='width=device-width,initial-scale=1'><title>Mise à jour du Tab5</title><style>
-body{font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:20px;color:#111}
-label{display:block;margin-top:18px;font-weight:600}input{width:100%;box-sizing:border-box;font-size:18px;
-padding:10px;margin-top:6px;border:1px solid #999;border-radius:8px}button{margin-top:24px;width:100%;
-padding:14px;font-size:18px;border:0;border-radius:8px;background:#111;color:#fff}progress{width:100%;
-height:18px;margin-top:20px}small{color:#555}#m{font-size:18px;margin-top:16px}</style></head><body>
-<h1>Mise à jour du Tab5</h1><p>Version installée : <b>%VERSION%</b></p>
-<form id=f><label>Code affiché sur le Tab5<input name=code inputmode=numeric autocomplete=off maxlength=6 required></label>
-<label>Firmware<input type=file name=fw accept=.bin required><small>Le fichier <b>wiim-remote-tab5.bin</b>
-téléchargé depuis GitHub (dézippé).</small></label><button>Installer</button></form>
-<progress id=p max=100 value=0 hidden></progress><p id=m></p>
+// Corps de la page (après kWebHead, feuille de style commune)
+static const char kPage[] PROGMEM = R"HTML(<title>Mise à jour du Tab5</title><style>
+#code{font:600 30px ui-monospace,Menlo,monospace;letter-spacing:.35em;text-align:center;padding:14px}
+.file{display:flex;align-items:center;gap:12px;background:#111317;border:1px dashed var(--line);border-radius:12px;padding:16px;cursor:pointer;color:var(--muted);font-weight:500}
+.file b{color:var(--text)}.file input{display:none}.file.ok{border-style:solid;border-color:var(--accent)}
+#m{margin-top:14px}#m:empty{display:none}.btn{margin-top:18px}</style></head><body>
+<header><div class=logo><i></i></div><div><h1>Mise à jour</h1><p>Télécommande WiiM · version <b>%VERSION%</b></p></div></header>
+<form id=f class=card><label for=code>Code affiché sur le Tab5</label>
+<input id=code name=code inputmode=numeric autocomplete=one-time-code maxlength=6 pattern='[0-9]{6}' placeholder='······' required>
+<label>Firmware</label><label class=file id=z><input type=file name=fw id=fw accept=.bin required>
+<span id=n>Choisir <b>wiim-remote-tab5.bin</b></span></label>
+<small>Le fichier de la dernière version sur GitHub (dézippé s'il est dans un .zip).</small>
+<button class=btn id=go>Installer</button>
+<progress id=p max=100 value=0 hidden></progress><div id=m></div></form>
 <script>
-f.onsubmit=e=>{e.preventDefault();const x=new XMLHttpRequest(),d=new FormData();
+var f=document.getElementById('f'),fw=document.getElementById('fw'),p=document.getElementById('p'),
+m=document.getElementById('m'),go=document.getElementById('go');
+function say(t,c){m.textContent=t;m.className=c||''}
+fw.onchange=function(){var x=fw.files[0];if(!x)return;document.getElementById('n').innerHTML='';
+var b=document.createElement('b');b.textContent=x.name;document.getElementById('n').append(b,' · '+Math.round(x.size/1024)+' Ko');
+document.getElementById('z').classList.add('ok')};
+f.onsubmit=function(e){e.preventDefault();var x=new XMLHttpRequest(),d=new FormData();
 x.open('POST','/update?code='+encodeURIComponent(f.code.value));
-x.upload.onprogress=v=>{p.hidden=false;p.value=v.loaded*100/v.total};
-x.onload=()=>{m.textContent=x.responseText;if(x.status==200)f.hidden=true};
-x.onerror=()=>{m.textContent='Connexion perdue : réessaie.'};
-d.append('fw',f.fw.files[0]);m.textContent='Envoi…';x.send(d)};
+x.upload.onprogress=function(v){p.hidden=false;p.value=v.loaded*100/v.total;
+go.textContent=v.loaded<v.total?'Envoi… '+Math.round(p.value)+' %':'Installation…'};
+x.onload=function(){go.disabled=false;go.textContent='Installer';
+if(x.status==200){say(x.responseText,'okbox');go.hidden=true;p.value=100}else{say(x.responseText,'err');p.hidden=true}};
+x.onerror=function(){go.disabled=false;go.textContent='Installer';say('Connexion perdue : réessaie.','err')};
+d.append('fw',fw.files[0]);go.disabled=true;go.textContent='Envoi…';say('');x.send(d)};
 </script></body></html>)HTML";
 
 void runUpdateMode(Ui& ui) {
@@ -59,7 +70,8 @@ void runUpdateMode(Ui& ui) {
     };
 
     server.on("/", HTTP_GET, [&] {
-        String page = FPSTR(kPage);
+        String page = FPSTR(kWebHead);
+        page += FPSTR(kPage);
         page.replace("%VERSION%", FW_VERSION);
         server.send(200, "text/html; charset=utf-8", page);
     });

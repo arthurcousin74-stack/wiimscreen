@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "web_style.h"
+
 static String esc(const String& s) { return wr::htmlEscape(s.c_str()).c_str(); }
 
 // Mot de passe du Wi-Fi de configuration : 10 caractères sans ambiguïté (pas de 0/o, 1/l),
@@ -32,119 +34,157 @@ static bool tokenOk(const String& v, unsigned minLen, unsigned maxLen) {
     return true;
 }
 
-static String formPage(const Settings& s, const std::vector<String>& ssids, const String& error) {
+// Réseau Wi-Fi vu pendant la recherche (le plus fort d'abord)
+struct Net {
+    String name;
+    int rssi;
+    bool open;
+};
+
+static String bars(int rssi) {
+    int n = rssi > -60 ? 3 : rssi > -72 ? 2 : 1;
+    String b = "<span class=bars>";
+    for (int i = 1; i <= 3; ++i) b += i <= n ? "<i class=f></i>" : "<i></i>";
+    return b + "</span>";
+}
+
+static String formPage(const Settings& s, const std::vector<Net>& nets, const String& error) {
     String h;
-    h.reserve(6000);
-    h += F("<!doctype html><html lang=fr><head><meta charset=utf-8>"
-           "<meta name=viewport content='width=device-width,initial-scale=1'>"
-           "<title>Télécommande WiiM</title><style>"
-           "body{font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111}"
-           "label{display:block;margin-top:16px;font-weight:600}"
-           "input,select,textarea{width:100%;box-sizing:border-box;font-size:16px;padding:10px;"
-           "margin-top:6px;border:1px solid #999;border-radius:8px}"
-           "textarea{height:220px;font-family:ui-monospace,monospace}"
-           "small{color:#555;display:block;margin-top:4px}"
-           "button{margin-top:24px;width:100%;padding:14px;font-size:18px;border:0;border-radius:8px;"
-           "background:#111;color:#fff}"
-           ".err{background:#fdd;border:1px solid #c66;padding:10px;border-radius:8px}"
-           ".row{display:flex;gap:12px}.row>div{flex:1}"
-           "</style></head><body><h1>Télécommande WiiM</h1>");
+    h.reserve(9000);
+    h += FPSTR(kWebHead);
+    h += F("<title>Configuration du Tab5</title></head><body>"
+           "<header><div class=logo><i></i></div><div><h1>T\xC3\xA9l\xC3\xA9" "commande WiiM</h1>"
+           "<p>Configuration du Tab5</p></div></header>");
     if (error.length()) h += "<p class=err>" + esc(error) + "</p>";
+    h += F("<form method=post action=/save id=f>");
 
-    h += F("<form method=post action=/save>");
-    h += F("<label>Réseau Wi-Fi<input name=ssid list=ssids required maxlength=32 value=\"");
-    h += esc(s.ssid) + F("\"></label><datalist id=ssids>");
-    for (auto& n : ssids) h += "<option value=\"" + esc(n) + "\">";
-    h += F("</datalist>");
+    // --- 1. Wi-Fi
+    h += F("<section class=card><h2><b>1</b>Ton Wi-Fi</h2>");
+    if (!nets.empty()) {
+        h += F("<div class=nets>");
+        for (auto& n : nets) {
+            h += "<button type=button class=net data-s=\"" + esc(n.name) + "\"><span>" + esc(n.name) +
+                 (n.open ? "" : " &#128274;") + "</span>" + bars(n.rssi) + "</button>";
+        }
+        h += F("</div>");
+    }
+    h += F("<label for=ssid>Nom du r\xC3\xA9seau</label><input id=ssid name=ssid required maxlength=32 "
+           "autocomplete=off placeholder='Touche un r\xC3\xA9seau ou tape son nom' value=\"");
+    h += esc(s.ssid) + F("\"><small>Ton r\xC3\xA9seau n'appara\xC3\xAEt pas ? Le Tab5 n'utilise que le 2,4 GHz.</small>");
+    h += F("<label for=pass>Mot de passe</label><div class=pw><input id=pass name=pass type=password "
+           "maxlength=63 autocomplete=off");
+    if (s.pass.length()) h += F(" placeholder='Inchang\xC3\xA9 si vide'");
+    h += F("><button type=button id=eye>Afficher</button></div>"
+           "<small>Sur Android : <b>Param\xC3\xA8tres \xE2\x80\xBA Wi-Fi \xE2\x80\xBA ton r\xC3\xA9seau \xE2\x80\xBA Partager</b> "
+           "affiche le mot de passe.</small></section>");
 
-    h += F("<label>Mot de passe Wi-Fi<input name=pass type=password maxlength=63 autocomplete=off");
-    if (s.pass.length()) h += F(" placeholder='inchangé si vide'");
-    h += F("></label>");
-
-    h += F("<label>Adresse IP du WiiM (facultatif)<input name=host maxlength=64 inputmode=decimal "
+    // --- 2. WiiM
+    h += F("<section class=card><h2><b>2</b>Ton WiiM</h2><label for=host>Adresse IP (facultatif)</label>"
+           "<input id=host name=host maxlength=64 inputmode=decimal autocomplete=off "
            "placeholder='Vide : recherche automatique' value=\"");
-    h += esc(s.host) + F("\"><small><b>Laisse vide</b> : le Tab5 trouve ton WiiM tout seul sur le Wi-Fi "
-                         "(et le retrouve si son adresse change). Sinon : app WiiM Home &gt; ton appareil &gt; "
-                         "Paramètres &gt; Informations.</small></label>");
+    h += esc(s.host) + F("\"><small><b>Laisse vide</b> : le Tab5 trouve ton WiiM sur le Wi-Fi, et le retrouve si "
+                         "son adresse change.</small></section>");
 
-    h += F("<label>Presets<textarea name=presets maxlength=1200 placeholder='Vide : presets du WiiM'>");
-    h += esc(s.presetsText) + F("</textarea><small><b>Laisse vide</b> pour reprendre les presets de l'app "
-                                "WiiM Home, avec leurs noms et leurs images. Sinon, une ligne par bouton : "
-                                "numéro=nom (12 boutons max), par exemple <code>1=Radio Swiss Jazz</code>."
-                                "</small></label>");
+    // --- Presets
+    h += F("<details class=card><summary>Presets</summary><div class=in>"
+           "<textarea name=presets maxlength=1200 placeholder='Vide : presets de l&#39;app WiiM Home'>");
+    h += esc(s.presetsText) + F("</textarea><small><b>Laisse vide</b> pour reprendre les favoris de l'app WiiM Home, "
+                                "avec leurs images. Sinon, une ligne par bouton : <code>1=Radio Swiss Jazz</code> "
+                                "(12 au plus).</small></div></details>");
 
-    h += F("<label>Orientation<select name=rotation>");
+    // --- Options
+    h += F("<details class=card><summary>Options</summary><div class=in>"
+           "<div class=row><div><label>Orientation</label><select name=rotation>");
     h += option("1", "Paysage", s.rotation == 1);
-    h += option("3", "Paysage inversé", s.rotation == 3);
+    h += option("3", "Paysage invers\xC3\xA9", s.rotation == 3);
     h += option("0", "Portrait", s.rotation == 0);
-    h += option("2", "Portrait inversé", s.rotation == 2);
-    h += F("</select></label>");
-
-    h += F("<div class=row><div><label>Pas du volume<input name=volstep type=number min=1 max=20 value=");
-    h += String(s.volStep) + F("></label></div><div><label>Connexion<select name=scheme>");
-    h += option("https", "HTTPS (recommandé)", s.https);
-    h += option("http", "HTTP", !s.https);
-    h += F("</select></label></div></div>");
-
-    h += F("<label>Bips à chaque appui<select name=beep>");
-    h += option("0", "Désactivés", s.beep == 0);
+    h += option("2", "Portrait invers\xC3\xA9", s.rotation == 2);
+    h += F("</select></div><div><label>Pas du volume</label><input name=volstep type=number min=1 max=20 value=");
+    h += String(s.volStep) + F("></div></div><div class=row><div><label>Bips</label><select name=beep>");
+    h += option("0", "D\xC3\xA9sactiv\xC3\xA9s", s.beep == 0);
     h += option("1", "Discrets", s.beep == 1);
     h += option("2", "Normaux", s.beep == 2);
     h += option("3", "Forts", s.beep == 3);
-    h += F("</select><small>Un clic à chaque appui, deux notes graves si le WiiM ne répond pas."
-           "</small></label>");
+    h += F("</select></div><div><label>Connexion au WiiM</label><select name=scheme>");
+    h += option("https", "HTTPS", s.https);
+    h += option("http", "HTTP", !s.https);
+    h += F("</select></div></div><div class=row><div><label>R\xC3\xA9veil au mouvement</label><select name=motion>");
+    h += option("1", "Activ\xC3\xA9", s.motionWake);
+    h += option("0", "D\xC3\xA9sactiv\xC3\xA9", !s.motionWake);
+    h += F("</select></div><div><label>Visualiseur</label><select name=visu>");
+    h += option("1", "Activ\xC3\xA9", s.visualizer);
+    h += option("0", "D\xC3\xA9sactiv\xC3\xA9", !s.visualizer);
+    h += F("</select></div></div><small>HTTPS est conseill\xC3\xA9. Visualiseur (exp\xC3\xA9rimental) : en vue ambiance, le micro anime un spectre. Le son est "
+           "analys\xC3\xA9 sur place, jamais enregistr\xC3\xA9 ni envoy\xC3\xA9.</small></div></details>");
 
-    h += F("<div class=row><div><label>Visualiseur (exp\xC3\xA9rimental)<select name=visu>");
-    h += option("1", "Activé", s.visualizer);
-    h += option("0", "Désactivé", !s.visualizer);
-    h += F("</select></label></div><div><label>Réveil par mouvement<select name=motion>");
-    h += option("1", "Activé", s.motionWake);
-    h += option("0", "Désactivé", !s.motionWake);
-    h += F("</select></label></div></div><small>Visualiseur : en vue ambiance, le micro écoute la pièce "
-           "pour animer un spectre. Le son est analysé sur place, jamais enregistré ni envoyé. "
-           "Réveil par mouvement : soulever ou déplacer le Tab5 rallume l'écran.</small>");
-
-    h += F("<label>Commande vocale : clé API OpenAI<input name=oaikey type=password maxlength=200 "
-           "autocomplete=off");
-    if (s.openaiKey.length()) h += F(" placeholder='inchangée si vide'");
-    h += F("><small>Pour parler au Tab5 (« Joue FIP », « Mets France Culture », « Plus fort »). Crée une clé "
-           "sur platform.openai.com (quelques centimes par mois). Pendant que le micro écoute, le son est "
-           "envoyé à OpenAI pour être transcrit ; rien d'autre n'est envoyé. Vide : pas de bouton micro."
-           "</small></label>");
+    // --- Commande vocale
+    h += F("<details class=card><summary>Commande vocale</summary><div class=in>"
+           "<label for=oaikey>Cl\xC3\xA9 API OpenAI</label><div class=pw><input id=oaikey name=oaikey type=password "
+           "maxlength=200 autocomplete=off");
+    h += s.openaiKey.length() ? F(" placeholder='Enregistr\xC3\xA9" "e \xE2\x80\x94 inchang\xC3\xA9" "e si vide'")
+                              : F(" placeholder='sk-\xE2\x80\xA6'");
+    h += F("></div><small>\xC2\xAB Joue FIP \xC2\xBB, \xC2\xAB Mets France Culture \xC2\xBB, \xC2\xAB Plus fort \xC2\xBB\xE2\x80\xA6 "
+           "Cl\xC3\xA9 \xC3\xA0 cr\xC3\xA9" "er sur platform.openai.com (quelques centimes par mois). Le son n'est "
+           "envoy\xC3\xA9 que pendant l'\xC3\xA9" "coute. Vide : pas de bouton micro.</small>");
     if (s.openaiKey.length())
-        h += F("<label><input type=checkbox name=oaidel value=1 style='width:auto'> Supprimer la clé "
-               "(désactive la commande vocale)</label>");
-    h += F("<label>Modèle de transcription<input name=sttmodel maxlength=60 value=\"");
-    h += esc(s.sttModel) + F("\"><small>À changer seulement si OpenAI renomme ce modèle.</small></label>");
+        h += F("<label class=chk><input type=checkbox name=oaidel value=1>Supprimer la cl\xC3\xA9 enregistr\xC3\xA9" "e</label>");
+    h += F("<label for=sttmodel>Mod\xC3\xA8le de transcription</label><input id=sttmodel name=sttmodel maxlength=60 value=\"");
+    h += esc(s.sttModel) + F("\"><small>\xC3\x80 changer seulement si OpenAI renomme ce mod\xC3\xA8le.</small></div></details>");
 
+    // --- Avancé
     if (s.fingerprint.length()) {
-        h += F("<label><input type=checkbox name=forgetfp value=1 style='width:auto'> "
-               "Oublier le certificat enregistré du WiiM</label><small>Empreinte actuelle : ");
+        h += F("<details class=card><summary>Avanc\xC3\xA9</summary><div class=in><label class=chk>"
+               "<input type=checkbox name=forgetfp value=1>Oublier le certificat enregistr\xC3\xA9 du WiiM</label>"
+               "<small>Empreinte : <code>");
         h += esc(s.fingerprint.substring(0, 16)) +
-             F("… À cocher seulement après une réinitialisation ou un changement de WiiM.</small>");
+             F("\xE2\x80\xA6</code>. Seulement apr\xC3\xA8s une r\xC3\xA9initialisation ou un changement de WiiM."
+               "</small></div></details>");
     }
-    h += F("<button type=submit>Enregistrer et redémarrer</button></form></body></html>");
+
+    h += F("<div class=bar><button class=btn type=submit id=go>Enregistrer et red\xC3\xA9marrer</button></div></form>"
+           "<script>"
+           "var s=document.getElementById('ssid'),p=document.getElementById('pass');"
+           "function mark(){document.querySelectorAll('.net').forEach(function(b){"
+           "b.classList.toggle('on',b.dataset.s===s.value)})}"
+           "document.querySelectorAll('.net').forEach(function(b){b.onclick=function(){s.value=b.dataset.s;mark();p.focus()}});"
+           "s.oninput=mark;mark();"
+           "document.getElementById('eye').onclick=function(){var t=p.type=='password';p.type=t?'text':'password';"
+           "this.textContent=t?'Masquer':'Afficher'};"
+           "document.getElementById('f').onsubmit=function(){var g=document.getElementById('go');"
+           "g.disabled=true;g.textContent='Enregistrement\xE2\x80\xA6'};"
+           "</script></body></html>");
     return h;
 }
 
-static const char* kDonePage =
-    "<!doctype html><html lang=fr><head><meta charset=utf-8>"
-    "<meta name=viewport content='width=device-width,initial-scale=1'></head>"
-    "<body style='font-family:system-ui;padding:24px'><h1>Enregistré</h1>"
-    "<p>La télécommande redémarre et se connecte à ton Wi-Fi. Tu peux fermer cette page.</p></body></html>";
+static String donePage(const String& ssid) {
+    String h = FPSTR(kWebHead);
+    h += F("<title>Enregistr\xC3\xA9</title></head><body><header><div class=logo><i></i></div><div>"
+           "<h1>C'est enregistr\xC3\xA9</h1><p>T\xC3\xA9l\xC3\xA9" "commande WiiM</p></div></header>"
+           "<div class='card okbox'>Le Tab5 red\xC3\xA9marre et se connecte \xC3\xA0 <b>");
+    h += esc(ssid) + F("</b>.</div><section class=card><h2>Et ensuite ?</h2><small>Ton t\xC3\xA9l\xC3\xA9phone va "
+                       "quitter le Wi-Fi du Tab5 : tu peux fermer cette page. Si un seul WiiM est sur ton r\xC3\xA9seau, "
+                       "il est choisi tout seul ; sinon, touche le tien sur l'\xC3\xA9" "cran du Tab5.</small>"
+                       "</section></body></html>");
+    return h;
+}
 
 void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     WiFi.disconnect(true);
     WiFi.mode(WIFI_AP_STA);
 
     // Réseaux visibles, proposés dans le formulaire
-    std::vector<String> ssids;
+    std::vector<Net> ssids;
     int n = WiFi.scanNetworks();
-    for (int i = 0; i < n && ssids.size() < 20; ++i) {
+    for (int i = 0; i < n; ++i) {
         String name = WiFi.SSID(i);
-        if (name.length() && std::find(ssids.begin(), ssids.end(), name) == ssids.end()) ssids.push_back(name);
+        if (!name.length()) continue;
+        auto it = std::find_if(ssids.begin(), ssids.end(), [&](const Net& x) { return x.name == name; });
+        if (it == ssids.end()) ssids.push_back(Net{name, WiFi.RSSI(i), WiFi.encryptionType(i) == WIFI_AUTH_OPEN});
+        else it->rssi = std::max(it->rssi, (int)WiFi.RSSI(i));
     }
     WiFi.scanDelete();
+    std::sort(ssids.begin(), ssids.end(), [](const Net& a, const Net& b) { return a.rssi > b.rssi; });
+    if (ssids.size() > 12) ssids.resize(12);
 
     char suffix[5];
     snprintf(suffix, sizeof suffix, "%04X", (unsigned)(ESP.getEfuseMac() & 0xFFFF));
@@ -214,7 +254,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
             return;
         }
         saveSettings(next);
-        server.send(200, "text/html; charset=utf-8", kDonePage);
+        server.send(200, "text/html; charset=utf-8", donePage(next.ssid));
         delay(1500);
         ESP.restart();
     });

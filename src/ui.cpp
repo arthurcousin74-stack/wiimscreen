@@ -81,6 +81,29 @@ int Ui::pageCount() const {
 
 void Ui::setPage(int p) { page_ = std::max(0, std::min(pageCount() - 1, p)); }
 
+void Ui::presentRect(const wr::Rect& r) {
+    D.startWrite();
+    D.setClipRect(r.x, r.y, r.w, r.h);
+    canvas_.pushSprite(&D, 0, 0);
+    D.clearClipRect();
+    D.endWrite();
+}
+
+bool Ui::updateProgress(const UiState& st) {
+    wr::Rect r;
+    if (view_ == View::Controls) r = layout_.progress;
+    else if (view_ == View::Ambient) r = ambProg_;
+    else return false;
+    if (r.w <= 0 || r.h <= 0) return false;
+    // Fond d'origine sur la seule ligne de progression, puis la ligne redessinée
+    canvas_.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&canvas_, 0, 0);
+    progressRow(st, r, view_ == View::Controls ? &progHit_ : nullptr);
+    canvas_.clearClipRect();
+    presentRect(r);
+    return true;
+}
+
 void Ui::present() {
     D.startWrite();
     canvas_.pushSprite(&D, 0, 0);
@@ -558,12 +581,18 @@ void Ui::toast(const String& msg) {
 
 void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     ambientShown_ = false;
+    view_ = View::Controls;
     progDuration_ = st.player.durationMs;
     background();
     roundedPush(art_, layout_.art.x, layout_.art.y, sc(16), true, 0);
     info(st);
     progressRow(st, layout_.progress, &progHit_);
     transport(st, pressedTransport);
+    {  // Réglages : engrenage au bout gauche de la rangée (le micro est au bout droit)
+        const wr::Rect& g = layout_.settings;
+        canvas_.fillCircle(g.x + g.w / 2, g.y + g.h / 2, g.w / 2, kCard);
+        gearIcon(g.x + g.w / 2, g.y + g.h / 2, g.w / 4, kText2, kCard);
+    }
     if (voiceOn_) {
         const wr::Rect& m = layout_.mic;
         canvas_.fillCircle(m.x + m.w / 2, m.y + m.h / 2, m.w / 2, kCard);
@@ -653,9 +682,18 @@ void Ui::renderAmbient(const UiState& st) {
         C.drawString(wr::wrapText(detail, tw, 1, measure)[0].c_str(), tx, y);
         y += smallH;
     }
-    progressRow(st, wr::Rect{tx, y + sc(28), tw, sc(30)}, nullptr);
+    ambProg_ = wr::Rect{tx, y + sc(28), tw, sc(30)};
+    progressRow(st, ambProg_, nullptr);
+    // Bouton Accueil, en haut à droite : retour aux commandes (toucher ailleurs marche aussi)
+    {
+        const int d = sc(52);
+        homeRect_ = wr::Rect{W - m - d, m, d, d};
+        C.fillCircle(homeRect_.x + d / 2, homeRect_.y + d / 2, d / 2, kCard);
+        homeIcon(homeRect_.x + d / 2, homeRect_.y + d / 2, d / 4, kText, kCard);
+    }
     if (visEnabled_) drawBars();
     ambientShown_ = true;
+    view_ = View::Ambient;
     present();
 }
 
@@ -690,11 +728,7 @@ void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& 
     bg_.pushSprite(&canvas_, 0, 0);
     drawBars();
     canvas_.clearClipRect();
-    D.startWrite();
-    D.setClipRect(r.x, r.y, r.w, r.h);
-    canvas_.pushSprite(&D, 0, 0);
-    D.clearClipRect();
-    D.endWrite();
+    presentRect(r);
 }
 
 // Micro : capsule, arceau et pied (s : demi-hauteur de l'icône)
@@ -709,9 +743,30 @@ void Ui::micIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     (void)bg;
 }
 
+// Engrenage : dents en couronne, disque, trou central
+void Ui::gearIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
+    auto& C = canvas_;
+    const int teeth = 8, tr = std::max(2, r / 4);
+    for (int k = 0; k < teeth; ++k) {
+        float a = k * 2 * 3.14159265f / teeth;
+        C.fillCircle(cx + (int)std::lround(std::cos(a) * r), cy + (int)std::lround(std::sin(a) * r), tr, c);
+    }
+    C.fillCircle(cx, cy, r * 85 / 100, c);
+    C.fillCircle(cx, cy, r * 38 / 100, bg);
+}
+
+// Maison : toit, corps, porte
+void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
+    auto& C = canvas_;
+    C.fillTriangle(cx - s - s / 4, cy - s / 8, cx + s + s / 4, cy - s / 8, cx, cy - s - s / 4, c);
+    C.fillRect(cx - s * 3 / 4, cy - s / 8, s * 3 / 2, s, c);
+    C.fillRect(cx - s / 5, cy + s / 3, s * 2 / 5, s * 2 / 3 - s / 8, bg);
+}
+
 // Écran d'écoute : grand micro dont l'anneau suit la voix
 void Ui::renderVoice(VoicePhase phase, float level) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height();
@@ -765,6 +820,14 @@ bool Ui::hitMic(int x, int y) const {
 }
 
 bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }
+
+bool Ui::hitSettings(int x, int y) const {
+    const wr::Rect& g = layout_.settings;
+    const int pad = sc(10);
+    return wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
+}
+
+bool Ui::hitHome(int x, int y) const { return view_ == View::Ambient && homeRect_.contains(x, y); }
 
 int Ui::hitPreset(int x, int y) const {
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
@@ -832,6 +895,7 @@ static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const 
 
 void Ui::renderMenu(const char* version) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height();
@@ -869,6 +933,7 @@ void Ui::renderMenu(const char* version) {
 // Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin
 void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     C.fillScreen(kBg);
     const int W = C.width(), H = C.height(), m = sc(20);
@@ -906,6 +971,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
 // Test tactile : quadrillage, rond sous le doigt, coordonnées, nombre d'appuis
 void Ui::renderTouchTest(int x, int y, int count) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     C.fillScreen(kBg);
     const int W = C.width(), H = C.height();
@@ -939,6 +1005,7 @@ void Ui::renderTouchTest(int x, int y, int count) {
 
 void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& devices) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
     background();
@@ -1009,6 +1076,7 @@ Ui::MenuChoice Ui::hitMenu(int x, int y) const {
 
 void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
@@ -1072,6 +1140,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
 
 void Ui::showInfo(const char* title, const String& body, const char* footer) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;
@@ -1097,6 +1166,7 @@ void Ui::showInfo(const char* title, const String& body, const char* footer) {
 
 void Ui::showPortal(const String& apName, const String& apPass, const String& url, const String& reason) {
     ambientShown_ = false;
+    view_ = View::Other;
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;

@@ -100,4 +100,5 @@ Routers with client isolation (guest networks) block this.
 - **No catalog search** (Qobuz, Spotify, TIDAL…): search the service's own API, then play a URL or use Connect
   **[forum]**. wiimscreen searches radios in [Radio Browser](https://www.radio-browser.info/) and plays the stream
   URL with `setPlayerCmd:play:`.
-- No push notifications: poll (wiimscreen polls every 5 s).
+- No push notifications: poll (wiimscreen polls every 1.5 s while playing, 3 s otherwise, over a kept-alive
+  TLS connection; the WiiM answers `Connection: keep-alive` requests and keeps the socket open for a few seconds).

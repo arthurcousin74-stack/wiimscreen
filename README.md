@@ -65,7 +65,7 @@ over the WiiM's local HTTP API, no cloud and no phone needed. Optional French vo
 3. **Configure from your phone**: scan the QR code on the screen, pick your Wi-Fi, type its password, save.
    Leave the WiiM address empty: the Tab5 finds it.
 
-Later updates go over Wi-Fi: hold the cover 3 s → *Mise à jour*, then open the address shown on a computer.
+Later updates go over Wi-Fi: gear button (left of the playback controls) → *Mise à jour*, then open the address shown on a computer.
 Full step-by-step guide in French: [LISEZMOI.md](LISEZMOI.md).
 
 **Voice commands** (optional): create an API key at <https://platform.openai.com>, paste it in the setup page.
@@ -77,10 +77,11 @@ writing, i.e. a few cents a month).
 ```
  M5Stack Tab5 (ESP32-P4)                                       WiiM streamer
 ┌──────────────────────────────────────────────┐   HTTPS      ┌──────────────┐
-│ main.cpp      loop: touch, poll every 5 s,   │ ───────────▶ │ httpapi.asp  │
+│ main.cpp      loop: touch, drawing, menus,   │  ─────────▶  │ httpapi.asp  │
 │               ambient view, voice, OTA       │  pinned TLS  │ getPlayer-   │
-│ wiim_client   getPlayerStatus / getMetaInfo /│              │ Status, get- │
-│               getPresetInfo / commands       │              │ MetaInfo…    │
+│ wiim_worker   background task: polling,      │  keep-alive  │ Status, get- │
+│               command queue                  │              │ MetaInfo…    │
+│ wiim_client   TLS client, WiiM commands      │              │              │
 │ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────────────┘
 │ art           background download of covers  │ ──▶ CDNs (album art, preset logos)
 │ ui            off-screen canvas (PSRAM) →    │

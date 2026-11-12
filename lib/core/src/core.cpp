@@ -397,6 +397,31 @@ bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
     return true;
 }
 
+HttpFrame httpFrame(const std::string& raw) {
+    HttpFrame f;
+    size_t hdrEnd = raw.find("\r\n\r\n");
+    if (hdrEnd == std::string::npos) return f;
+    std::string headers = raw.substr(0, hdrEnd);
+    std::transform(headers.begin(), headers.end(), headers.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    const size_t bodyStart = hdrEnd + 4;
+    const bool http10 = headers.compare(0, 8, "http/1.0") == 0;
+    const bool closes = headers.find("\nconnection: close") != std::string::npos ||
+                        (http10 && headers.find("\nconnection: keep-alive") == std::string::npos);
+    size_t p = headers.find("\ncontent-length:");
+    if (p != std::string::npos) {
+        long n = std::strtol(headers.c_str() + p + 16, nullptr, 10);
+        if (n < 0) return f;
+        f.complete = raw.size() >= bodyStart + static_cast<size_t>(n);
+    } else if (headers.find("\ntransfer-encoding: chunked") != std::string::npos) {
+        f.complete = raw.find("\r\n0\r\n\r\n", bodyStart - 2) != std::string::npos;
+    } else {
+        return f;  // longueur inconnue : lire jusqu'à la fermeture
+    }
+    f.reusable = f.complete && !closes;
+    return f;
+}
+
 std::string toHex(const uint8_t* data, size_t len) {
     static const char* d = "0123456789abcdef";
     std::string s;
@@ -556,6 +581,7 @@ Layout computeLayout(int width, int height, int presetCount) {
     L.transport[kPrev] = Rect{cx - playD / 2 - sc(30) - sideD, playCy - sideD / 2, sideD, sideD};
     L.transport[kNext] = Rect{cx + playD / 2 + sc(30), playCy - sideD / 2, sideD, sideD};
     L.mic = Rect{colX + colW - sideD, playCy - sideD / 2, sideD, sideD};
+    L.settings = Rect{colX, playCy - sideD / 2, sideD, sideD};
     L.progress = Rect{colX, L.transport[kPlayPause].y - sc(12) - progH, colW, progH};
     L.info = Rect{colX, colY, colW, L.progress.y - sc(6) - colY};
 

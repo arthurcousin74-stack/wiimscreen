@@ -18,6 +18,16 @@ Hardware testing in progress.
   Radio Browser station search).
 - Over-the-air updates from a browser (6-digit code), firmware version display.
 - PC preview tool rendering the real UI to PNG; native unit tests for all hardware-free logic.
+- Gear button next to the playback controls (settings menu) and home button in the ambient view.
+- Settings menu: touch test and event log (for hardware bug reports).
+- Dark, phone-friendly setup and update pages: Wi-Fi list with signal strength, show-password toggle, folded
+  advanced sections, file name and progress on the update page.
+
+### Changed
+- All WiiM networking runs in a background task; the screen never waits for the network.
+- Kept-alive TLS connection to the WiiM: commands and polls no longer pay a TLS handshake each time; faster
+  polling (1.5 s while playing). Redraws are coalesced to one per loop, and the 1 Hz progress tick redraws only
+  the progress bar.
 
 ### History
 - The project started as a remote for the e-ink **M5PaperS3** (ESP32-S3) and moved to the Tab5 for a color

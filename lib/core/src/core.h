@@ -105,6 +105,17 @@ struct HttpResponse {
 // Réponse HTTP/1.x brute (en-têtes + corps), corps "chunked" accepté.
 bool parseHttpResponse(const std::string& raw, HttpResponse& out);
 
+// Où en est la lecture d'une réponse sur une connexion gardée ouverte (keep-alive) :
+// complete : la réponse entière est arrivée (Content-Length atteint, ou fin "chunked") ;
+// reusable : la connexion peut servir à la requête suivante (le serveur ne la ferme
+// pas et la fin du corps est délimitée). Sans longueur connue, il faut lire jusqu'à
+// la fermeture : complete et reusable restent faux.
+struct HttpFrame {
+    bool complete = false;
+    bool reusable = false;
+};
+HttpFrame httpFrame(const std::string& raw);
+
 std::string toHex(const uint8_t* data, size_t len);
 // Accepte "AA:BB:..." ou "aabb..." (64 caractères hexa utiles).
 bool parseFingerprint(const std::string& s, uint8_t out[32]);
@@ -144,6 +155,7 @@ struct Layout {
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
     Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
+    Rect settings;  // bouton Réglages, à l'autre bout de la rangée
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
     Rect volBar;    // curseur de volume

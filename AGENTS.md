@@ -34,6 +34,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
 | `src/voice_service.*` | OpenAI transcription, Radio Browser search |
 | `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
+| `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/settings.*` | NVS-backed settings |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
 
@@ -66,12 +67,15 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   integer; `seek` takes seconds. Details in `docs/WIIM_API_NOTES.md`.
 - **Never call the WiiM from the main loop.** Each request opens a TLS connection (1–3 s on the P4); doing it in
   `loop()` froze the screen and dropped taps. Use `g_worker.command()` (non-blocking), update `g_state`
-  optimistically, and let `serviceWiim()` apply reports and errors. Reports that started before the latest command
+  optimistically, and let `serviceWiim()` apply reports and errors. `WiimClient` keeps the TLS connection open
+  (keep-alive, closed after 8 s idle; `httpFrame()` in `lib/core` decides when a response is complete) and retries
+  once on a fresh connection if a reused one returns nothing. Reports that started before the latest command
   are discarded (`cmdSeq`) so they don't undo the optimistic state.
-- `show()` must not draw over modal screens (voice listening, menu): guarded by `g_listening` / `g_menuOpen`.
+- `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
+  (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 
 ## Status / not verified on hardware yet
 
 Built and unit-tested; screens verified via the PC preview. Not yet confirmed on a physical Tab5: Wi-Fi via the
 C6, microphones (visualizer, voice), speaker volume levels, SSDP discovery, `setPlayerCmd:play:<url>` encoding,
-OTA end to end. Prefer small, testable changes and note what was verified on real hardware in commit messages.
+OTA end to end, HTTP keep-alive with the WiiM (falls back to a new connection per request). Prefer small, testable changes and note what was verified on real hardware in commit messages.

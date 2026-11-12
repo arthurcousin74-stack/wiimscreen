@@ -174,6 +174,33 @@ static void test_discovery() {
     TEST_ASSERT_FALSE(parseStatusEx("<html>TV</html>").ok);           // autre appareil UPnP
 }
 
+static void test_http_frame() {
+    // Content-Length : complet seulement quand tout le corps est là
+    std::string h = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\n";
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nContent-Len").complete);
+    TEST_ASSERT_FALSE(httpFrame(h + "O").complete);
+    HttpFrame f = httpFrame(h + "OK");
+    TEST_ASSERT_TRUE(f.complete && f.reusable);
+    // Le serveur ferme : complet mais pas réutilisable
+    f = httpFrame("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nOK");
+    TEST_ASSERT_TRUE(f.complete);
+    TEST_ASSERT_FALSE(f.reusable);
+    // HTTP/1.0 sans keep-alive explicite : fermeture
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK").reusable);
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.0 200 OK\r\nConnection: Keep-Alive\r\nContent-Length: 2\r\n\r\nOK").reusable);
+    // Chunked : complet au bloc de taille 0
+    std::string c = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nOK\r\n";
+    TEST_ASSERT_FALSE(httpFrame(c).complete);
+    TEST_ASSERT_TRUE(httpFrame(c + "0\r\n\r\n").complete);
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n").complete);
+    // Sans longueur : lire jusqu'à la fermeture
+    f = httpFrame("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK");
+    TEST_ASSERT_FALSE(f.complete);
+    TEST_ASSERT_FALSE(f.reusable);
+    // Corps vide (Content-Length: 0)
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").complete);
+}
+
 static void test_quality() {
     TEST_ASSERT_EQUAL_STRING("16 bits \xC2\xB7 44,1 kHz", formatQuality(44100, 16).c_str());
     TEST_ASSERT_EQUAL_STRING("24 bits \xC2\xB7 96 kHz", formatQuality(96000, 24).c_str());
@@ -295,7 +322,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.volume};
+                                L.transport[kNext], L.mic, L.settings, L.volume};
     if (n > 0) blocks.push_back(L.strip);
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -567,6 +594,7 @@ int main() {
     RUN_TEST(test_player_status);
     RUN_TEST(test_meta_info);
     RUN_TEST(test_quality);
+    RUN_TEST(test_http_frame);
     RUN_TEST(test_discovery);
     RUN_TEST(test_wiim_doc_examples);
     RUN_TEST(test_urls_and_images);

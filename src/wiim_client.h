@@ -2,6 +2,10 @@
 
 #include <Arduino.h>
 
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+
+#include <memory>
 #include <string>
 
 #include "core.h"
@@ -16,6 +20,11 @@ enum class WiimError {
 };
 
 // Client de l'API HTTP locale du WiiM (httpapi.asp).
+//
+// Connexion gardée ouverte (keep-alive) : la poignée de main TLS (1 à 3 s sur
+// l'ESP32-P4) n'a lieu qu'à la première requête ; les suivantes réutilisent la
+// connexion (~0,1 s). Si le WiiM ne la garde pas, retour automatique à une
+// connexion par requête. Utilisé par une seule tâche (WiimWorker).
 //
 // TLS : le WiiM présente un certificat auto-signé, impossible à valider par une
 // chaîne de confiance. La connexion est établie sans validation de chaîne, puis
@@ -43,6 +52,14 @@ public:
     }
 
 private:
+    WiimError connect();
+    void disconnect();
+    // Envoie la requête et lit la réponse ; false si aucun octet n'est revenu
+    bool exchange(const String& cmd, std::string& raw, bool& reusable);
+
+    std::unique_ptr<WiFiClient> conn_;
+    WiFiClientSecure* secure_ = nullptr;  // conn_ vu comme client TLS (même objet)
+    uint32_t lastUse_ = 0;
     String host_;
     uint16_t port_ = 443;
     bool https_ = true;

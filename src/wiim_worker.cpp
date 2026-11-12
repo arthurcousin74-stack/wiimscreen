@@ -3,9 +3,10 @@
 #include "discovery.h"
 #include "log.h"
 
-static constexpr uint32_t kPollPlayingMs = 2500;
-static constexpr uint32_t kPollIdleMs = 4000;
-static constexpr uint32_t kAfterCommandMs = 400;  // relire l'état peu après une commande
+// Connexion gardée ouverte (WiimClient) : un relevé coûte ~0,1 s, on peut relever souvent
+static constexpr uint32_t kPollPlayingMs = 1500;
+static constexpr uint32_t kPollIdleMs = 3000;
+static constexpr uint32_t kAfterCommandMs = 300;  // relire l'état peu après une commande
 static const char* kVolPrefix = "setPlayerCmd:vol:";
 
 const char* wiimErrorName(WiimError e) {

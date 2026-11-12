@@ -58,7 +58,12 @@ public:
     void setVoiceEnabled(bool on) { voiceOn_ = on; }
     void renderVoice(VoicePhase phase, float level);  // level : 0..1
     bool hitMic(int x, int y) const;
+    bool hitSettings(int x, int y) const;  // bouton Réglages (engrenage) de la vue commandes
+    bool hitHome(int x, int y) const;      // bouton Accueil de la vue ambiance
     bool hitVoiceCancel(int x, int y) const;
+    // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
+    // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
+    bool updateProgress(const UiState& st);
     // Visualiseur de la vue ambiance : réserve sa place si activé
     void setVisualizer(bool enabled) { visEnabled_ = enabled; }
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
@@ -105,6 +110,7 @@ private:
     void buildBackground();
     void background();
     void present();
+    void presentRect(const wr::Rect& r);  // n'envoie à l'écran que cette zone
     void relayout();
     int thumbSide() const;
 
@@ -121,6 +127,8 @@ private:
     void toast(const String& msg);
     void drawBars();
     void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
+    void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
+    void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -151,6 +159,10 @@ private:
     // Visualiseur
     bool visEnabled_ = false;
     bool ambientShown_ = false;
+    enum class View { Other, Controls, Ambient };
+    View view_ = View::Other;  // dernier écran affiché (pour les mises à jour partielles)
+    wr::Rect ambProg_;          // ligne de progression de la vue ambiance
+    wr::Rect homeRect_;         // bouton Accueil de la vue ambiance
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

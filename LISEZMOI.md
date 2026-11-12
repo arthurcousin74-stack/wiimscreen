@@ -63,7 +63,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reconnaître du français libre (le moteur hors ligne d'Espressif ne connaît que des commandes en anglais et en chinois).
 
 1. Crée un compte sur https://platform.openai.com, ajoute quelques dollars de crédit, puis crée une clé API (*API keys* > *Create new secret key*).
-2. Ouvre la configuration du Tab5 (appui long 3 s sur la pochette) et colle la clé dans **Commande vocale : clé API OpenAI**.
+2. Ouvre la configuration du Tab5 (bouton engrenage, à gauche des commandes de lecture → **Configuration**) et colle la clé dans **Commande vocale : clé API OpenAI**.
 3. Un bouton micro apparaît à droite des commandes de lecture.
 
 **Coût** : modèle `gpt-4o-mini-transcribe`, facturé à la durée d'audio (environ 0,3 centime de dollar la minute au moment de l'écriture) ; une phrase dure quelques secondes, soit quelques centimes par mois même en usage quotidien.
@@ -79,14 +79,14 @@ La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reco
 | « Pause », « Reprends », « Suivant », « Précédent » | Commandes de lecture |
 | « Plus fort », « Moins fort », « Volume 30 », « Coupe le son », « Remets le son » | Volume |
 
-**Reconfigurer plus tard** : appui long (3 s) sur la pochette ou le titre, puis **Configuration**.
+**Reconfigurer plus tard** : bouton engrenage (à gauche des commandes de lecture), puis **Configuration**.
 
 ## 5. Mettre à jour par le Wi-Fi
 
 Une fois ce firmware installé par USB, les versions suivantes s'installent sans câble :
 
 1. Télécharge l'artefact **wiim-remote-tab5** de la dernière exécution (onglet **Actions** de GitHub) et dézippe-le.
-2. Sur le Tab5 : appui long (3 s) sur la pochette → **Mise à jour**. L'écran affiche une adresse (`http://192.168.x.x`) et un code à 6 chiffres.
+2. Sur le Tab5 : bouton engrenage → **Mise à jour**. L'écran affiche une adresse (`http://192.168.x.x`) et un code à 6 chiffres.
 3. Sur un ordinateur du même Wi-Fi, ouvre cette adresse, saisis le code, choisis `wiim-remote-tab5.bin`, **Installer**.
 4. Une barre de progression s'affiche sur l'ordinateur et sur le Tab5, puis il redémarre sur la nouvelle version (affichée en bas du menu Réglages).
 
@@ -104,13 +104,14 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 | − / + (bouts de la barre de volume) | Volume (pas réglable) |
 | ◀◀ / ▶▶ | Piste précédente / suivante |
 | ▶ / II | Lecture / pause |
-| Pochette ou titre, 3 s | Réglages : configuration ou mise à jour |
-| N'importe où, en vue ambiance | Revenir aux commandes |
+| Engrenage (à gauche de ◀◀) | Réglages : configuration, mise à jour, test tactile, journal |
+| Pochette ou titre, 3 s | Réglages (même menu) |
+| Maison (en haut à droite), ou n'importe où, en vue ambiance | Revenir aux commandes |
 | Soulever / déplacer le Tab5 | Rallumer l'écran, revenir aux commandes |
 
 ## En cas de souci
 
-- **Une zone tactile semble décalée** : appui long (3 s) sur la pochette → **Test tactile**. Un rond doit apparaître sous ton doigt ; une photo de cet écran aide beaucoup à corriger.
+- **Une zone tactile semble décalée** : engrenage → **Test tactile**. Un rond doit apparaître sous ton doigt ; une photo de cet écran aide beaucoup à corriger.
 - **« WiiM injoignable »** : WiiM éteint ou débranché. Si seule son adresse a changé, le Tab5 le retrouve en moins de deux minutes (« WiiM retrouvé à sa nouvelle adresse »).
 - **« Aucun WiiM trouvé »** au démarrage : WiiM éteint, ou sur un autre réseau (Wi-Fi invité, autre box). Certains routeurs bloquent la recherche entre appareils (« isolation des clients ») : saisis alors l'IP du WiiM dans la configuration.
 - **« Certificat du WiiM inattendu »** : après une réinitialisation ou une mise à jour du WiiM, son certificat peut changer. Si c'est le cas, reconfigure et coche « Oublier le certificat enregistré ». Si rien n'a changé côté WiiM, quelqu'un s'intercale peut-être sur ton réseau : ne l'accepte pas à l'aveugle.
