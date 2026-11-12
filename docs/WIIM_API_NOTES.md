@@ -256,6 +256,93 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   starts it at that track (index found by title in the loaded queue).
 - *File du WiiM* also keeps a model of queues from other sources (`/fav/model_<source>.xml`, e.g. Deezer) for
   later work.
+- **Reading Deezer favorites over UPnP does not work on this WiiM (tested 2026-11-12).** `GetUserFavorites`
+  (`AccountSource` `Deezer2` and `Deezer`, each with `MediaType` `album`/`track`/`playlist`, `Filter` empty) answers
+  HTTP 500 `UPnP 501 UserRegister failed` every time — the same error the firmware gives for actions it does not
+  implement. So the favorites list cannot be read through the PlayQueue service. The alternative that
+  `runDeezerFavorites()` assumes — `GetUserInfo(AccountSource=Deezer…)` handing out a Deezer `access_token` usable
+  against `api.deezer.com/user/me/albums` — is **still unverified** (that path reads an account credential and the
+  check was not completed). Treat `runDeezerFavorites()` as experimental until the token shape is confirmed.
+
+## Other UPnP services (AVTransport, RenderingControl, ConnectionManager, QPlay)
+
+`description.xml` (port 49152) lists **five** services, not just PlayQueue (verified on a WiiM Pro, 2026-11-12). All
+were enumerated from their SCPD; the reads below are plain SOAP `POST` with `SOAPACTION:
+"urn:schemas-upnp-org:service:<Service>:1#<Action>"`, every input has `<InstanceID>0</InstanceID>`.
+
+| Service | controlURL | SCPD |
+|---|---|---|
+| `AVTransport:1` | `/upnp/control/rendertransport1` | `/upnp/rendertransportSCPD.xml` |
+| `RenderingControl:1` | `/upnp/control/rendercontrol1` | `/upnp/rendercontrolSCPD.xml` |
+| `ConnectionManager:1` | `/upnp/control/renderconnmgr1` | `/upnp/renderconnmgrSCPD.xml` |
+| `PlayQueue:1` (wiimu) | `/upnp/control/PlayQueue1` | `/upnp/PlayQueueSCPD.xml` |
+| `QPlay:1` (Tencent) | `/upnp/control/QPlay1` | `/upnp/QPlaySCPD.xml` |
+
+### AVTransport — reading now-playing, and loading a URI
+
+Actions: `GetInfoEx`, `GetMediaInfo`, `GetPositionInfo`, `GetTransportInfo`, `GetTransportSettings`,
+`GetDeviceCapabilities`, `GetCurrentTransportActions`, `GetPlayType`, `Play(Speed)`, `Pause`, `Stop`, `Next`,
+`Previous`, `Seek(Unit, Target)`, `SeekForward`, `SeekBackward`, `SetPlayMode(NewPlayMode)`,
+`SetAVTransportURI(CurrentURI, CurrentURIMetaData)`, `SetNextAVTransportURI(NextURI, NextURIMetaData)`.
+
+- **`GetInfoEx` is the best read on the device: one call, 30 fields** (far more than httpapi `getPlayerStatus`), all
+  read-only, no playback change. Fields seen: `CurrentTransportState` (`PLAYING`/`PAUSED_PLAYBACK`/`STOPPED`…),
+  `CurrentSpeed`, `Track`, `TrackDuration`, `TrackMetaData` (DIDL-Lite: title, artist, album, albumArtURI),
+  `TrackURI`, `RelTime` (position `hh:mm:ss`), `CurrentVolume`, `CurrentMute`, `CurrentChannel`, `LoopMode` (same
+  codes as httpapi `loop`), `PlayType`, `SlaveFlag`/`MasterUUID`/`SlaveList` (multiroom; `SlaveList` is JSON with
+  `wmrm_version`, `surround`, `group_type`), `PlayMedium` (`SONGLIST-NETWORK`, `STATION-NETWORK`, `SONGLIST-LOCAL`…),
+  `TrackSource` (`Qobuz`, `Deezer`, …), `InternetAccess`, `BatteryFlag`/`BatteryPercent` (0 on mains models; real on
+  portables), `AlarmFlag`, `SpotifyActive`. This gives title/artist/album/art **and** the source and loop mode in a
+  single request — unlike `getMetaInfo`, which omits source and loop. `AbsTime` is `NOT_IMPLEMENTED`;
+  `RelCount`/`AbsCount` are `2147483647` (unset).
+- **SENSITIVE:** for a streaming track, `GetInfoEx.TrackURI` (and `GetMediaInfo` / `GetPositionInfo` metadata)
+  contains the **resolved, HMAC-signed CDN URL**, which embeds the account user id and app id (e.g.
+  `https://streaming-qobuz-std.akamaized.net/file?uid=<account>&eid=…&app_id=…&hmac=…`). Never log, display, cache
+  or commit it. wiimscreen should read only title/artist/album/art/source from the DIDL and ignore `TrackURI`.
+- `GetDeviceCapabilities.PlayMedia` lists the media kinds the device accepts:
+  `NONE,STATION-NETWORK,SONGLIST-NETWORK,SONGLIST-LOCAL,SONGLIST-LOCAL_TF,THIRD-DLNA,AIRPLAY,UNKNOWN`.
+- `GetCurrentTransportActions.Actions` is the valid next actions (`Play,Stop` while paused) — handy to enable/disable
+  remote buttons.
+- **`SetAVTransportURI(CurrentURI, CurrentURIMetaData)` is the standard UPnP "load a direct URI" primitive** — a
+  different path from PlayQueue's `CreateQueue`. In UPnP it sets the media **without** starting playback (you then
+  call `Play`). **Not yet tested on this WiiM** (it is a write that replaces the current media; not run while music
+  was paused mid-track). Worth testing for: casting an arbitrary stream URL (radio, a `/deezer/album/<id>` airable
+  URL, any `Sink` format below) and whether this WiiM honours set-without-play or auto-starts like `CreateQueue`.
+  When testing: note `GetInfoEx` first, mute, then restore.
+- `GetMediaInfo.CurrentURI` is **empty for queue/songlist playback** (the track comes from the PlayQueue, not an
+  AVTransport URI); `GetInfoEx.TrackURI` still resolves it. So AVTransport reads describe the current track but do
+  not expose the queue — use PlayQueue `BrowseQueue` for that.
+
+### RenderingControl — volume, mute, EQ, presets, multiroom, alarms, rename
+
+Actions: `GetVolume(Channel)`/`SetVolume(Channel, DesiredVolume)`, `GetMute(Channel)`/`SetMute(Channel,
+DesiredMute)`, `GetEqualizer(Channel)`/`SetEqualizer(Channel, DesiredEqualizer)`, `GetChannel`/`SetChannel`,
+`ListPresets`/`SelectPreset(PresetName)`, `GetSimpleDeviceInfo`, `GetControlDeviceInfo`, `MultiRoomJoinGroup(MasterInfo)`,
+`MultiRoomLeaveGroup`, `SetAlarmQueue(AlarmContext)`/`GetAlarmQueue(AlarmName)`/`DeleteAlarmQueue(AlarmName)`,
+`SetDeviceName(Name)`, `AirplayAutoSyncDelay(Name)`, `StreamServicesCapability`/`SetStreamServicesCapability`.
+
+- `GetEqualizer` returned `0` (EQ flat/off). `ListPresets.CurrentPresetNameList` returned `FactoryDefaults` — these
+  are **sound/EQ presets, not the radio presets** of httpapi `getPresetInfo` (a different list).
+- `MultiRoomJoinGroup`/`MultiRoomLeaveGroup` are the UPnP way to build/break a multiroom group; `GetInfoEx`
+  `SlaveFlag`/`MasterUUID`/`SlaveList` read the group back.
+- `SetDeviceName` renames the player (mirrors `friendlyName`). `SetAlarmQueue` is the alarm-clock mechanism.
+- **SENSITIVE:** `GetControlDeviceInfo` returns `Router` and `Ssid` (the home Wi-Fi name) — do not read into logs or
+  commit. `GetSimpleDeviceInfo` is the safer device read (name, volume, channel, multiroom) without network names.
+- All `Set*` here are writes — not tested while the device was in use.
+
+### ConnectionManager — supported formats
+
+`GetProtocolInfo` returns an empty `Source` (the WiiM is a renderer, not a server) and a `Sink` list of **~20
+`http-get` protocol entries**. Audio MIME types accepted: `aac, ac3, ape, flac, m4a, mp3, mpeg, ogg,
+vnd.dlna.adts, wav, wma, x-ape, x-ms-wma, x-wav`. This is the format whitelist for anything cast via
+`SetAVTransportURI` (so FLAC and WAV/LPCM direct URLs are fine). `GetCurrentConnectionIDs` /
+`GetCurrentConnectionInfo` enumerate active UPnP connections.
+
+### QPlay — Tencent QQ Music
+
+A full queue service for QQ Music (China): `InsertTracks`, `RemoveTracks`, `RemoveAllTracks`, `GetTracksInfo`,
+`SetTracksInfo`, `GetTracksCount`, `GetMaxTracks`, `QPlayAuth(Seed) -> Code, MID, DID`, `SetNetwork(SSID, Key, …)`.
+`QPlayAuth` is the device-pairing handshake. Not relevant to a Qobuz/Deezer user; listed for completeness.
 
 ## What the local API does not do
 
