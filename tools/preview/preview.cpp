@@ -239,6 +239,8 @@ int main(int argc, char** argv) {
 
     ui.renderMenu("57-219c0bc");
     save(out, "13-menu.ppm");
+    ui.renderTouchTest(820, 470, 7);
+    save(out, "18-test-tactile.ppm");
     ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");
     save(out, "14-mise-a-jour.ppm");
 

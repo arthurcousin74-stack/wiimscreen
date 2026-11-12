@@ -835,20 +835,23 @@ void Ui::renderMenu(const char* version) {
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height();
-    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(96), gap = sc(18);
-    const int x = (W - bw) / 2, y0 = (H - (2 * bh + gap + sc(44) + sc(30))) / 2 + sc(20);
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(76), gap = sc(14);
+    const int x = (W - bw) / 2, y0 = sc(110);
     C.setTextDatum(textdatum_t::bottom_center);
     C.loadFont(kBig);
     C.setTextColor(kText);
-    C.drawString("R\xC3\xA9glages", W / 2, y0 - sc(24));
+    C.drawString("R\xC3\xA9glages", W / 2, y0 - sc(20));
     menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
     menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
-    menuButton(C, menuRects_[MenuConfig], "Configuration", "Wi-Fi, WiiM, presets, voix (depuis ton t\xC3\xA9l\xC3\xA9phone)",
+    menuRects_[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
+    menuButton(C, menuRects_[MenuConfig], "Configuration", "Wi-Fi, WiiM, presets, voix",
                accent_, sc(16));
     menuButton(C, menuRects_[MenuUpdate], "Mise \xC3\xA0 jour", "Installer un nouveau firmware par le Wi-Fi", kText2,
                sc(16));
+    menuButton(C, menuRects_[MenuTouch], "Test tactile", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt",
+               kText2, sc(16));
     const int cw = sc(150), ch = sc(44);
-    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuUpdate].bottom() + sc(30), cw, ch};
+    menuRects_[MenuClose] = wr::Rect{(W - cw) / 2, menuRects_[MenuTouch].bottom() + sc(24), cw, ch};
     const wr::Rect& c = menuRects_[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
     C.loadFont(kSmall);
@@ -858,6 +861,40 @@ void Ui::renderMenu(const char* version) {
     C.setTextDatum(textdatum_t::bottom_right);
     C.setTextColor(kText2);
     C.drawString((String("Version ") + version).c_str(), W - sc(20), H - sc(14));
+    present();
+}
+
+// Test tactile : quadrillage, rond sous le doigt, coordonnées, nombre d'appuis
+void Ui::renderTouchTest(int x, int y, int count) {
+    ambientShown_ = false;
+    auto& C = canvas_;
+    C.fillScreen(kBg);
+    const int W = C.width(), H = C.height();
+    for (int gx = 0; gx <= W; gx += W / 8) C.drawFastVLine(std::min(gx, W - 1), 0, H, kCard);
+    for (int gy = 0; gy <= H; gy += H / 6) C.drawFastHLine(0, std::min(gy, H - 1), W, kCard);
+    C.drawRect(0, 0, W, H, kText2);
+    C.loadFont(kMid);
+    C.setTextDatum(textdatum_t::top_left);
+    C.setTextColor(kText);
+    C.drawString("Test tactile", sc(24), sc(20));
+    C.loadFont(kSmall);
+    C.setTextColor(kText2);
+    C.drawString("Touche l'\xC3\xA9" "cran : un rond doit appara\xC3\xAEtre sous ton doigt.", sc(24), sc(76));
+    String info = "\xC3\x89" "cran " + String(W) + " x " + String(H) + "   Appuis : " + String(count);
+    if (x >= 0) info += "   Dernier : x " + String(x) + ", y " + String(y);
+    C.drawString(info.c_str(), sc(24), sc(110));
+    if (x >= 0) {
+        C.fillCircle(x, y, sc(34), accent_);
+        C.drawFastHLine(0, y, W, accent_);
+        C.drawFastVLine(x, 0, H, accent_);
+        C.fillCircle(x, y, sc(6), kText);
+    }
+    const int bw = sc(150), bh = sc(48);
+    touchClose_ = wr::Rect{W - bw - sc(20), sc(20), bw, bh};
+    C.fillRoundRect(touchClose_.x, touchClose_.y, bw, bh, bh / 2, kCardHi);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString("Fermer", touchClose_.x + bw / 2, touchClose_.y + bh / 2 + 1);
     present();
 }
 
@@ -926,7 +963,7 @@ int Ui::hitPicker(int x, int y) const {
 }
 
 Ui::MenuChoice Ui::hitMenu(int x, int y) const {
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
         if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
     return MenuNone;
 }

@@ -74,7 +74,7 @@ public:
     int hitDots(int x, int y) const;                       // -1 / +1 : page précédente / suivante
 
     // Menu de l'appui long : configuration, mise à jour, fermer
-    enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuClose };
+    enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuTouch, MenuClose };
     void renderMenu(const char* version);
     MenuChoice hitMenu(int x, int y) const;
 
@@ -82,6 +82,10 @@ public:
     enum { PickNone = -1, PickRetry = -2, PickConfig = -3 };
     void renderPicker(const std::vector<std::pair<std::string, std::string>>& devices);
     int hitPicker(int x, int y) const;  // indice du WiiM, ou PickRetry / PickConfig / PickNone
+
+    // Test de l'écran tactile : un rond sous le doigt et ses coordonnées (x < 0 : aucun appui)
+    void renderTouchTest(int x, int y, int count);
+    bool hitTouchTestClose(int x, int y) const { return touchClose_.contains(x, y); }
 
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
@@ -135,8 +139,9 @@ private:
     // Commande vocale
     bool voiceOn_ = false;
     wr::Rect cancelRect_;
-    wr::Rect menuRects_[3];
+    wr::Rect menuRects_[4];
     std::vector<wr::Rect> pickRects_;
+    wr::Rect touchClose_;
     wr::Rect pickRetry_, pickConfig_;
     // Visualiseur
     bool visEnabled_ = false;

@@ -6,8 +6,8 @@
 //    et titre en cours, progression, presets du WiiM avec leurs images,
 //    lecture/pause, piste précédente/suivante, volume
 // Appui long (3 s) sur la pochette ou le titre → menu Réglages.
-// Après 30 s sans appui pendant la lecture : vue ambiance (grande pochette).
-// En vue ambiance, le micro anime un visualiseur (son analysé sur place, jamais envoyé).
+// Après 60 s sans appui pendant la lecture : vue ambiance (grande pochette) ; tout contact
+// avec l'écran la quitte. Visualiseur (micro) en option, expérimental.
 // Après 10 min sans appui, l'écran s'atténue ; il s'éteint après 20 min si rien ne joue.
 // Soulever ou déplacer le Tab5 rallume l'écran (capteur de mouvement).
 //
@@ -61,6 +61,9 @@ static bool g_ambient = false;
 static int g_brightness = -1;
 static bool g_listening = false;  // commande vocale en cours d'écoute
 static bool g_menuOpen = false;   // menu Réglages affiché (appui long)
+static bool g_touchTest = false;  // écran de test tactile (menu Réglages)
+static int g_touchCount = 0;
+static uint32_t g_touchFrame = 0;
 
 // Bouton montré enfoncé un court instant après un appui
 static int g_flashPreset = -1, g_flashTransport = -1;
@@ -97,8 +100,8 @@ static constexpr uint32_t kPresetRefreshMs = 10UL * 60 * 1000;
 static constexpr uint32_t kPresetRetryMs = 30UL * 1000;
 static constexpr uint32_t kFlashMs = 150;
 
-// Vue ambiance après 30 s ; rétroéclairage atténué après 10 min, éteint après 20 min si rien ne joue
-static constexpr uint32_t kAmbientMs = 30UL * 1000;
+// Vue ambiance après 60 s ; rétroéclairage atténué après 10 min, éteint après 20 min si rien ne joue
+static constexpr uint32_t kAmbientMs = 60UL * 1000;
 static constexpr uint8_t kBrightOn = 200, kBrightDim = 50;
 static constexpr uint32_t kDimMs = 10UL * 60 * 1000;
 static constexpr uint32_t kOffMs = 20UL * 60 * 1000;
@@ -130,7 +133,7 @@ static UiState displayState() {
 }
 
 static void show(int pressedPreset = -1, int pressedTransport = -1) {
-    if (g_listening || g_menuOpen) return;  // l'écran d'écoute ou le menu restent affichés
+    if (g_listening || g_menuOpen || g_touchTest) return;  // écrans modaux : rien par-dessus
     if (pressedPreset < 0 && pressedTransport < 0 && millis() < g_flashUntil) {
         pressedPreset = g_flashPreset;
         pressedTransport = g_flashTransport;
@@ -823,6 +826,35 @@ void loop() {
     auto t = M5.Touch.getDetail();
     const uint32_t now = millis();
 
+    // Test tactile : rond sous le doigt tant qu'il touche ; « Fermer » pour sortir
+    if (g_touchTest) {
+        if (t.wasPressed()) {
+            ++g_touchCount;
+            if (g_ui.hitTouchTestClose(t.x, t.y)) {
+                sound::tap();
+                g_touchTest = false;
+                g_lastTouch = now;
+                show();
+                delay(5);
+                return;
+            }
+        }
+        if (t.isPressed() && now - g_touchFrame > 40) {
+            g_touchFrame = now;
+            g_ui.renderTouchTest(t.x, t.y, g_touchCount);
+        }
+        serviceWiim();
+        delay(5);
+        return;
+    }
+
+    // Vue ambiance : n'importe quel contact (même un doigt déjà posé) ramène les commandes
+    if (g_ambient && t.isPressed() && !t.wasPressed()) {
+        g_lastTouch = now;
+        setBrightness(kBrightOn);
+        exitAmbient();
+    }
+
     if (t.wasPressed()) {
         g_lastTouch = now;
         if (g_brightness != kBrightOn) {
@@ -838,6 +870,11 @@ void loop() {
                 runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
                 g_menuOpen = false;
                 show();
+            } else if (c == Ui::MenuTouch) {
+                g_menuOpen = false;
+                g_touchTest = true;
+                g_touchCount = 0;
+                g_ui.renderTouchTest(-1, -1, 0);
             } else if (c == Ui::MenuClose) {
                 g_menuOpen = false;
                 show();
@@ -886,7 +923,7 @@ void loop() {
     if (g_brightness > 0 && !g_ambient && p.loading && !g_stripTouch && now - g_lastTick >= 50) show();
 
     const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && !g_listening && !g_menuOpen && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
+    if (!g_ambient && !g_listening && !g_menuOpen && !g_touchTest && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
         g_state.online)
         enterAmbient();
     if (idle > kOffMs && !p.playing) {

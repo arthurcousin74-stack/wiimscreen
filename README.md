@@ -27,8 +27,8 @@ over the WiiM's local HTTP API, no cloud and no phone needed. Optional French vo
 - **Presets as tiles** with their artwork, fetched automatically from the WiiM (or a custom list), 6 per page,
   swipe for more; the playing preset is highlighted.
 - **One volume control** with direct tap-to-set, mute, and ±.
-- **Ambient view** after 30 s idle: big cover and text readable across the room, with a **spectrum visualizer**
-  driven by the Tab5 microphones (processed on-device, nothing recorded or sent).
+- **Ambient view** after 60 s idle: big cover and text readable across the room; optional (experimental)
+  **spectrum visualizer** driven by the Tab5 microphones (processed on-device, nothing recorded or sent).
 - **Zero-config WiiM discovery**: finds WiiM players on the network (SSDP + `getStatusEx`), lets you pick one,
   and follows it if its IP address changes.
 - **Setup from a phone**: scan a QR code shown on the Tab5, pick your Wi-Fi, done.

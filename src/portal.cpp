@@ -94,7 +94,7 @@ static String formPage(const Settings& s, const std::vector<String>& ssids, cons
     h += F("</select><small>Un clic à chaque appui, deux notes graves si le WiiM ne répond pas."
            "</small></label>");
 
-    h += F("<div class=row><div><label>Visualiseur<select name=visu>");
+    h += F("<div class=row><div><label>Visualiseur (exp\xC3\xA9rimental)<select name=visu>");
     h += option("1", "Activé", s.visualizer);
     h += option("0", "Désactivé", !s.visualizer);
     h += F("</select></label></div><div><label>Réveil par mouvement<select name=motion>");

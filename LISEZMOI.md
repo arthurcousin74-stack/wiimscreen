@@ -12,8 +12,8 @@ Firmware pour le M5Stack Tab5 (ESP32-P4, écran tactile couleur 5" 1280×720) qu
 - **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
 - **Commande vocale** (facultative, en français) : bouton micro → « Joue FIP », « Mets France Culture », « Plus fort », « Volume 30 », « Suivant ». Tes presets, les commandes de lecture, et n'importe quelle radio de l'annuaire libre Radio Browser
 - **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
-- **Vue ambiance** : après 30 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
-- **Visualiseur** : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
+- **Vue ambiance** : après 60 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
+- **Visualiseur** (expérimental, à activer dans la configuration) : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
 - **Réveil par mouvement** : soulever ou déplacer le Tab5 rallume l'écran et affiche les commandes ; les petites vibrations (enceinte sur le même meuble) sont ignorées
 
   ![Vue ambiance](docs/ambiance.png)
@@ -110,6 +110,7 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 
 ## En cas de souci
 
+- **Une zone tactile semble décalée** : appui long (3 s) sur la pochette → **Test tactile**. Un rond doit apparaître sous ton doigt ; une photo de cet écran aide beaucoup à corriger.
 - **« WiiM injoignable »** : WiiM éteint ou débranché. Si seule son adresse a changé, le Tab5 le retrouve en moins de deux minutes (« WiiM retrouvé à sa nouvelle adresse »).
 - **« Aucun WiiM trouvé »** au démarrage : WiiM éteint, ou sur un autre réseau (Wi-Fi invité, autre box). Certains routeurs bloquent la recherche entre appareils (« isolation des clients ») : saisis alors l'IP du WiiM dans la configuration.
 - **« Certificat du WiiM inattendu »** : après une réinitialisation ou une mise à jour du WiiM, son certificat peut changer. Si c'est le cas, reconfigure et coche « Oublier le certificat enregistré ». Si rien n'a changé côté WiiM, quelqu'un s'intercale peut-être sur ton réseau : ne l'accepte pas à l'aveugle.

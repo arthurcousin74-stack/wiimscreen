@@ -33,7 +33,7 @@ bool loadSettings(Settings& s) {
     s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
     s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
     s.beep = constrain(p.getInt("beep", 2), 0, 3);
-    s.visualizer = p.getBool("visu", true);
+    s.visualizer = p.getBool("visu2", false);  // expérimental : désactivé par défaut
     s.motionWake = p.getBool("motion", true);
     s.openaiKey = p.getString("oaikey", "");
     s.sttModel = p.getString("sttmodel", "gpt-4o-mini-transcribe");
@@ -62,7 +62,7 @@ void saveSettings(const Settings& s) {
     p.putInt("rotation", s.rotation);
     p.putInt("volstep", s.volStep);
     p.putInt("beep", s.beep);
-    p.putBool("visu", s.visualizer);
+    p.putBool("visu2", s.visualizer);
     p.putBool("motion", s.motionWake);
     p.putString("oaikey", s.openaiKey);
     p.putString("sttmodel", s.sttModel);
