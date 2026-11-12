@@ -678,16 +678,25 @@ void WiimWorker::runSearch(const String& query) {
     }
     // Résultats relus ; d'abord sans lancer la lecture, puis en la lançant si la file reste vide
     std::string resp;
+    // Le WiiM ajoute les résultats peu à peu (1 ou 2 après 1 s, 7 après 6 s) : on relit jusqu'à ce que
+    // leur nombre ne bouge plus (deux lectures égales), dans la limite de `seconds`
     auto readBack = [&](const std::string& name, int seconds, wr::QueueInfo& out) {
-        for (int i = 0; i < seconds; ++i) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
+        int last = -1, stable = 0;
+        const uint32_t until = millis() + seconds * 1000UL;
+        while ((int32_t)(millis() - until) < 0) {
+            vTaskDelay(pdMS_TO_TICKS(700));
             std::string back;
-            if (browseQueue(control, name, back) == 200 && !back.empty()) {
-                out = wr::parseQueueContext(back);
-                if (out.tracks > 0) return true;
+            if (browseQueue(control, name, back) != 200 || back.empty()) continue;
+            wr::QueueInfo q = wr::parseQueueContext(back);
+            if (q.tracks > 0 && q.tracks == last) {
+                if (++stable >= 2) break;
+            } else {
+                stable = 0;
             }
+            last = q.tracks;
+            out = q;
         }
-        return false;
+        return out.tracks > 0;
     };
     // Façons d'écrire les espaces dans l'adresse : on passe à la suivante si les résultats n'ont
     // aucun mot de la recherche (le WiiM a pu mal lire la requête)
@@ -718,7 +727,7 @@ void WiimWorker::runSearch(const String& query) {
         if (create != 200) continue;
         wr::QueueInfo q;
         bool played = false;
-        bool found = readBack(name, 3, q);
+        bool found = readBack(name, 8, q);
         if (!found) {
             played = upnpRequest(control, "PlayQueueWithIndex",
                                  wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),

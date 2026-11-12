@@ -140,10 +140,11 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   - (A) the album `SearchUrl` `album/get?album_id=…`: the WiiM fetched the 48 tracks itself and played them;
   - (B) `SearchUrl` = `https://www.qobuz.com/api.json/0.2/track/search?query=<q>&offset=0&limit=50`: the WiiM
     accepted the queue, filled it (7 tracks, with DIDL-Lite titles, artists, albums) and played the first one,
-    **but the tracks had nothing to do with the query** (user report): the WiiM does not seem to pass the query
-    through. The search screen now tries several URL forms (`%20` / `+` spaces, `catalog/search?type=tracks`,
-    query last), keeps the first whose results share a word with the query, and logs the URL sent and the
-    `SearchUrl` read back. Outcome: not known yet.
+    **but the tracks had nothing to do with the query** — most likely an old queue of the same name read back.
+    With a fresh queue name each time (and `DeleteQueue` first), **the search works** (verified, 2026-11):
+    "daft" → Daft Punk tracks, "stromae" → Stromae; `%20` for spaces; the WiiM stores the `SearchUrl` unchanged and
+    **fills the queue without `PlayQueueWithIndex`** (nothing plays until a result is chosen), but
+    **progressively** (1–2 tracks after ~1 s, 7 after ~6 s): read it back until the count is stable.
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty.
 
