@@ -171,6 +171,12 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   unmuted after (user report: a track could still be heard). *File du WiiM* now logs the arguments of `CreateQueue`,
   `SetQueuePolicy`, `SearchQueueOnline`, `GetQueueOnline`, `BackUpQueue`, `AppendQueue`, `BrowseQueueEx`, to look
   for a way to load a queue without playing it.
+- **Other PlayQueue actions** (signatures from the Go library `wiimplay`, not yet tried on a WiiM):
+  `SearchQueueOnline(QueueName, SearchKey, Queuelimit) -> QueueContext`,
+  `GetQueueOnline(QueueName, QueueID, QueueType, Queuelimit, QueueAutoInsert) -> QueueContext`,
+  `BackUpQueue(QueueContext)`, `SetQueuePolicy(QueueName)`, `ReplaceQueue(QueueContext)`, `AppendQueue(QueueContext)`.
+  Journal › *Essais* tries them to load results **without starting playback** (sound muted during the test).
+  Source: [wiimplay](https://pkg.go.dev/github.com/shumatech/wiimplay/upnp).
 - **Verified on a real WiiM (2026-11):** a `Deezer2` queue with `SearchUrl` `https://<id>.airable.io/deezer/album/<id>`
   (no tracks) is filled by the WiiM (127 tracks for a large album); `/deezer/track/<id>` and the guessed airable
   search paths (`/deezer/search?q=`, `/deezer/search/tracks?q=`) load nothing.
