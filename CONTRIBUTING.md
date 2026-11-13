@@ -3,6 +3,11 @@
 Thanks for helping! Bug reports, hardware test results, translations, ports to other ESP32 boards and UI ideas are all
 welcome. Only the M5Stack Tab5 has been tested so far, so reports from real hardware are especially useful.
 
+## Support
+
+Not ready to contribute code? A star on GitHub already helps: it makes the project easier to find for other WiiM
+owners and developers.
+
 ## Reporting a problem
 
 Open an issue with:
