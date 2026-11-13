@@ -231,22 +231,37 @@ void WiimWorker::pollOnce() {
 
 void WiimWorker::taskMain(void* self) { static_cast<WiimWorker*>(self)->run(); }
 
+void WiimWorker::drainCommands() {
+    for (;;) {
+        xSemaphoreTake(lock_, portMAX_DELAY);
+        bool has = !cmds_.empty();
+        String cmd;
+        if (has) {
+            cmd = cmds_.front();
+            cmds_.pop_front();
+        }
+        xSemaphoreGive(lock_);
+        if (!has) break;
+        execute(cmd);
+    }
+}
+
+// Attente dans une tâche longue (album qui se charge, recherche…) : les appuis (pause, volume…) passent
+// pendant ce temps, et le relevé d'état continue si `poll` (pas pendant une recherche à son coupé, dont
+// l'état transitoire ne doit pas s'afficher).
+void WiimWorker::pause(uint32_t ms, bool poll) {
+    const uint32_t until = millis() + ms;
+    while ((int32_t)(millis() - until) < 0) {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
+        drainCommands();
+        if (poll && (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
+    }
+}
+
 void WiimWorker::run() {
     for (;;) {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
-        // Les commandes passent toujours en premier
-        for (;;) {
-            xSemaphoreTake(lock_, portMAX_DELAY);
-            bool has = !cmds_.empty();
-            String cmd;
-            if (has) {
-                cmd = cmds_.front();
-                cmds_.pop_front();
-            }
-            xSemaphoreGive(lock_);
-            if (!has) break;
-            execute(cmd);
-        }
+        drainCommands();  // les commandes passent toujours en premier
         xSemaphoreTake(lock_, portMAX_DELAY);
         bool presets = presetsWanted_, pollNow = pollWanted_, queue = queueWanted_, qfavs = qobuzFavsWanted_;
         presetsWanted_ = pollWanted_ = queueWanted_ = qobuzFavsWanted_ = false;
@@ -569,18 +584,14 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
 // Envoie une file au WiiM puis la lance ; renvoie le code HTTP de PlayQueueWithIndex (-1 si non tenté)
 static int sendQueue(const std::string& control, const std::string& ctx, const std::string& listName, int& create) {
     std::string resp;
-    // QueuePolicy 1 comme dans l'exemple connu ; sans l'argument si le WiiM le refuse
-    create = upnpRequest(control, "CreateQueue",
-                         wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}, {"QueuePolicy", "1"}}), resp);
-    if (create != 200)
-        create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}),
-                             resp);
+    create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
     if (create != 200) return -1;
     return upnpRequest(control, "PlayQueueWithIndex",
                        wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", listName}, {"Index", "1"}}), resp);
 }
 
-static bool readQueueStable(const std::string& control, const std::string& name, int seconds, wr::QueueInfo& out);
+static bool readQueueStable(WiimWorker* w, const std::string& control, const std::string& name, int seconds,
+                            wr::QueueInfo& out, bool poll = false);
 
 // Recherche publique Deezer (api.deezer.com, sans clé, HTTPS vérifié) : morceaux avec leur album
 static std::vector<wr::DeezerTrack> deezerSearch(const std::string& query, int limit, int& code) {
@@ -669,7 +680,7 @@ void WiimWorker::runNoPlayTest(const String& query) {
         if (!ctx.empty()) serialDump(label, ctx, model.user);
     };
     auto settle = [&](const char* label) {
-        vTaskDelay(pdMS_TO_TICKS(4000));
+        pause(4000, false);
         logEvent("  %s : lecture %s", label, playbackChanged() ? "CHANG\xC3\xA9" "E" : "inchang\xC3\xA9" "e");
     };
     auto call = [&](const char* action, const std::vector<std::pair<std::string, std::string>>& args) {
@@ -701,7 +712,7 @@ void WiimWorker::runNoPlayTest(const String& query) {
         if (c == 200) {
             settle("C");
             wr::QueueInfo back;
-            readQueueStable(control, name, 6, back);
+            readQueueStable(this, control, name, 6, back);
             logEvent("  C relue : %d piste(s)", back.tracks);
             for (size_t i = 0; i < back.items.size() && i < 2; ++i) logLong("  - ", back.items[i].title);
         }
@@ -721,7 +732,7 @@ void WiimWorker::runNoPlayTest(const String& query) {
         call("DeleteQueue", {{"QueueName", n}});
     restoreAfterSearch(control, before);
     if (muted) {
-        vTaskDelay(pdMS_TO_TICKS(600));
+        pause(600, false);
         client_.command("setPlayerCmd:mute:0");
     }
     logEvent("Essai \xC2\xAB charger sans lire \xC2\xBB : termin\xC3\xA9 (son r\xC3\xA9tabli)");
@@ -752,7 +763,7 @@ void WiimWorker::runFavoritesTest(const String& query) {
         logLong("envoy\xC3\xA9 ", v.second);
         if (create != 200) continue;
         wr::QueueInfo q;
-        const bool found = readQueueStable(control, name, 10, q);
+        const bool found = readQueueStable(this, control, name, 10, q);
         if (!q.searchUrl.empty()) logLong(q.searchUrl == v.second ? "relu (identique) " : "relu ", wr::maskSecrets(q.searchUrl));
         logEvent("  %d piste(s)%s", found ? q.tracks : 0, found ? "" : " (rien de charg\xC3\xA9)");
         for (size_t i = 0; i < q.items.size() && i < 5; ++i)
@@ -809,7 +820,7 @@ void WiimWorker::runDeezerTest(const std::string& control, const String& query) 
         logLong("envoy\xC3\xA9 ", v.second.substr(base.size()));  // sans l'adresse de la passerelle
         if (create != 200) continue;
         wr::QueueInfo q;
-        const bool ok = readQueueStable(control, name, 8, q);
+        const bool ok = readQueueStable(this, control, name, 8, q);
         logEvent("  %d piste(s)", ok ? q.tracks : 0);
         for (size_t i = 0; i < q.items.size() && i < 2; ++i)
             logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
@@ -826,11 +837,12 @@ static const char* kSearchQueue = "wiimscreen-recherche";
 
 // Le WiiM ajoute les pistes peu à peu (1 ou 2 après 1 s, 7 après 6 s) : on relit la file jusqu'à ce que
 // leur nombre ne bouge plus (deux lectures égales), dans la limite de `seconds`
-static bool readQueueStable(const std::string& control, const std::string& name, int seconds, wr::QueueInfo& out) {
+static bool readQueueStable(WiimWorker* w, const std::string& control, const std::string& name, int seconds,
+                            wr::QueueInfo& out, bool poll) {
     int last = -1, stable = 0;
     const uint32_t until = millis() + seconds * 1000UL;
     while ((int32_t)(millis() - until) < 0) {
-        vTaskDelay(pdMS_TO_TICKS(700));
+        w->pause(700, poll);
         std::string back;
         if (browseQueue(control, name, back) != 200 || back.empty()) continue;
         wr::QueueInfo q = wr::parseQueueContext(back);
@@ -919,7 +931,7 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
     if (create == 200) {
         const std::string want = wr::normalizeText(title);
         while (index == 0 && millis() - t0 < 12000) {
-            vTaskDelay(pdMS_TO_TICKS(700));
+            pause(700, true);  // les appuis et le relevé continuent pendant le chargement
             std::string back;
             if (browseQueue(control, name, back) != 200 || back.empty()) continue;
             const wr::QueueInfo q = wr::parseQueueContext(back);
@@ -1022,6 +1034,9 @@ void WiimWorker::runDeezerFavorites() {
     std::string control;
     if (!findPlayQueue(control, false)) return;
     if (deezerToken_.empty()) {
+        // Non vérifié (aucun jeton Deezer constaté) : une seule tentative par démarrage, pas à chaque rafraîchissement
+        if (deezerTried_) return;
+        deezerTried_ = true;
         for (const char* src : {"Deezer", "Deezer2", "deezer"}) {
             std::string resp, result;
             const int c = upnpRequest(control, "GetUserInfo",
@@ -1159,7 +1174,7 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
                                              resp)
                                : -1;
         if (p == 200 && before.posMs > 5000) {
-            vTaskDelay(pdMS_TO_TICKS(1500));
+            pause(1500, false);
             client_.command("setPlayerCmd:seek:" + String(before.posMs / 1000));
         }
         logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise (%d, %d)", c, p);
@@ -1207,7 +1222,7 @@ void WiimWorker::runSearch(const String& query) {
     // Résultats relus ; d'abord sans lancer la lecture, puis en la lançant si la file reste vide
     std::string resp;
     auto readBack = [&](const std::string& name, int seconds, wr::QueueInfo& out) {
-        return readQueueStable(control, name, seconds, out);
+        return readQueueStable(this, control, name, seconds, out);
     };
     // Façons d'écrire les espaces dans l'adresse : on passe à la suivante si les résultats n'ont
     // aucun mot de la recherche (le WiiM a pu mal lire la requête)
@@ -1259,7 +1274,7 @@ void WiimWorker::runSearch(const String& query) {
     }
     restoreAfterSearch(control, before);  // le WiiM lance la file de recherche dès sa création
     if (muted) {
-        vTaskDelay(pdMS_TO_TICKS(600));  // la musique d'avant a repris (ou la lecture est arrêtée)
+        pause(600, false);  // la musique d'avant a repris (ou la lecture est arrêtée)
         logEvent("Recherche : son r\xC3\xA9tabli (%s)", wiimErrorName(client_.command("setPlayerCmd:mute:0")));
     }
     logEvent("Recherche : termin\xC3\xA9" "e en %lu ms", (unsigned long)(millis() - t0));
@@ -1327,7 +1342,7 @@ void WiimWorker::runPlayQobuzFavorites() {
                               "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100"),
         policy);
     wr::QueueInfo q;
-    const bool loaded = c == 200 && readQueueStable(control, name, 8, q);
+    const bool loaded = c == 200 && readQueueStable(this, control, name, 8, q, true);
     // Le WiiM lance d'ordinaire la file créée ; sinon on la lance
     const int p = loaded ? upnpRequest(control, "PlayQueueWithIndex",
                                        wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),

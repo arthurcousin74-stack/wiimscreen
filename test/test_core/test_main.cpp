@@ -687,6 +687,8 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&user_auth_token=***",
                              maskSecrets(q.searchUrl).c_str());
     TEST_ASSERT_EQUAL_STRING("a=1&mytoken=x", maskSecrets("a=1&mytoken=x").c_str());  // pas un paramètre "token"
+    TEST_ASSERT_EQUAL_STRING("x?app_id=***&uid=***&eid=***&hmac=***&album_id=42",
+                             maskSecrets("x?app_id=123&uid=9&eid=abc&hmac=f00&album_id=42").c_str());
     TEST_ASSERT_EQUAL_STRING("so***@ex***", maskAccount(q.user).c_str());
     TEST_ASSERT_EQUAL_STRING("ar***", maskAccount("arthur").c_str());
     TEST_ASSERT_FALSE(parseQueueContext("<nothing/>").ok);

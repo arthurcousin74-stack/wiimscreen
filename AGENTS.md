@@ -17,7 +17,8 @@ pio run -e preview                   # PC build of the real UI (needs SDL2 heade
 SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
 ```
 
-Firmware version: CI passes `-DFW_VERSION="<run>-<sha>"` through `PLATFORMIO_BUILD_FLAGS`; local builds say `dev`.
+Firmware version: CI passes `-DFW_VERSION="<run>-<sha>"` through `PLATFORMIO_BUILD_FLAGS`; local builds get
+`local-<git sha>` from `tools/version.py` (`dev` without git).
 Flashable image for USB (address `0x0`): see the merge step in `.github/workflows/firmware.yml`
 (ESP32-P4 bootloader at **0x2000**, partitions 0x8000, boot_app0 0xe000, app 0x10000).
 
@@ -98,6 +99,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Settings survive a full USB flash**: the merged image written at `0x0` pads over the NVS (0x9000), so
   `setup()` keeps a copy in LittleFS (`fav::saveSettingsBackup`, `settingsToBackup`) and restores it when the NVS
   is empty. Add new settings to `settingsToBackup()` / `settingsFromBackup()` too.
+- **Long worker jobs** (search, favorites, tests) wait with `WiimWorker::pause()`, never `vTaskDelay`: it keeps
+  executing queued commands (play/pause, volume) so taps are not ignored for several seconds.
+- **OpenAI transcription** runs in its own task (`sttTask`); the main loop only checks `g_stt.done`.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 
@@ -111,5 +115,6 @@ navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz se
 
 **Not yet confirmed on hardware:** favorite replay, Deezer search screen and playback at a track, restoring the music
 after a Qobuz search, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,
-the restart into setup mode, the partial-redraw speed-up. Prefer small, testable changes and note what was verified
+the restart into setup mode, the partial-redraw speed-up, factory reset, taps handled during long worker jobs,
+background transcription. Prefer small, testable changes and note what was verified
 on real hardware in commit messages.

@@ -50,3 +50,5 @@ void saveWiim(const String& host, const String& uuid, const String& name);
 // actives, figeait le Tab5) ; takePortalRequest() le lit et l'efface.
 void requestPortal(const String& reason);
 bool takePortalRequest(String& reason);
+// Remise à zéro : efface toute la NVS des réglages (Wi-Fi, WiiM, clé OpenAI…).
+void eraseSettings();

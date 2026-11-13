@@ -20,6 +20,7 @@
 
 #include <esp_heap_caps.h>
 
+#include <atomic>
 #include <cmath>
 #include <map>
 
@@ -870,6 +871,29 @@ static void runVoice(const std::string& text) {
 static void runSearchQuery();
 
 // Dictée de la recherche : la phrase entendue devient le texte cherché, puis la recherche part
+// Transcription en tâche de fond : l'appel à OpenAI (jusqu'à ~30 s si le réseau est lent) ne doit pas figer
+// l'écran (règle « jamais d'attente réseau dans la boucle »). La boucle lit le résultat quand il est prêt.
+struct SttJob {
+    std::atomic<bool> busy{false}, done{false};  // atomiques : `done` publie text/err/ok écrits avant lui
+    bool ok = false;
+    std::string text;
+    String err;
+};
+static SttJob g_stt;
+
+static void sttTask(void*) {
+    static const std::string hint = "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
+                                    "fran\xC3\xA7" "ais ou en anglais.";
+    std::string text;
+    String err;
+    const bool ok = transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, hint, text, err);
+    g_stt.text = text;
+    g_stt.err = err;
+    g_stt.ok = ok;
+    g_stt.done = true;  // écrit en dernier : la boucle lit les champs après
+    vTaskDelete(nullptr);
+}
+
 static void finishDictation(bool send) {
     stopListening();
     g_dictation = false;
@@ -878,18 +902,32 @@ static void finishDictation(bool send) {
         renderSearch();
         return;
     }
+    if (g_stt.busy) return;
     g_ui.updateSearchField(g_searchQuery, "", false, g_searchSource, g_deezerOk, 2);
-    std::string text;
-    String err;
-    const std::string hint = "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
-                             "fran\xC3\xA7" "ais ou en anglais.";
-    if (!transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, hint, text, err)) {
-        logEvent("Transcription : %s", err.c_str());
+    g_stt.busy = true;
+    g_stt.done = false;
+    // Pile en RAM interne (TLS) ; cœur 0, comme la tâche WiiM : le cœur 1 reste à l'écran et au toucher
+    if (xTaskCreatePinnedToCore(sttTask, "stt", 16 * 1024, nullptr, 1, nullptr, 0) != pdPASS) {
+        g_stt.busy = false;
+        g_searchStatus = "M\xC3\xA9moire insuffisante pour la transcription";
+        renderSearch();
+    }
+}
+
+// Résultat de la transcription (appelé par la boucle de l'écran de recherche)
+static void serviceTranscription() {
+    if (!g_stt.busy || !g_stt.done) return;
+    g_stt.busy = false;
+    g_stt.done = false;
+    if (!g_searchOpen) return;  // l'écran a été quitté entre-temps
+    if (!g_stt.ok) {
+        logEvent("Transcription : %s", g_stt.err.c_str());
         sound::error();
-        g_searchStatus = err;
+        g_searchStatus = g_stt.err;
         renderSearch();
         return;
     }
+    std::string text = g_stt.text;
     // Ponctuation et guillemets ajoutés par la transcription retirés
     while (!text.empty() && strchr(" .,;:!?\"'", text.back())) text.pop_back();
     size_t a = 0;
@@ -1262,10 +1300,25 @@ static void onSearchDone(const WiimEvent& ev) {
     if (g_searchOpen) renderSearch();
 }
 
+// Mémoire dans le Journal (au démarrage + toutes les 10 min) : pour repérer une fuite lors d'un essai de longue durée
+static void logMemory() {
+    static uint32_t last = 0;
+    static bool first = true;
+    const uint32_t now = millis();
+    if (!first && now - last < 10 * 60 * 1000UL) return;
+    first = false;
+    last = now;
+    logEvent("M\xC3\xA9moire : interne %u ko (min %u), PSRAM %u ko, pile WiiM %u o",
+             unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), unsigned(g_worker.stackLeft()));
+}
+
 void loop() {
     M5.update();
     auto t = M5.Touch.getDetail();
     const uint32_t now = millis();
+    logMemory();
 
     // Test tactile : rond sous le doigt tant qu'il touche ; « Fermer » pour sortir
     if (g_touchTest) {
@@ -1340,7 +1393,7 @@ void loop() {
                     finishDictation(false);
                 }
             } else if (g_searchOpen && g_ui.hitMic(t.x, t.y)) {
-                if (!g_searchBusy) startVoice(true);  // bip, puis écoute jusqu'à ■
+                if (!g_searchBusy && !g_stt.busy) startVoice(true);  // bip, puis écoute jusqu'au bouton rouge
             } else if (g_ui.hitHome(t.x, t.y)) {
                 sound::tap();
                 g_searchOpen = g_resultsOpen = false;
@@ -1383,6 +1436,7 @@ void loop() {
             }
         }
         releaseKey(false);
+        serviceTranscription();
         serviceVoice();
         serviceWiim();
         delay(5);

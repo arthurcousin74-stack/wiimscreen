@@ -66,6 +66,14 @@ bool begin() {
     return true;
 }
 
+bool eraseAll() {
+    Guard g;
+    g_list.clear();
+    g_ok = false;
+    ++g_rev;
+    return LittleFS.format();
+}
+
 std::vector<wr::Favorite> list() {
     Guard g;
     return g_list;

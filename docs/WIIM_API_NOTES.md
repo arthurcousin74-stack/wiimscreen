@@ -150,9 +150,9 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
     **progressively** (1–2 tracks after ~1 s, 7 after ~6 s): read it back until the count is stable.
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty. *(Changed: the user reported
-  that a search started the first result; the remote now never starts a search queue and creates it with
-  `QueuePolicy 0` first — 1, then no argument, if refused. Whether 0 avoids playback: **no** — `CreateQueue` has no
-  `QueuePolicy` argument on this WiiM and always plays, see *Loading a queue without playing it*.)*
+  that a search started the first result. `CreateQueue` has no `QueuePolicy` argument on this WiiM and always
+  plays, see *Loading a queue without playing it*; the search screen now asks Qobuz directly (`GetUserInfo`) and only
+  creates a queue when a result is chosen.)*
 
 - Journal › *Essais*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums`, read back
   without playing. **First result on a real WiiM: the tracks query loaded 1 favorite track** (so the WiiM does add
@@ -347,7 +347,7 @@ A full queue service for QQ Music (China): `InsertTracks`, `RemoveTracks`, `Remo
 ## What the local API does not do
 
 - **No catalog search** (Qobuz, Spotify, TIDAL…): search the service's own API, then play a URL or use Connect
-  **[forum]**. wiimscreen searches radios in [Radio Browser](https://www.radio-browser.info/) and plays the stream
-  URL with `setPlayerCmd:play:`.
+  **[forum]**. wiimscreen searches Qobuz with the access the WiiM gives (`GetUserInfo`, see *Qobuz*) and Deezer
+  with the public `api.deezer.com/search`, then plays the choice as a WiiM play queue.
 - No push notifications: poll (wiimscreen polls every 1.5 s while playing, 3 s otherwise, over a kept-alive
   TLS connection; the WiiM answers `Connection: keep-alive` requests and keeps the socket open for a few seconds).

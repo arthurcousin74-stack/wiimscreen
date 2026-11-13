@@ -357,7 +357,8 @@ std::string urlQueryEncode(const std::string& s) {
 }
 
 std::string maskSecrets(const std::string& text) {
-    static const char* kKeys[] = {"user_auth_token", "access_token", "token", "secret", "password", "request_sig", "sig"};
+    static const char* kKeys[] = {"user_auth_token", "access_token", "token", "secret", "password", "request_sig", "sig",
+                                  "hmac",            "uid",          "eid",   "app_id", "accessToken", "clientId"};
     std::string o = text;
     for (const char* key : kKeys) {
         const std::string k = std::string(key) + "=";

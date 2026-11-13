@@ -74,11 +74,16 @@ public:
     bool takeReport(WiimReport& out);
     bool takeEvent(WiimEvent& out);
     uint32_t queued() const { return queued_; }  // commandes envoyées depuis le début
+    // Place libre minimale sur la pile de la tâche (octets), pour le journal
+    uint32_t stackLeft() const { return task_ ? uxTaskGetStackHighWaterMark(task_) * sizeof(StackType_t) : 0; }
+    // Attente dans une tâche longue de la tâche WiiM : commandes (et relevé si `poll`) traitées pendant ce temps
+    void pause(uint32_t ms, bool poll);
 
 private:
     static void taskMain(void* self);
     void run();
     void execute(const String& cmd);
+    void drainCommands();
     void pollOnce();
     bool rediscover();
     void learnIdentity();
@@ -144,6 +149,7 @@ private:
     wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
     bool haveQobuz_ = false;
     bool qobuzFavsWanted_ = false;
+    bool deezerTried_ = false;  // favoris Deezer : une tentative par démarrage
     std::string deezerToken_;  // jeton Deezer donné par le WiiM (mémoire seulement), vide si inconnu
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)

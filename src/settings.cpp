@@ -116,6 +116,13 @@ void saveFingerprint(const String& hex) {
     p.end();
 }
 
+void eraseSettings() {
+    Preferences p;
+    p.begin(kNamespace, false);
+    p.clear();
+    p.end();
+}
+
 void requestPortal(const String& reason) {
     Preferences p;
     p.begin(kNamespace, false);

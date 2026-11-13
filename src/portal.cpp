@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "favorites.h"
 #include "web_style.h"
 
 static String esc(const String& s) { return wr::htmlEscape(s.c_str()).c_str(); }
@@ -139,14 +140,17 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
     h += esc(s.sttModel) + F("\"><small>\xC3\x80 changer seulement si OpenAI renomme ce mod\xC3\xA8le.</small></div></details>");
 
     // --- Avancé
+    h += F("<details class=card><summary>Avanc\xC3\xA9</summary><div class=in>");
     if (s.fingerprint.length()) {
-        h += F("<details class=card><summary>Avanc\xC3\xA9</summary><div class=in><label class=chk>"
-               "<input type=checkbox name=forgetfp value=1>Oublier le certificat enregistr\xC3\xA9 du WiiM</label>"
-               "<small>Empreinte : <code>");
+        h += F("<label class=chk><input type=checkbox name=forgetfp value=1>Oublier le certificat enregistr\xC3\xA9 du "
+               "WiiM</label><small>Empreinte : <code>");
         h += esc(s.fingerprint.substring(0, 16)) +
              F("\xE2\x80\xA6</code>. Seulement apr\xC3\xA8s une r\xC3\xA9initialisation ou un changement de WiiM."
-               "</small></div></details>");
+               "</small>");
     }
+    h += F("<label class=chk><input type=checkbox name=wipe value=1 id=wipe>Tout effacer : r\xC3\xA9glages, cl\xC3\xA9 "
+           "OpenAI et favoris</label><small>Remet le Tab5 \xC3\xA0 z\xC3\xA9ro (comme neuf). Les autres champs "
+           "sont alors ignor\xC3\xA9s.</small></div></details>");
 
     h += F("<div class=bar><button class=btn type=submit id=go>Enregistrer et red\xC3\xA9marrer</button></div></form>"
            "<script>"
@@ -157,7 +161,9 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
            "s.oninput=mark;mark();"
            "document.getElementById('eye').onclick=function(){var t=p.type=='password';p.type=t?'text':'password';"
            "this.textContent=t?'Masquer':'Afficher'};"
-           "document.getElementById('f').onsubmit=function(){var g=document.getElementById('go');"
+           "document.getElementById('f').onsubmit=function(){var w=document.getElementById('wipe');"
+           "if(w.checked&&!confirm('Tout effacer ? R\xC3\xA9glages et favoris seront perdus.'))return false;"
+           "var g=document.getElementById('go');"
            "g.disabled=true;g.textContent='Enregistrement\xE2\x80\xA6'};"
            "</script></body></html>");
     return h;
@@ -172,6 +178,16 @@ static String donePage(const String& ssid) {
                        "quitter le Wi-Fi du Tab5 : tu peux fermer cette page. Si un seul WiiM est sur ton r\xC3\xA9seau, "
                        "il est choisi tout seul ; sinon, touche le tien sur l'\xC3\xA9" "cran du Tab5.</small>"
                        "</section></body></html>");
+    return h;
+}
+
+static String wipedPage() {
+    String h = FPSTR(kWebHead);
+    h += F("<title>Effac\xC3\xA9</title></head><body><header><div class=logo><i></i></div><div>"
+           "<h1>Tout est effac\xC3\xA9</h1><p>T\xC3\xA9l\xC3\xA9" "commande WiiM</p></div></header>"
+           "<div class='card okbox'>Le Tab5 red\xC3\xA9marre en mode configuration, comme neuf.</div>"
+           "<section class=card><small>Reconnecte-toi \xC3\xA0 son Wi-Fi (nouveau mot de passe affich\xC3\xA9 "
+           "sur l'\xC3\xA9" "cran) pour le configurer.</small></section></body></html>");
     return h;
 }
 
@@ -214,6 +230,15 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     server.on("/", HTTP_GET, [&] { server.send(200, "text/html; charset=utf-8", formPage(s, ssids, error)); });
 
     server.on("/save", HTTP_POST, [&] {
+        if (server.hasArg("wipe")) {
+            // Remise à zéro : NVS + LittleFS (favoris, copie des réglages), puis portail au redémarrage
+            eraseSettings();
+            fav::eraseAll();
+            server.send(200, "text/html; charset=utf-8", wipedPage());
+            delay(1500);
+            ESP.restart();
+            return;
+        }
         Settings next = s;
         next.ssid = server.arg("ssid");
         next.ssid.trim();

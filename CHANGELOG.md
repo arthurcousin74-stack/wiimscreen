@@ -8,6 +8,10 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Setup page › *Avancé* › *Tout effacer*: factory reset (settings, OpenAI key, favorites and their backup).
+- Memory report in the Journal at start and every 10 minutes (internal heap, minimum, PSRAM, WiiM task stack), to
+  find leaks in long tests.
+- Local builds show their git commit as the version (`local-<sha>`, `-modifie` with uncommitted changes).
 - Settings backup in LittleFS: a full USB flash (merged image at 0x0, which overwrites the NVS) no longer loses the
   Wi-Fi, WiiM, OpenAI key and options; they are restored at the next start. OTA updates already kept them.
 - Sleep: Settings › *Mise en veille* turns the Tab5 off; optional automatic sleep after 30 min / 1 h / 2 h without
@@ -23,8 +27,7 @@ Hardware testing in progress.
 - Ambient view with microphone spectrum visualizer; pick-up-to-wake (IMU); backlight dimming.
 - Automatic WiiM discovery (SSDP + `getStatusEx`), choice among several players, following the same player
   (uuid) across IP changes.
-- Phone setup portal (QR code), optional OpenAI key for French voice commands (presets, playback, volume,
-  Radio Browser station search).
+- Phone setup portal (QR code), optional OpenAI key for voice search (dictation in the search field).
 - Over-the-air updates from a browser (6-digit code), firmware version display.
 - PC preview tool rendering the real UI to PNG; native unit tests for all hardware-free logic.
 - Navigation bar on the left (top in portrait): 🏠 main screen, ⚙ settings; also shown on the settings and log
@@ -57,8 +60,9 @@ Hardware testing in progress.
   a tap on the screen cancels setup mode when the Tab5 is already configured.
 - Loading feedback: after ⏮/⏭, play/pause, a preset, a favorite or a search result, a ring turns around the
   button until the WiiM reports the change (10 s at most).
-- Search never starts playback by itself: queues are created with `QueuePolicy 0` first, and the remote no
-  longer starts the queue when results are slow.
+- Search never starts playback by itself: Qobuz results come from the Qobuz API with the access the WiiM gives
+  (`GetUserInfo`); the music only changes when a result is chosen. (`CreateQueue` has no `QueuePolicy` argument on
+  the WiiM and always plays, so the older "QueuePolicy 0" attempt is removed.)
 - The main screen always keeps its preset row. Without presets on the WiiM, the row explains how to add them
   (before, the screen looked like the ambient view, so the home button seemed to do nothing).
 - All WiiM networking runs in a background task; the screen never waits for the network.
