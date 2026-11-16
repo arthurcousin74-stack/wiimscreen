@@ -323,6 +323,10 @@ int main(int argc, char** argv) {
         save(out, "29-dictee.ppm");
         ui.renderResults("aretha franklin", found, 0, "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer");
         save(out, "25-resultats.ppm");
+        ui.renderResults("Favoris Qobuz", {}, 0, "Chargement de tes favoris Qobuz\xE2\x80\xA6");
+        save(out, "31-favoris-qobuz-chargement.ppm");
+        ui.renderResults("Favoris Qobuz", found, 0, "");
+        save(out, "32-favoris-qobuz.ppm");
     }
     {
             std::vector<String> jl = {

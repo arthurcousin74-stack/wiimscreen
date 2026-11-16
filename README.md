@@ -47,7 +47,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   position in the track. A "live" badge shows for radio streams.
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
 - **Qobuz favorites**: the favorite albums of your Qobuz account show as tiles with their album art. One touch plays
-  the album. The **Favoris Qobuz** tile plays your favorite tracks.
+  the album. The **Favoris Qobuz** tile shows the list of your favorite tracks. Touch a track to play it.
+  Note: album tiles show only if your Qobuz account has favorite albums.
 - **Deezer favorites** (experimental): if your WiiM gives a Deezer access, the favorite albums of your Deezer account
   also show as tiles. One touch plays the album.
 - **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button at the left

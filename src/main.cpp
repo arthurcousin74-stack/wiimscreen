@@ -55,7 +55,7 @@ static bool g_favBusy = false;                          // enregistrement d'un f
 static std::vector<wr::Favorite> g_favs;
 static std::vector<wr::QobuzAlbum> g_deezerAlbums;  // albums favoris du compte Deezer
 static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Qobuz (lus par l'accès du WiiM)
-static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » (file chargée par le WiiM)
+static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » : liste des morceaux favoris
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
 static bool g_presetsFromWiim = false;
 static uint32_t g_lastPresetFetch = 0;
@@ -76,6 +76,8 @@ static bool g_touchTest = false;  // écran de test tactile (menu Réglages)
 static bool g_logOpen = false;    // écran Journal (menu Réglages)
 // Recherche Qobuz (par le WiiM) : clavier, puis résultats
 static bool g_searchOpen = false, g_resultsOpen = false, g_searchBusy = false;
+static std::string g_resultsTitle;  // en-tête de la liste : texte cherché, ou « Favoris Qobuz »
+static int g_resultsSource = 0;     // source de la liste affichée (1 : Deezer, albums plus longs à charger)
 static std::string g_searchQuery;
 static String g_searchStatus;
 static std::vector<wr::QueueTrack> g_searchResults;
@@ -703,9 +705,15 @@ static bool handleBars(int x, int y) {
     return false;
 }
 
+static void openQobuzFavorites();
+
 static void playPreset(int p) {
     logEvent("Preset %d : %s", g_presets[p].slot, g_presets[p].label.c_str());
     sound::tap();
+    if (g_presets[p].favId == kQobuzFavsId) {  // liste des morceaux favoris : on choisit, rien ne joue avant
+        openQobuzFavorites();
+        return;
+    }
     g_activePreset = p;
     g_activeSince = millis();
     g_activeMode = -1;
@@ -1221,10 +1229,28 @@ static void runSearchQuery() {
     }
     logEvent("Recherche %s : %s", g_searchSource == 1 ? "Deezer" : "Qobuz", q.c_str());
     g_searchBusy = true;
+    g_resultsTitle = q;
+    g_resultsSource = g_searchSource;
     g_searchStatus = g_searchSource == 1 ? String("Recherche sur Deezer\xE2\x80\xA6")
                                          : String("Recherche sur Qobuz par ton WiiM\xE2\x80\xA6");
     g_worker.search(q.c_str(), g_searchSource);
     renderSearch();
+}
+
+// Tuile « Favoris Qobuz » : liste des morceaux favoris du compte (tâche WiiM), affichée comme des résultats
+static void openQobuzFavorites() {
+    if (g_searchBusy) {
+        setMessage("Recherche en cours, r\xC3\xA9" "essaie dans un instant", 3000);
+        return;
+    }
+    g_searchBusy = true;
+    g_resultsTitle = "Favoris Qobuz";
+    g_resultsSource = 0;
+    g_searchResults.clear();
+    g_resultsPage = 0;
+    g_resultsOpen = true;
+    g_ui.renderResults(g_resultsTitle, g_searchResults, 0, "Chargement de tes favoris Qobuz\xE2\x80\xA6");
+    g_worker.search("Favoris Qobuz", 2);
 }
 
 static void openSearch() {
@@ -1278,19 +1304,23 @@ static void onSearchKey(int k) {
 // Résultats arrivés (tâche WiiM)
 static void onSearchDone(const WiimEvent& ev) {
     g_searchBusy = false;
-    if (!ev.ok) {
-        sound::error();
-        g_searchStatus = "Recherche impossible : " + ev.text;
-    } else if (ev.tracks.empty()) {
-        g_searchStatus = "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB " + ev.name + " \xC2\xBB";
+    if (!ev.ok || ev.tracks.empty()) {
+        if (!ev.ok) sound::error();
+        g_searchStatus = !ev.ok ? "Recherche impossible : " + ev.text
+                                : "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB " + ev.name + " \xC2\xBB";
+        if (g_resultsOpen) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
+            g_searchResults.clear();
+            g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
+                               !ev.ok ? "Impossible : " + ev.text : String("Aucun morceau favori sur Qobuz"));
+        }
     } else {
         g_searchResults = ev.tracks;
         g_resultsPage = 0;
         g_searchStatus = "";
-        if (g_searchOpen) {  // toujours sur le clavier : on montre les résultats
+        if (g_searchOpen || g_resultsOpen) {  // toujours sur le clavier ou la liste : on montre les résultats
             g_searchOpen = false;
             g_resultsOpen = true;
-            g_ui.renderResults(g_searchQuery, g_searchResults, 0,
+            g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
                                ev.played ? String("Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer")
                                          : String());
         }
@@ -1414,20 +1444,20 @@ void loop() {
                 int r = g_ui.hitResult(t.x, t.y), pg = g_ui.hitResultsPage(t.x, t.y);
                 if (r >= 0) {
                     sound::tap();
-                    g_ui.renderResults(g_searchQuery, g_searchResults, g_resultsPage, "", r);  // ligne enfoncée
+                    g_ui.renderResults(g_resultsTitle, g_searchResults, g_resultsPage, "", r);  // ligne enfoncée
                     logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
                     g_worker.playSearchResult(r);
                     markPending(wr::kPlayPause, Await::Music, true);
                     setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title +
-                                (g_searchSource == 1 ? " (chargement de l'album\xE2\x80\xA6)" : ""))
+                                (g_resultsSource == 1 ? " (chargement de l'album\xE2\x80\xA6)" : ""))
                                    .c_str(),
-                               g_searchSource == 1 ? 9000 : 4000);
+                               g_resultsSource == 1 ? 9000 : 4000);
                     g_resultsOpen = false;
                     show();
                 } else if (pg) {
                     sound::tap();
                     g_resultsPage += pg;
-                    g_ui.renderResults(g_searchQuery, g_searchResults, g_resultsPage, "");
+                    g_ui.renderResults(g_resultsTitle, g_searchResults, g_resultsPage, "");
                 } else if (g_ui.hitResultsEdit(t.x, t.y) || g_ui.hitSearch(t.x, t.y)) {
                     sound::tap();
                     g_resultsOpen = false;

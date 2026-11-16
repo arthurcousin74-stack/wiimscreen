@@ -64,7 +64,8 @@ public:
     void testQobuzSearch(const String& query);
     // Recherche (évènement SearchDone avec les morceaux trouvés), puis lecture d'un résultat (0 pour le
     // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
-    // joué par le WiiM (album du morceau, par sa passerelle airable). Non bloquant.
+    // joué par le WiiM (album du morceau, par sa passerelle airable) ; 2 : morceaux favoris du compte Qobuz
+    // (liste, rien ne joue avant le choix). Non bloquant.
     void search(const String& query, int source);
     // Albums favoris du compte Qobuz (évènement QobuzFavorites), lus avec l'accès donné par le WiiM
     void refreshQobuzFavorites();
@@ -95,7 +96,7 @@ private:
     bool findPlayQueue(std::string& control, bool verbose);
     void runSaveFavorite(const FavRequest& r);
     void runPlayFavorite(const String& id);
-    void runPlayQobuzFavorites();
+    void runQobuzFavoriteList(const String& title);
     bool playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
                      const std::string& title, const char* label);
     bool qobuzAccess(const std::string& control, bool refresh);

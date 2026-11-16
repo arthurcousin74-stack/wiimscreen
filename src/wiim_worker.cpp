@@ -295,6 +295,7 @@ void WiimWorker::run() {
         if (searchTest.length()) runSearchTest(searchTest);
         if (search.length()) {
             if (searchSource == 1) runDeezerSearch(search);
+            else if (searchSource == 2) runQobuzFavoriteList(search);
             else runSearch(search);
         }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
@@ -1322,19 +1323,39 @@ void WiimWorker::runPlaySearchResult(int index) {
     nextPoll_ = millis() + 800;
 }
 
-// Favoris Qobuz du compte : file dont l'adresse est la liste des morceaux favoris ; le WiiM la lit avec sa
-// propre connexion Qobuz (vérifié : il y ajoute le jeton de l'utilisateur) et la lance.
-void WiimWorker::runPlayQobuzFavorites() {
+// Morceaux favoris du compte Qobuz, en liste : on choisit celui à écouter (rien ne joue avant).
+// D'abord par l'accès Qobuz donné par le WiiM ; sinon par une file que le WiiM charge lui-même (il la lance :
+// son coupé, puis la musique d'avant est remise, comme pour la recherche).
+void WiimWorker::runQobuzFavoriteList(const String& title) {
     WiimEvent ev;
-    ev.kind = WiimEvent::FavPlayed;
-    std::string control, templ, resp;
-    if (!findPlayQueue(control, false) || !qobuzModel(control, templ)) {
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = title;
+    std::string control, templ, body, resp;
+    if (!findPlayQueue(control, false)) {
+        ev.text = "le WiiM ne r\xC3\xA9pond pas";
+        push(std::move(ev));
+        return;
+    }
+    const int code = qobuzGet(control, "favorite/getUserFavorites?type=tracks&limit=100", body);
+    if (code == 200) {
+        qobuzResults_ = wr::parseQobuzTracks(body);
+        searchSource_ = 2;
+        logEvent("Favoris Qobuz : %u morceau(x), liste sans lecture", (unsigned)qobuzResults_.size());
+        ev.ok = true;
+        for (auto& t : qobuzResults_) ev.tracks.push_back(wr::QueueTrack{t.title, t.artist, t.album, t.image});
+        push(std::move(ev));
+        return;
+    }
+    logEvent("Favoris Qobuz : acc\xC3\xA8s direct %d, liste par une file du WiiM", code);
+    if (!qobuzModel(control, templ)) {
         ev.text = "lance d'abord un album Qobuz depuis l'app WiiM Home";
         push(std::move(ev));
         return;
     }
     const std::string name = "Favoris Qobuz";
     upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    const Playback before = snapshot(control);
+    const bool muted = before.known && !before.muted && client_.command("setPlayerCmd:mute:1") == WiimError::None;
     const char* policy = "0";
     const int c = createQueueQuiet(
         control,
@@ -1342,24 +1363,22 @@ void WiimWorker::runPlayQobuzFavorites() {
                               "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100"),
         policy);
     wr::QueueInfo q;
-    const bool loaded = c == 200 && readQueueStable(this, control, name, 8, q, true);
-    // Le WiiM lance d'ordinaire la file créée ; sinon on la lance
-    const int p = loaded ? upnpRequest(control, "PlayQueueWithIndex",
-                                       wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", "1"}}),
-                                       resp)
-                         : -1;
-    logEvent("Favoris Qobuz : CreateQueue %d, %d morceau(x), Play %d", c, loaded ? q.tracks : 0, p);
-    ev.ok = loaded && p == 200;
-    if (!ev.ok) ev.text = loaded ? "le WiiM n'a pas lanc\xC3\xA9 les favoris" : "aucun morceau favori sur Qobuz";
+    const bool loaded = c == 200 && readQueueStable(this, control, name, 8, q);
+    restoreAfterSearch(control, before);
+    if (muted) {
+        pause(600, false);
+        client_.command("setPlayerCmd:mute:0");
+    }
+    logEvent("Favoris Qobuz (file) : CreateQueue %d, %d morceau(x)", c, loaded ? q.tracks : 0);
+    searchSource_ = 0;
+    searchQueue_ = name;
+    ev.ok = loaded;
+    ev.tracks = q.items;
+    if (!loaded) ev.text = "aucun morceau favori sur Qobuz";
     push(std::move(ev));
-    nextPoll_ = millis() + 800;
 }
 
 void WiimWorker::runPlayFavorite(const String& id) {
-    if (id == "qobuz-favoris") {
-        runPlayQobuzFavorites();
-        return;
-    }
     if (id.startsWith("qobuz-album:")) {
         runPlayQobuzAlbum(id.substring(12).c_str());
         return;

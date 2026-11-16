@@ -8,6 +8,9 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- The **Favoris Qobuz** tile opens the list of favorite tracks: touch one to play it (before, the tile played all
+  favorites from the first one). The list comes from Qobuz with the access the WiiM gives; without it, the WiiM
+  loads the list itself (sound muted, previous music put back).
 - Update screen: QR code of the update page, so a phone opens it without typing the address. The page no
   longer filters the file picker on `.bin` (some phones greyed the file out).
 - Setup page › *Avancé* › *Tout effacer*: factory reset (settings, OpenAI key, favorites and their backup).
