@@ -107,6 +107,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 
 ## Status / not verified on hardware yet
 
+Hardware checklist and the 24 h test prompt: [docs/HARDWARE_TEST.md](docs/HARDWARE_TEST.md).
+
 Built and unit-tested; screens verified via the PC preview. No other board has been tried.
 
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
