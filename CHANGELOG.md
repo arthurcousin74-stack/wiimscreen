@@ -3,7 +3,7 @@
 Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show their version at the bottom of
 the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
-## [Unreleased]
+## [0.1.1-beta] — 2026-11-16 — direct Qobuz search becomes an option
 
 ### Changed
 - **Direct Qobuz search is now an option, off by default** (setup page › Advanced). It reuses the Qobuz access of
