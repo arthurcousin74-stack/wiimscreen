@@ -1,0 +1,40 @@
+# Tour of the main screens (1280×720). Run: .pio/build/sim/program --headless --reset --script tools/sim/scripts/tour.txt
+# Then: python tools/preview/topng.py .pio/sim-out/*.ppm
+wait 2000
+tap 50 360
+wait 400
+tap 1203 435
+wait 150
+tap 975 330
+wait 150
+tap 1089 435
+wait 150
+tap 405 330
+wait 150
+tap 291 435
+wait 300
+shot tour-04-saisie
+tap 1089 647
+wait 300
+shot tour-05-recherche-en-cours
+wait 1800
+shot tour-06-resultats
+tap 600 300
+wait 2500
+shot tour-07-lecture-resultat
+press 1000 585
+move 800 585
+move 500 585
+move 300 585
+release
+wait 600
+shot tour-08-page2
+tap 208 640
+wait 1200
+shot tour-09-favoris-qobuz
+tap 50 64
+wait 500
+tap 50 656
+wait 400
+shot tour-10-reglages
+quit

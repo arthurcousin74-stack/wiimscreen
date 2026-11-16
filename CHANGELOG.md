@@ -8,6 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- PC simulator (`pio run -e sim`, tools/sim/README.md): the real app with a fake WiiM in a window (mouse = touch),
+  scripted taps and screenshots; CI runs a tour of the screens on every push.
+
+### Fixed (found with the simulator)
+- The search result message showed an empty box instead of "▶" (no such glyph in the font): now "Lecture : …".
+- A tile whose cover is the cover of the music playing never got its image.
+- While loading, the status chips could cover the battery level.
 - Deezer favorites from a public Deezer profile (setup page › *Favoris Deezer*: profile number or address; no key):
   favorite albums as tiles, and a **Favoris Deezer** tile with the list of favorite tracks (touch one to play it).
   The unverified token from the WiiM is still tried once per start when no profile is set.

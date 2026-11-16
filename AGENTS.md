@@ -15,7 +15,12 @@ pio test -e native                   # unit tests of lib/core on the PC — run 
 pio run -e tab5                      # firmware for the M5Stack Tab5
 pio run -e preview                   # PC build of the real UI (needs SDL2 headers: libsdl2-dev)
 SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
+pio run -e sim                       # simulator: the real app + a fake WiiM in an SDL window (tools/sim/README.md)
+.pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
 ```
+
+Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
+(missing glyph, shared cover image, chips over the battery).
 
 Firmware version: CI passes `-DFW_VERSION="<run>-<sha>"` through `PLATFORMIO_BUILD_FLAGS`; local builds get
 `local-<git sha>` from `tools/version.py` (`dev` without git).
@@ -45,6 +50,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/settings.*` | NVS-backed settings |
 | `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
+| `tools/sim/` | PC simulator: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, Preferences), fake WiiM (`WiimWorker`), fake services, scripts |
 
 ## Conventions
 
@@ -102,6 +108,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Long worker jobs** (search, favorites, tests) wait with `WiimWorker::pause()`, never `vTaskDelay`: it keeps
   executing queued commands (play/pause, volume) so taps are not ignored for several seconds.
 - **OpenAI transcription** runs in its own task (`sttTask`); the main loop only checks `g_stt.done`.
+- **VLW fonts have no symbols** such as ▶ ■ ♥: write words ("Lecture :") or draw icons.
+- **Simulator**: `src/` must keep compiling there. New hardware or network calls in `main.cpp` need a stub in
+  `tools/sim/stubs` or a fake in `tools/sim`; new `WiimWorker` public methods need a fake in `tools/sim/fake_wiim.cpp`.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 

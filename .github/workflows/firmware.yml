@@ -36,6 +36,19 @@ jobs:
       - name: Tests de la logique (PC)
         run: pio test -e native
 
+      # Simulator: the real app with a fake WiiM; the tour script fails the build if the app crashes or hangs
+      - name: Simulateur (tour des écrans, faux WiiM)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev
+          pio run -e sim
+          timeout 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
+          pip install pillow && python tools/preview/topng.py .pio/sim-out/*.ppm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sim-screens
+          path: .pio/sim-out/*.png
+
       # Version shown by the Tab5 (Réglages menu, update page): the tag, or build number + commit
       - name: Version number
         run: |

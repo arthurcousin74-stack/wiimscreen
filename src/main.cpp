@@ -452,6 +452,21 @@ static void checkImages() {
     bool changed = false;
     while (g_artFetcher.poll(img)) {
         if (!g_artWanted.empty() && img.url == g_artWanted) {
+            // Même image pour une tuile (album en cours parmi les favoris) : une copie pour la tuile, sinon elle
+            // ne recevait jamais son image (vu dans le simulateur)
+            bool tile = false;
+            for (auto& p : g_presets) tile |= p.picUrl == img.url;
+            if (tile && img.ok() && !g_presetImages[img.url].ok()) {
+                ArtImage& copy = g_presetImages[img.url];
+                copy.url = img.url;
+                copy.data = static_cast<uint8_t*>(heap_caps_malloc(img.len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+                if (copy.data) {
+                    memcpy(copy.data, img.data, img.len);
+                    copy.len = img.len;
+                    for (size_t i = 0; i < g_presets.size(); ++i)
+                        if (g_presets[i].picUrl == img.url) g_ui.setPresetArt((int)i, &copy);
+                }
+            }
             g_art = std::move(img);
             g_ui.setArt(&g_art);
             changed = true;
@@ -1323,7 +1338,7 @@ void loop() {
                     logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
                     g_worker.playSearchResult(r);
                     markPending(wr::kPlayPause, Await::Music, true);
-                    setMessage(("\xE2\x96\xB6 " + g_searchResults[r].title +
+                    setMessage(("Lecture : " + g_searchResults[r].title +
                                 (g_resultsSource == 1 ? " (chargement de l'album\xE2\x80\xA6)" : ""))
                                    .c_str(),
                                g_resultsSource == 1 ? 9000 : 4000);

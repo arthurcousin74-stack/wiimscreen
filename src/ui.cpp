@@ -261,7 +261,7 @@ void Ui::chip(int& x, int y, const std::string& text, uint32_t dot, uint32_t tex
     useFont(C, kSmall);
     const int h = sc(28), padX = sc(12), dotD = dot ? sc(10) : 0, dotGap = dot ? sc(8) : 0;
     const int w = padX * 2 + dotD + dotGap + (int)C.textWidth(text.c_str());
-    if (x + w > layout_.info.right()) return;
+    if (x + w > (chipRight_ > 0 ? chipRight_ : layout_.info.right())) return;  // pas sur la batterie
     C.fillRoundRect(x, y, w, h, h / 2, kCard);
     if (dot) C.fillCircle(x + padX + dotD / 2, y + h / 2, dotD / 2, dot);
     C.setTextDatum(textdatum_t::middle_left);
@@ -293,8 +293,11 @@ void Ui::info(const UiState& st) {
         if (inner > 0) C.fillRect(bx + sc(4), by + sc(4), inner, bh - sc(8), st.battery <= 15 ? kRed : kText);
         C.setTextDatum(textdatum_t::middle_right);
         C.setTextColor(kText2);
-        C.drawString((String(st.battery) + " %").c_str(), bx - sc(10), r.y + sc(14) + 1);
+        const String pct = String(st.battery) + " %";
+        C.drawString(pct.c_str(), bx - sc(10), r.y + sc(14) + 1);
+        right = bx - sc(10) - (int)C.textWidth(pct.c_str()) - sc(12);
     }
+    chipRight_ = right;  // les puces s'arrêtent avant la batterie (vu dans le simulateur : « Chargement… » la couvrait)
     int x = r.x;
     const int chipY = r.y;
     if (!st.online) {
@@ -308,6 +311,7 @@ void Ui::info(const UiState& st) {
         std::string q = wr::formatQuality(st.meta.sampleRate, st.meta.bitDepth);
         if (!q.empty()) chip(x, chipY, q, 0, kText2);
     }
+    chipRight_ = 0;
 
     // --- Titre (deux lignes si la place le permet), artiste, album
     int y = chipY + sc(28) + sc(8);

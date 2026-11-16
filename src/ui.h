@@ -187,6 +187,7 @@ private:
     wr::Rect menuRects_[6];
     wr::Rect logClose_;
     wr::Rect logQueue_;  // Journal : bouton « File du WiiM »
+    int chipRight_ = 0;  // info() : bord droit des puces (avant la batterie), 0 = largeur du bloc
     std::vector<wr::Rect> pickRects_;
     wr::Rect touchClose_;
     wr::Rect pickRetry_, pickConfig_;

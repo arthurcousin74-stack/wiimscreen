@@ -262,6 +262,7 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 - **`src/`** contains the device firmware (Arduino-ESP32 3.x on ESP-IDF 5 through pioarduino, M5Unified and M5GFX).
 - **`tools/preview/`** compiles the real `src/ui.cpp` for a PC (M5GFX and SDL2). It makes a PNG image of each
   screen. Thus you can design the UI without the device.
+- **[tools/sim/README.md](tools/sim/README.md)** explains the simulator: the real app on a PC with a fake WiiM.
 - **[docs/HARDWARE_TEST.md](docs/HARDWARE_TEST.md)** is the checklist to test the firmware on a real Tab5.
 - **[docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md)** contains practical notes about the WiiM/LinkPlay HTTP API
   and about the UPnP `PlayQueue` service, which WiiM does not document. These notes add data that the official
