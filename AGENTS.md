@@ -127,6 +127,7 @@ Built and unit-tested; screens verified via the PC preview. No other board has b
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
 navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM
 (`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates, the Favoris Qobuz list.
+**Simulator `simreal` with a real WiiM (user report, 2026-11-16):** relay (`--wiim`, WSL NAT mode) and the WiiM status shown.
 
 **Not yet confirmed on hardware:** favorite replay, Deezer search screen and playback at a track, restoring the music
 after a Qobuz search, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,

@@ -72,6 +72,9 @@ hosts only with TLS on port 443 (certificate checked) or HTTP on port 80. It log
 data (Qobuz and Deezer tokens are in the HTTP headers). `tools/relay/selftest.sh` checks the chain with a mock
 WiiM (CI runs it).
 
+Checked with a real WiiM (2026-11, Windows 11 + WSL in NAT mode, relay with `--wiim`): the simulator finds the
+WiiM through the relay and shows what plays.
+
 Dictation stays simulated (no OpenAI call). The setup and update web pages are not available.
 
 ### Windows
@@ -88,7 +91,9 @@ tools\relay\wiim_relay.py`).
    networkingMode=mirrored
    ```
 
-   Then run `wsl --shutdown` and open Ubuntu again. (Windows 11 22H2 or later.)
+   Then run `wsl --shutdown` and open Ubuntu again. (Windows 11 22H2 or later. On older builds WSL says that
+   mirrored mode is not supported and keeps its NAT network: that also works if the relay and the simulator both
+   run in WSL, but discovery cannot find the WiiM: start the relay with `--wiim <WiiM address>`.)
 3. In Ubuntu: `sudo apt install -y build-essential libsdl2-dev python3-venv git`, then
    `python3 -m venv ~/pio && ~/pio/bin/pip install platformio "click<8.2"`, then clone the repository and use
    `~/pio/bin/pio` in the commands above.
