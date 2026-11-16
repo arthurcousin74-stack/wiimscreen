@@ -1,5 +1,7 @@
 #include "core.h"
 
+#include <cstring>
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -359,6 +361,23 @@ bool isHttpUrl(const std::string& url) {
     for (unsigned char c : url)
         if (c <= 0x20 || c == 0x7f) return false;
     return true;
+}
+
+std::string baselineCoverUrl(const std::string& url) {
+    static const char* hosts[] = {"https://cdn-images.dzcdn.net/", "https://e-cdns-images.dzcdn.net/",
+                                  "http://cdn-images.dzcdn.net/", "http://e-cdns-images.dzcdn.net/"};
+    bool deezer = false;
+    for (const char* h : hosts) deezer |= url.compare(0, std::strlen(h), h) == 0;
+    if (!deezer || url.find('?') != std::string::npos) return url;
+    const size_t slash = url.rfind('/');
+    std::string name = url.substr(slash + 1);
+    if (name.size() < 8 || name.compare(name.size() - 4, 4, ".jpg") != 0) return url;
+    // <w>x<h>-<colour>-<quality>-<a>-<b>.jpg : exactly four dashes, last field "0"
+    int dashes = 0;
+    for (char c : name) dashes += c == '-';
+    const size_t last = name.rfind('-');
+    if (dashes != 4 || name.compare(last, std::string::npos, "-0.jpg") != 0) return url;
+    return url.substr(0, slash + 1) + name.substr(0, last) + "-1.jpg";
 }
 
 ImageType sniffImage(const uint8_t* d, size_t n) {

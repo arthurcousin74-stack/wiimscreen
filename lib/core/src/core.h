@@ -98,6 +98,11 @@ bool isHttpUrl(const std::string& url);
 
 enum class ImageType { Unknown, Jpeg, Png };
 ImageType sniffImage(const uint8_t* data, size_t len);
+// Address of the same cover as a baseline JPEG when the server can make one: the decoder of the device (TJpgDec)
+// cannot draw progressive JPEGs. Deezer (cdn-images.dzcdn.net / e-cdns-images.dzcdn.net, name
+// "<w>x<h>-<colour>-<quality>-<a>-<b>.jpg"): last field 1 instead of 0 (36 of 36 covers baseline, checked
+// 2026-11-16; with 0, 22 of 36 were progressive). Other addresses are returned unchanged.
+std::string baselineCoverUrl(const std::string& url);
 
 struct HttpResponse {
     int status = 0;

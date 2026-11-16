@@ -794,6 +794,17 @@ static void test_qobuz_json() {
     TEST_ASSERT_EQUAL_STRING("wiimscreen-1", qi.listName.c_str());
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=7", qi.searchUrl.c_str());
     TEST_ASSERT_TRUE(qobuzQueueModel("").empty());
+    // Pochettes Deezer : variante JPEG de base (le décodeur ne lit pas les JPEG progressifs)
+    TEST_ASSERT_EQUAL_STRING("https://cdn-images.dzcdn.net/images/cover/93f1af/250x250-000000-80-0-1.jpg",
+                             baselineCoverUrl("https://cdn-images.dzcdn.net/images/cover/93f1af/250x250-000000-80-0-0.jpg").c_str());
+    TEST_ASSERT_EQUAL_STRING("https://e-cdns-images.dzcdn.net/images/artist/ab/56x56-000000-80-0-1.jpg",
+                             baselineCoverUrl("https://e-cdns-images.dzcdn.net/images/artist/ab/56x56-000000-80-0-0.jpg").c_str());
+    const char* same[] = {"https://static.qobuz.com/images/covers/x_230.jpg",
+                          "https://cdn-images.dzcdn.net/images/cover/93f1af/250x250.jpg",
+                          "https://cdn-images.dzcdn.net/images/cover/93f1af/250x250-000000-80-0-0.png",
+                          "https://cdn-images.dzcdn.net/images/cover/93f1af/250x250-000000-80-0-0.jpg?x=1",
+                          "https://evil.example/cdn-images.dzcdn.net/250x250-000000-80-0-0.jpg"};
+    for (const char* u : same) TEST_ASSERT_EQUAL_STRING(u, baselineCoverUrl(u).c_str());
     // Album Qobuz : adresse de la file et clé de favori (sans offset/limit, comme une file copiée du WiiM)
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=0886443927087&offset=0&limit=50",
                              qobuzAlbumUrl("0886443927087").c_str());

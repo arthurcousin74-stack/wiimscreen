@@ -93,7 +93,10 @@ bool download(const std::string& url, ArtImage& out) {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     http.setRedirectLimit(3);
     http.setUserAgent("wiim-remote-tab5");
-    if (!http.begin(client, url.c_str())) return false;
+    // Même pochette en JPEG de base si le serveur sait la faire (Deezer) : les JPEG progressifs ne s'affichent pas.
+    // L'adresse d'origine reste celle de l'image (out.url), pour les comparaisons de l'écran.
+    const std::string fetchUrl = wr::baselineCoverUrl(url);
+    if (!http.begin(client, fetchUrl.c_str())) return false;
 
     int code = http.GET();
     if (code != HTTP_CODE_OK) {

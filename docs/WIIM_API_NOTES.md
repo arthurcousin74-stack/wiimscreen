@@ -270,6 +270,11 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   (`wr::parseDeezerAlbums`); each album plays as a `Deezer2` queue `<airable origin>/deezer/album/<id>`. *File du
   WiiM* logs the linked services from `GetBasicUserInfo` (`showName` values) to find the right `AccountSource`.
 
+- A Deezer **mix** (Flow) started from WiiM Home also gives a `Deezer2` queue (`SearchUrl`
+  `https://<id>.airable.io/deezer/mix/<id>`, 1 track at a time); it is a valid model for album queues (checked
+  2026-11-16: Deezer search result played at its track).
+- Deezer covers (`cdn-images.dzcdn.net/images/cover/<hash>/250x250-000000-80-0-0.jpg`): 22 of 36 were progressive
+  JPEGs, which the device cannot draw; the same name ending in `-0-1.jpg` gave baseline JPEGs for all 36.
 - A Deezer album started from the WiiM Home app gives a queue with **`SourceName` `Deezer2`** and
   `SearchUrl` **`https://<id>.airable.io/deezer/album/<Deezer album id>`** (airable: the music-service gateway the
   WiiM uses; `<id>` looks specific to the device or account, do not publish it). 11 tracks, read with `BrowseQueue`.
