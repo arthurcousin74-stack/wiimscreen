@@ -46,9 +46,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   AirPlay, Bluetooth…) and the audio quality (*16 bits · 44.1 kHz*). Touch the progress bar to go to a different
   position in the track. A "live" badge shows for radio streams.
 - **Colors from the album art**: the background, the play button and the bars use the main color of the album art.
-- **Qobuz favorites**: the favorite albums of your Qobuz account show as tiles with their album art. One touch plays
-  the album. The **Favoris Qobuz** tile shows the list of your favorite tracks. Touch a track to play it.
-  Note: album tiles show only if your Qobuz account has favorite albums.
+- **Qobuz favorites**: the **Favoris Qobuz** tile shows the list of your favorite tracks. Touch a track to play it.
+  The favorite albums of your Qobuz account can show as tiles only if Qobuz accepts the access of your WiiM. On the
+  WiiM that we tested, Qobuz does not accept it. To get your albums as tiles, use the album search (see below).
 - **Deezer favorites**: give your Deezer profile number in the setup page. The favorite albums of this profile
   show as tiles. The **Favoris Deezer** tile shows the list of your favorite tracks. Touch a track to play it. The
   profile must be public. No key is necessary.
@@ -59,8 +59,10 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track on the
   on-screen keyboard. The device searches Qobuz with the access that your WiiM gives. It shows the results (title,
   artist, album). The music does not change until you touch a result. Then the WiiM plays the album of this track,
-  from this track. Before the first search, play one Qobuz album from the WiiM Home app. Refer to
-  [Search Qobuz](#search-qobuz).
+  from this track. Refer to [Search Qobuz](#search-qobuz).
+- **Qobuz album search**: on the search screen, select **Albums**. The device shows the albums (title, artist,
+  number of tracks). Touch an album to play it. Touch the heart of an album to add it as a tile, without playing it.
+  Touch the heart again to remove the tile.
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
   search, play one Deezer album from the WiiM Home app.
@@ -173,18 +175,29 @@ A full guide in French is in [LISEZMOI.md](LISEZMOI.md).
 
 The WiiM must have your Qobuz account (WiiM Home app › Qobuz). The Tab5 does not need a Qobuz key or password.
 
-1. In the WiiM Home app, play one Qobuz album. Do this one time only: the Tab5 copies the Qobuz settings of the
-   WiiM (account name, quality) from this play queue.
-2. On the Tab5, touch the magnifying glass in the left bar.
-3. Make sure that **Qobuz** is selected (below the search field).
-4. Type an artist or a track, then touch **Chercher** (search).
-5. Wait 1 or 2 seconds. The Tab5 shows the results. The music does not change.
-6. Touch a result. The WiiM plays the album of this track, from this track.
+1. On the Tab5, touch the magnifying glass in the left bar.
+2. Make sure that **Qobuz** is selected (below the search field).
+3. Type an artist or a track, then touch **Chercher** (search).
+4. Wait 1 or 2 seconds. The Tab5 shows the results. The music does not change.
+5. Touch a result. The WiiM plays the album of this track, from this track.
+
+Note: the Tab5 gets the Qobuz settings of the WiiM (account name, quality) from the WiiM. You do not have to play a
+Qobuz album in the WiiM Home app first.
 
 Note: if the WiiM does not give its Qobuz access, the Tab5 uses an older method: the WiiM does the search in a play
 queue. Then the WiiM starts a result, so the Tab5 mutes the WiiM and puts back the music that played before.
 
 Note: the search finds tracks. To keep an album, play it and touch the heart button.
+
+### Add Qobuz albums as tiles
+
+1. Touch the magnifying glass in the left bar.
+2. Select **Albums** (below the search field).
+3. Type an artist or an album, then touch **Chercher**.
+4. Touch the heart at the right of an album. The heart fills. The music does not change.
+5. Touch 🏠. The album shows as a tile with its album art. One touch plays it.
+
+To remove the tile, touch the heart of the album again, or touch the heart button while the album plays.
 
 ### Search Deezer
 

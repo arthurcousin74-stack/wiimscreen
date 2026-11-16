@@ -118,7 +118,10 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
   **shuffle on**, `CreateQueue` reshuffles: find a track by title in a fresh `BrowseQueue`, never reuse an old
   index. Status `load` = loading; seek only once it plays. (Seen with `simreal` on a real WiiM, 2026-11-16.)
-- The Qobuz token from `GetUserInfo` is refused (401) for favorites: only search works directly.
+- The Qobuz token from `GetUserInfo` is refused (401) for favorites: only search works directly. Album tiles come
+  from the album search (♥ saves a queue `album/get?album_id=…`, key `wr::qobuzAlbumKey`, nothing plays).
+- `tools/relay`: never read and write one TLS socket from two Python threads (with TLS 1.3, the WiiM's version
+  too, the connection hung about one time in two); `bridge()` does both ways in one thread, non-blocking.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (voice, menu, touch test, log): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 
@@ -130,7 +133,7 @@ Built and unit-tested; screens verified via the PC preview. No other board has b
 
 **Seen working with `simreal` on a real WiiM (2026-11-16):** Qobuz access, direct Qobuz search without playback
 and playing a result, Favoris Qobuz list (queue fallback) with restore of the music before (shuffle on), playing a
-track of that list, ♥ add / replay / remove. Qobuz favorite albums: refused by Qobuz (401). Deezer: not tested.
+track of that list, ♥ add / replay / remove, Qobuz album search with ♥ as tile (no playback) and replay of that tile. Qobuz favorite albums: refused by Qobuz (401). Deezer: not tested.
 
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
 navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM

@@ -283,6 +283,10 @@ int main(int argc, char** argv) {
             save(out, "26-recherche-portrait.ppm");
             up.renderResults("aretha franklin", found, 0, "");
             save(out, "27-resultats-portrait.ppm");
+            up.renderSearch("miles", "", false, -1, 2, true);  // Qobuz | Albums | Deezer
+            save(out, "33-albums-portrait.ppm");
+            up.renderResults("miles", found, 0, "", -1, {1, 0, 0, 0, 0, 0, 0});
+            save(out, "34-albums-resultats-portrait.ppm");
         }
         D.deleteSprite();
         D.createSprite(1280, 720);
@@ -315,6 +319,11 @@ int main(int argc, char** argv) {
         save(out, "31-favoris-qobuz-chargement.ppm");
         ui.renderResults("Favoris Qobuz", found, 0, "");
         save(out, "32-favoris-qobuz.ppm");
+        ui.renderSearch("miles", "", false, -1, 2, false);  // Qobuz | Albums (pas de Deezer)
+        save(out, "35-albums.ppm");
+        ui.renderResults("miles", found, 0, "7 albums \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile",
+                         -1, {1, 0, 1, 0, 0, 0, 0});
+        save(out, "36-albums-resultats.ppm");
     }
     {
             std::vector<String> jl = {

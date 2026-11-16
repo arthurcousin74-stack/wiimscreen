@@ -182,6 +182,9 @@ void WiimWorker::playSearchResult(int index) { SIM_REQUEST(searchPlay_, index + 
 void WiimWorker::saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl) {
     SIM_REQUEST(favSave_, (FavRequest{true, title, artist, album, artUrl}));
 }
+void WiimWorker::saveAlbumFavorite(const String& id, const String& title, const String& artist, const String& image) {
+    SIM_REQUEST(albumSave_, (AlbumFavRequest{true, id, title, artist, image}));
+}
 void WiimWorker::search(const String& query, int source) {
     xSemaphoreTake(lock_, portMAX_DELAY);
     search_ = query;
@@ -296,6 +299,8 @@ void WiimWorker::run() {
         favPlay_ = search_ = "";
         const int source = searchSourceReq_, searchPlay = searchPlay_;
         searchPlay_ = 0;
+        const AlbumFavRequest albumSave = albumSave_;
+        albumSave_.wanted = false;
         xSemaphoreGive(lock_);
 
         if (presets) {
@@ -317,10 +322,12 @@ void WiimWorker::run() {
             if (source == 1) runDeezerSearch(search);
             else if (source == 2) runQobuzFavoriteList(search);
             else if (source == 3) runDeezerFavoriteList(search);
+            else if (source == 4) runQobuzAlbumSearch(search);
             else runSearch(search);
         }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (save.wanted) runSaveFavorite(save);
+        if (albumSave.wanted) runSaveAlbumFavorite(albumSave);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
     }
 }
@@ -360,6 +367,52 @@ static WiimEvent listEvent(const String& title, const std::vector<std::pair<int,
         ev.tracks.push_back(wr::QueueTrack{a.tracks[r.second].title, a.artist, a.title, a.art()});
     }
     return ev;
+}
+
+// Album search: catalog albums sharing a word with the query (« erreur » shows the error case)
+void WiimWorker::runQobuzAlbumSearch(const String& query) {
+    pause(700, true);
+    const std::string q = wr::normalizeText(query.c_str());
+    WiimEvent ev;
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = query;
+    P.results.clear();
+    qobuzAlbums_.clear();
+    for (size_t i = 0; i < catalog().size(); ++i) {
+        const Album& a = catalog()[i];
+        if (a.tracks.empty() || !wr::sharesWord(q, {a.artist, a.title})) continue;
+        qobuzAlbums_.push_back(wr::QobuzAlbum{a.id, a.title, a.artist, a.art(), (int)a.tracks.size()});
+        P.results.push_back({(int)i, 0});
+        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, std::to_string(a.tracks.size()) + " pistes", a.art()});
+    }
+    ev.ok = q != "erreur";
+    if (!ev.ok) {
+        ev.text = "Qobuz ne r\xC3\xA9pond pas";
+        ev.tracks.clear();
+        qobuzAlbums_.clear();
+    }
+    ev.albums = qobuzAlbums_;
+    logEvent("Recherche d'albums Qobuz (simul\xC3\xA9" "e) \xC2\xAB %s \xC2\xBB : %u album(s)", query.c_str(),
+             (unsigned)qobuzAlbums_.size());
+    push(std::move(ev));
+}
+
+void WiimWorker::runSaveAlbumFavorite(const AlbumFavRequest& r) {
+    pause(300, true);
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavSaved;
+    wr::Favorite f;
+    f.key = wr::qobuzAlbumKey(r.id.c_str());
+    f.title = r.title.c_str();
+    f.artist = r.artist.c_str();
+    f.source = "Qobuz";
+    f.artUrl = r.image.c_str();
+    std::string err;
+    ev.ok = fav::add(f, r.id.c_str(), err);  // simulator: the context is the album id
+    ev.text = ev.ok ? r.title : String(err.c_str());
+    logEvent("Favori \xC2\xAB %s \xC2\xBB (album Qobuz depuis la recherche, simul\xC3\xA9) : %s", f.title.c_str(),
+             ev.ok ? "OK" : err.c_str());
+    push(std::move(ev));
 }
 
 void WiimWorker::runSearch(const String& query) {
@@ -439,7 +492,7 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
         ev.text = "une radio ne peut pas \xC3\xAAtre un favori";
     } else {
         wr::Favorite f;
-        f.key = a.id;
+        f.key = wr::qobuzAlbumKey(a.id);  // same key as an album saved from the album search
         f.title = a.title;
         f.artist = a.artist;
         f.source = "Qobuz";

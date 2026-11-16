@@ -103,21 +103,23 @@ public:
 
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
-    // source 0 Qobuz, 1 Deezer ; sources : afficher le choix Qobuz | Deezer
+    // source 0 Qobuz (morceaux), 1 Deezer, 2 albums Qobuz ; sources : Deezer proposé (choix Qobuz | Albums | Deezer)
     // mic : 0 micro au repos, 1 écoute (level 0..1), 2 transcription en cours (si la voix est configurée)
     void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1, int source = 0,
                       bool sources = false, int mic = 0, float level = 0);
-    int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, -1 ailleurs
+    int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, 2 Albums, -1 ailleurs
     int hitKey(int x, int y) const;      // indice dans keys(), ou -1
     // Mises à jour partielles (rapides) de l'écran de recherche : une touche enfoncée / relâchée, le champ
     void pressKey(int index, bool down);
     void updateSearchField(const std::string& query, const String& status, bool busy, int source, bool sources,
                            int mic = 0, float level = 0);
     const std::vector<wr::Key>& keys() const { return keys_; }
+    // hearts : vide, ou un cœur par ligne (0 vide, 1 plein) : albums que l'on peut mettre en tuile
     void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
-                       const String& status, int pressed = -1);
+                       const String& status, int pressed = -1, const std::vector<int>& hearts = {});
     int resultsPerPage() const { return resultsPerPage_; }
     int hitResult(int x, int y) const;   // indice global du morceau, ou -1
+    int hitResultHeart(int x, int y) const;  // indice global de la ligne dont le cœur est touché, ou -1
     int hitResultsPage(int x, int y) const;  // -1 / +1 : page précédente / suivante, 0 sinon
     bool hitResultsEdit(int x, int y) const { return resultsEdit_.contains(x, y); }
 
@@ -202,9 +204,10 @@ private:
     int favState_ = 0;
     std::vector<wr::Key> keys_;           // clavier affiché
     std::vector<wr::Rect> resultRects_;   // lignes de résultats affichées
+    std::vector<wr::Rect> heartRects_;    // leurs cœurs (vide sans cœurs)
     int resultsFirst_ = 0, resultsPerPage_ = 1;
     wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
-    wr::Rect srcRects_[2];  // choix Qobuz | Deezer du clavier
+    wr::Rect srcRects_[3];  // choix Qobuz | Deezer | Albums du clavier (indice = source)
     wr::Rect micRect_;      // micro (dictée) du champ de recherche
     wr::Rect searchArea_;   // champ + choix de la source + ligne d'état (redessinés seuls)
     bool keysBusy_ = false;

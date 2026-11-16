@@ -54,4 +54,9 @@ bool parseQobuzAccess(const std::string& json, QobuzAccess& out);
 // fields as the queues the WiiM stores itself (BrowseQueue, 2026-11-16). Empty if `user` is empty.
 std::string qobuzQueueModel(const std::string& user);
 
+// SearchUrl of a Qobuz album queue (the WiiM fetches the tracks itself), and the favorite key (wr::queueKey) of a
+// queue with this SearchUrl: a ♥ album saved from the search shares its key with the same album copied while it plays.
+std::string qobuzAlbumUrl(const std::string& albumId);
+std::string qobuzAlbumKey(const std::string& albumId);
+
 }  // namespace wr

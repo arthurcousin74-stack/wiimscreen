@@ -222,4 +222,14 @@ std::string qobuzQueueModel(const std::string& user) {
            "<StationBackup>0</StationBackup></ListInfo><Tracks></Tracks></PlayList>";
 }
 
+std::string qobuzAlbumUrl(const std::string& albumId) {
+    return "https://www.qobuz.com/api.json/0.2/album/get?album_id=" + urlQueryEncode(albumId) + "&offset=0&limit=50";
+}
+
+std::string qobuzAlbumKey(const std::string& albumId) {
+    QueueInfo q;
+    q.searchUrl = qobuzAlbumUrl(albumId);
+    return queueKey(q);
+}
+
 }  // namespace wr

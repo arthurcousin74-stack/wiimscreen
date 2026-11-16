@@ -38,6 +38,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 2.6 | Touch one track in the list. | That track plays (then the rest of its album, or of the list for the fallback). | `Qobuz ▶ « … » (piste k) : CreateQueue 200, Play 200` (fallback: `Liste Qobuz ▶ …`) |
 | 2.7 | Search ⌕ › Qobuz › type « miles davis » › ↵. | Results in a few seconds. **The music does not change** before you choose. | `Recherche Qobuz directe « … » : N morceau(x) (… ms)` |
 | 2.8 | Touch a result. | That track plays. | `Qobuz ▶ …` |
+| 2.10 | Search ⌕ › **Albums** › type « miles » › ↵. Touch the heart of one album, then 🏠. | A list of albums with a heart on each row; the heart fills; **no music change**; a tile with the cover. Touch the tile: the album plays. Touch the heart again in the search: the tile goes. | `Recherche d'albums Qobuz « … » : 200, N album(s)`, `Favori « … » (album Qobuz depuis la recherche) : OK`, `Favori ▶ …` |
 | 2.9 | Only if 2.1 failed: search again. | The music may stop briefly (muted), then the previous music comes back at the same place. | `Avant la recherche…`, `Après la recherche : musique d'avant remise` |
 
 ## 3. Deezer (only if Deezer is linked in WiiM Home)
@@ -114,6 +115,7 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 | 2.4 play Qobuz album tile | | |
 | 2.5–2.6 Favoris Qobuz list | | |
 | 2.7–2.8 Qobuz search, no playback before choice | | |
+| 2.10 Qobuz album search, heart as tile | | |
 | 3.1–3.2 Deezer search and play | | |
 | 3.3–3.5 Deezer favorites (profile) | | |
 | 4.1–4.3 Tab5 favorites | | |

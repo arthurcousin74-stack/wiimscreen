@@ -63,8 +63,12 @@ public:
     // Recherche (évènement SearchDone avec les morceaux trouvés), puis lecture d'un résultat (0 pour le
     // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
     // joué par le WiiM (album du morceau, par sa passerelle airable) ; 2 : morceaux favoris du compte Qobuz
-    // (liste, rien ne joue avant le choix) ; 3 : morceaux favoris Deezer (profil configuré). Non bloquant.
+    // (liste, rien ne joue avant le choix) ; 3 : morceaux favoris Deezer (profil configuré) ; 4 : albums Qobuz
+    // (cherchés par le Tab5 avec l'accès du WiiM ; `albums` de SearchDone). Non bloquant.
     void search(const String& query, int source);
+    // Album Qobuz enregistré comme favori (tuile) sans le jouer : file de l'album, le WiiM lira les pistes.
+    // Évènement FavSaved. Non bloquant.
+    void saveAlbumFavorite(const String& id, const String& title, const String& artist, const String& image);
     // Albums favoris du compte Qobuz (évènement QobuzFavorites), lus avec l'accès donné par le WiiM
     void refreshQobuzFavorites();
     void playSearchResult(int index);
@@ -93,6 +97,14 @@ private:
     };
     bool findPlayQueue(std::string& control, bool verbose);
     void runSaveFavorite(const FavRequest& r);
+    struct AlbumFavRequest {
+        bool wanted = false;
+        String id, title, artist, image;
+    };
+    AlbumFavRequest albumSave_;
+    void runSaveAlbumFavorite(const AlbumFavRequest& r);
+    void runQobuzAlbumSearch(const String& query);
+    std::vector<wr::QobuzAlbum> qobuzAlbums_;  // searchSource_ 4 : albums trouvés
     void runPlayFavorite(const String& id);
     void runQobuzFavoriteList(const String& title);
     bool playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,

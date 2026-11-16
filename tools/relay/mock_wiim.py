@@ -30,7 +30,14 @@ class H(http.server.BaseHTTPRequestHandler):
         data = (body if isinstance(body, str) else json.dumps(body)).encode()
         self.send_response(200); self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(data)))
         self.end_headers(); self.wfile.write(data)
-srv = http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H)
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain(sys.argv[2], sys.argv[3])
-srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+class S(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+    # TLS handshake in the connection's own thread (on first read): a handshake done in accept() on the main
+    # thread let one stalled connection block all the others (the self-test failed about one time in two)
+    def get_request(self):
+        sock, addr = self.socket.accept()
+        return ctx.wrap_socket(sock, server_side=True, do_handshake_on_connect=False), addr
+srv = S(("127.0.0.1", int(sys.argv[1])), H)
+print("mock listening", flush=True)
 srv.serve_forever()

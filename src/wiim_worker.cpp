@@ -274,6 +274,8 @@ void WiimWorker::run() {
         const int searchSource = searchSourceReq_;
         int searchPlay = searchPlay_;
         searchPlay_ = 0;
+        AlbumFavRequest albumSave = albumSave_;
+        albumSave_.wanted = false;
         xSemaphoreGive(lock_);
         if (presets) {
             WiimEvent ev;
@@ -294,10 +296,12 @@ void WiimWorker::run() {
             if (searchSource == 1) runDeezerSearch(search);
             else if (searchSource == 2) runQobuzFavoriteList(search);
             else if (searchSource == 3) runDeezerFavoriteList(search);
+            else if (searchSource == 4) runQobuzAlbumSearch(search);
             else runSearch(search);
         }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (save.wanted) runSaveFavorite(save);
+        if (albumSave.wanted) runSaveAlbumFavorite(albumSave);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
     }
 }
@@ -660,6 +664,13 @@ void WiimWorker::search(const String& query, int source) {
     xTaskNotifyGive(task_);
 }
 
+void WiimWorker::saveAlbumFavorite(const String& id, const String& title, const String& artist, const String& image) {
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    albumSave_ = AlbumFavRequest{true, id, title, artist, image};
+    xSemaphoreGive(lock_);
+    xTaskNotifyGive(task_);
+}
+
 void WiimWorker::playSearchResult(int index) {
     xSemaphoreTake(lock_, portMAX_DELAY);
     searchPlay_ = index + 1;  // 1 pour le premier résultat
@@ -964,11 +975,58 @@ void WiimWorker::runPlayQobuzAlbum(const std::string& albumId) {
         push(std::move(ev));
         return;
     }
-    ev.ok = playAlbumAt(control, templ,
-                        "https://www.qobuz.com/api.json/0.2/album/get?album_id=" + wr::urlQueryEncode(albumId) +
-                            "&offset=0&limit=50",
-                        "", "Album Qobuz");
+    ev.ok = playAlbumAt(control, templ, wr::qobuzAlbumUrl(albumId), "", "Album Qobuz");
     if (!ev.ok) ev.text = "le WiiM n'a pas lanc\xC3\xA9 cet album";
+    push(std::move(ev));
+}
+
+// Recherche d'albums Qobuz : le Tab5 interroge Qobuz (album/search, accès donné par le WiiM), rien ne joue
+void WiimWorker::runQobuzAlbumSearch(const String& query) {
+    searchSource_ = 4;
+    WiimEvent ev;
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = query;
+    std::string control, body;
+    qobuzAlbums_.clear();
+    const uint32_t t0 = millis();
+    const int code = findPlayQueue(control, false)
+                         ? qobuzGet(control, "album/search?query=" + wr::urlQueryEncode(query.c_str()) + "&limit=50", body)
+                         : -1;
+    if (code == 200) qobuzAlbums_ = wr::parseQobuzAlbums(body);
+    logEvent("Recherche d'albums Qobuz \xC2\xAB %s \xC2\xBB : %d, %u album(s) (%lu ms)", query.c_str(), code,
+             (unsigned)qobuzAlbums_.size(), (unsigned long)(millis() - t0));
+    ev.ok = code == 200;
+    if (!ev.ok) ev.text = code < 0 ? "pas d'acc\xC3\xA8s \xC3\xA0 Qobuz par le WiiM" : "Qobuz ne r\xC3\xA9pond pas";
+    ev.albums = qobuzAlbums_;
+    for (auto& a : qobuzAlbums_)
+        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, a.tracks > 0 ? std::to_string(a.tracks) + " pistes" : "",
+                                           a.image});
+    push(std::move(ev));
+}
+
+// Album choisi dans la recherche → favori : file de l'album (modèle Qobuz du WiiM), sans lecture
+void WiimWorker::runSaveAlbumFavorite(const AlbumFavRequest& r) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavSaved;
+    std::string control, templ;
+    if (!findPlayQueue(control, false) || !qobuzModel(control, templ)) {
+        ev.text = "le WiiM ne donne pas de mod\xC3\xA8le de file Qobuz";
+        push(std::move(ev));
+        return;
+    }
+    const std::string ctx = wr::queueFromTemplate(templ, "wiimscreen-album-" + std::string(r.id.c_str()),
+                                                  wr::qobuzAlbumUrl(r.id.c_str()));
+    wr::Favorite f;
+    f.key = wr::qobuzAlbumKey(r.id.c_str());
+    f.title = r.title.c_str();
+    f.artist = r.artist.c_str();
+    f.source = "Qobuz";
+    f.artUrl = r.image.c_str();
+    std::string err;
+    ev.ok = !ctx.empty() && fav::add(f, ctx, err);
+    if (ctx.empty()) err = "mod\xC3\xA8le de file Qobuz illisible";
+    ev.text = ev.ok ? f.title.c_str() : err.c_str();
+    logEvent("Favori \xC2\xAB %s \xC2\xBB (album Qobuz depuis la recherche) : %s", f.title.c_str(), ev.ok ? "OK" : err.c_str());
     push(std::move(ev));
 }
 
@@ -1193,6 +1251,17 @@ void WiimWorker::runSearch(const String& query) {
 }
 
 void WiimWorker::runPlaySearchResult(int index) {
+    if (searchSource_ == 4) {
+        if (index >= 1 && index <= (int)qobuzAlbums_.size()) {
+            runPlayQobuzAlbum(qobuzAlbums_[index - 1].id);
+        } else {
+            WiimEvent ev;
+            ev.kind = WiimEvent::FavPlayed;
+            ev.text = "album introuvable";
+            push(std::move(ev));
+        }
+        return;
+    }
     if (searchSource_ == 1) {
         runPlayDeezer(index - 1);
         return;

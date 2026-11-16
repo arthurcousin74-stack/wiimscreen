@@ -794,6 +794,14 @@ static void test_qobuz_json() {
     TEST_ASSERT_EQUAL_STRING("wiimscreen-1", qi.listName.c_str());
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=7", qi.searchUrl.c_str());
     TEST_ASSERT_TRUE(qobuzQueueModel("").empty());
+    // Album Qobuz : adresse de la file et clé de favori (sans offset/limit, comme une file copiée du WiiM)
+    TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=0886443927087&offset=0&limit=50",
+                             qobuzAlbumUrl("0886443927087").c_str());
+    QueueInfo copied;
+    copied.searchUrl = "https://www.qobuz.com/api.json/0.2/album/get?album_id=0886443927087&offset=0&limit=100";
+    TEST_ASSERT_EQUAL_STRING(queueKey(copied).c_str(), qobuzAlbumKey("0886443927087").c_str());
+    TEST_ASSERT_TRUE(qobuzAlbumKey("a") != qobuzAlbumKey("b"));
+    TEST_ASSERT_TRUE(qobuzAlbumUrl("a&b").find("album_id=a%26b&") != std::string::npos);
     TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\",\"accessToken\":\"bad\\r\\ntoken\"}", acc));  // en-tête HTTP
     TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\"}", acc));
 }

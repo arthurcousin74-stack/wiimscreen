@@ -23,6 +23,7 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import select
 import socket
 import ssl
 import sys
@@ -62,20 +63,37 @@ def read_line(sock):
     return data.decode("ascii", "replace").strip()
 
 
-def pipe(src, dst):
-    try:
-        while True:
-            data = src.recv(65536)
+def bridge(a, b, idle_s=120):
+    """Passes bytes both ways until one side closes, from ONE thread: reading and writing the same TLS socket from
+    two threads at once is not safe (with TLS 1.3 the connection hung about one time in two)."""
+    socks = (a, b)
+    for s in socks:
+        s.setblocking(False)
+
+    def send_all(s, data):
+        view = memoryview(data)
+        while view:
+            try:
+                view = view[s.send(view):]
+            except (ssl.SSLWantWriteError, ssl.SSLWantReadError, BlockingIOError, InterruptedError):
+                select.select([s], [s], [], 5)
+
+    while True:
+        # Data already decrypted inside a TLS socket does not make select() fire: read it first
+        ready = [s for s in socks if isinstance(s, ssl.SSLSocket) and s.pending()]
+        if not ready:
+            ready, _, _ = select.select(socks, [], [], idle_s)
+            if not ready:
+                return  # idle
+        for s in ready:
+            other = b if s is a else a
+            try:
+                data = s.recv(65536)
+            except (ssl.SSLWantReadError, ssl.SSLWantWriteError, BlockingIOError, InterruptedError):
+                continue  # a TLS record without data (session ticket…) or not complete yet
             if not data:
-                break
-            dst.sendall(data)
-    except OSError:
-        pass
-    for s in (dst, src):
-        try:
-            s.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
+                return
+            send_all(other, data)
 
 
 def open_target(kind, host, port):
@@ -179,12 +197,7 @@ def handle(conn, peer, args):
             return
         log(f"{kind} {host}:{port}")
         conn.sendall(f"OK {fingerprint}\n".encode() if fingerprint else b"OK\n")
-        conn.settimeout(None)
-        target.settimeout(None)
-        t = threading.Thread(target=pipe, args=(target, conn), daemon=True)
-        t.start()
-        pipe(conn, target)
-        t.join(timeout=5)
+        bridge(conn, target)
     except (OSError, ConnectionError, ValueError):
         pass
     finally:

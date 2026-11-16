@@ -988,18 +988,21 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     // Choix de la source (à droite), puis état (recherche en cours, aucun résultat, erreur)
     useFont(C, kSmall);
     int lineW = W;
-    srcRects_[0] = srcRects_[1] = wr::Rect{};
-    if (sources) {
-        const int ch = sc(40), cw = sc(130), cy = fy + fh + sc(6);
-        const char* names[] = {"Qobuz", "Deezer"};
-        for (int i = 1; i >= 0; --i) {
-            srcRects_[i] = wr::Rect{X + W - (2 - i) * cw - (1 - i) * sc(8), cy, cw, ch};
-            const wr::Rect& r = srcRects_[i];
-            const bool on = i == source;
+    srcRects_[0] = srcRects_[1] = srcRects_[2] = wr::Rect{};
+    {
+        // Qobuz (morceaux) | Albums (Qobuz) | Deezer (si une file Deezer est connue), à droite de la ligne d'état
+        std::vector<std::pair<int, const char*>> chips = {{0, "Qobuz"}, {2, "Albums"}};
+        if (sources) chips.push_back({1, "Deezer"});
+        const int n = (int)chips.size(), gap = sc(8), ch = sc(40), cy = fy + fh + sc(6);
+        const int cw = std::min(sc(124), (W * 60 / 100 - (n - 1) * gap) / n);
+        for (int k = 0; k < n; ++k) {
+            wr::Rect& r = srcRects_[chips[k].first];
+            r = wr::Rect{X + W - (n - k) * cw - (n - 1 - k) * gap, cy, cw, ch};
+            const bool on = chips[k].first == source;
             C.fillRoundRect(r.x, r.y, r.w, r.h, ch / 2, on ? accent_ : kCard);
             C.setTextDatum(textdatum_t::middle_center);
             C.setTextColor(on ? kBg : kText2);
-            C.drawString(names[i], r.x + r.w / 2, r.y + r.h / 2 + 1);
+            C.drawString(chips[k].second, r.x + r.w / 2, r.y + r.h / 2 + 1);
         }
         lineW = srcRects_[0].x - X - sc(16);
     }
@@ -1007,14 +1010,15 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     C.setTextColor(busy ? accent_ : kText2);
     const String line = status.length()
                             ? status
-                            : String(source == 1 ? "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM"
-                                                 : "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
+                            : String(source == 1   ? "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM"
+                                     : source == 2 ? "Albums Qobuz \xC2\xB7 le c\xC5\x93ur en fait une tuile"
+                                                   : "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
     C.drawString(wr::wrapText(line.c_str(), lineW, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
     searchArea_ = wr::Rect{A.x, A.y, A.w, fy + fh + sc(10) + C.fontHeight() + sc(14) - A.y};
 }
 
 int Ui::hitSource(int x, int y) const {
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < 3; ++i)
         if (srcRects_[i].contains(x, y)) return i;
     return -1;
 }
@@ -1030,7 +1034,7 @@ int Ui::hitKey(int x, int y) const {
 
 // Résultats : une ligne par morceau (titre, artiste · album), par pages
 void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
-                       const String& status, int pressed) {
+                       const String& status, int pressed, const std::vector<int>& hearts) {
     ambientShown_ = false;
     view_ = View::Other;
     railShown_ = false;
@@ -1068,6 +1072,7 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     page = std::max(0, std::min(pages - 1, page));
     resultsFirst_ = page * resultsPerPage_;
     resultRects_.clear();
+    heartRects_.clear();
     for (int k = 0; k < resultsPerPage_ && resultsFirst_ + k < (int)items.size(); ++k) {
         const int i = resultsFirst_ + k;
         const wr::Rect r{X, top + k * (rowH + gap), W, rowH};
@@ -1079,7 +1084,17 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
         C.setTextDatum(textdatum_t::middle_center);
         C.setTextColor(kText2);
         C.drawString(String(i + 1).c_str(), r.x + sc(30), r.y + r.h / 2 + 1);
-        const int tx = r.x + sc(60), tw = r.w - sc(80);
+        int tx = r.x + sc(60), tw = r.w - sc(80);
+        if (i < (int)hearts.size()) {  // cœur à droite : vide (ajouter en tuile) ou plein (retirer)
+            const int d = r.h - sc(16);
+            const wr::Rect h{r.x + r.w - sc(8) - d, r.y + sc(8), d, d};
+            heartRects_.push_back(h);
+            const bool on = hearts[i] == 1;
+            C.fillCircle(h.x + d / 2, h.y + d / 2, d / 2, on ? accent_ : kCardHi);
+            heartIcon(h.x + d / 2, h.y + d / 2, d / 4, on ? kBg : kText);
+            if (!on) heartIcon(h.x + d / 2, h.y + d / 2 - 1, d / 4 - sc(4), kCardHi);
+            tw -= d + sc(12);
+        }
         const wr::QueueTrack& t = items[i];
         C.setTextDatum(textdatum_t::top_left);
         useFont(C, kSmall);
@@ -1118,6 +1133,15 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
 int Ui::hitResult(int x, int y) const {
     for (size_t k = 0; k < resultRects_.size(); ++k)
         if (resultRects_[k].contains(x, y)) return resultsFirst_ + (int)k;
+    return -1;
+}
+
+int Ui::hitResultHeart(int x, int y) const {
+    const int pad = sc(6);
+    for (size_t k = 0; k < heartRects_.size(); ++k) {
+        const wr::Rect& h = heartRects_[k];
+        if (wr::Rect{h.x - pad, h.y - pad, h.w + 2 * pad, h.h + 2 * pad}.contains(x, y)) return resultsFirst_ + (int)k;
+    }
     return -1;
 }
 
