@@ -8,6 +8,13 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Deezer favorites from a public Deezer profile (setup page › *Favoris Deezer*: profile number or address; no key):
+  favorite albums as tiles, and a **Favoris Deezer** tile with the list of favorite tracks (touch one to play it).
+  The unverified token from the WiiM is still tried once per start when no profile is set.
+
+### Removed
+- Spoken commands ("joue FIP", "plus fort"…) and the Radio Browser station search: the microphone is only for the
+  search field now. The Journal *Essais* button and its queue tests (their results are in docs/WIIM_API_NOTES.md).
 - The **Favoris Qobuz** tile opens the list of favorite tracks: touch one to play it (before, the tile played all
   favorites from the first one). The list comes from Qobuz with the access the WiiM gives; without it, the WiiM
   loads the list itself (sound muted, previous music put back).

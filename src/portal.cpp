@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "favorites.h"
+#include "voice.h"
 #include "web_style.h"
 
 static String esc(const String& s) { return wr::htmlEscape(s.c_str()).c_str(); }
@@ -125,19 +126,28 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
            "bouton d'alimentation le rallume. HTTPS est conseill\xC3\xA9. Visualiseur (exp\xC3\xA9rimental) : en vue ambiance, le micro anime un spectre. Le son est "
            "analys\xC3\xA9 sur place, jamais enregistr\xC3\xA9 ni envoy\xC3\xA9.</small></div></details>");
 
-    // --- Commande vocale
-    h += F("<details class=card><summary>Commande vocale</summary><div class=in>"
+    // --- Dictée (recherche)
+    h += F("<details class=card><summary>Dict\xC3\xA9" "e de la recherche</summary><div class=in>"
            "<label for=oaikey>Cl\xC3\xA9 API OpenAI</label><div class=pw><input id=oaikey name=oaikey type=password "
            "maxlength=200 autocomplete=off");
     h += s.openaiKey.length() ? F(" placeholder='Enregistr\xC3\xA9" "e \xE2\x80\x94 inchang\xC3\xA9" "e si vide'")
                               : F(" placeholder='sk-\xE2\x80\xA6'");
-    h += F("></div><small>\xC2\xAB Joue FIP \xC2\xBB, \xC2\xAB Mets France Culture \xC2\xBB, \xC2\xAB Plus fort \xC2\xBB\xE2\x80\xA6 "
+    h += F("></div><small>Bouton micro dans la recherche : dis un artiste ou un titre. "
            "Cl\xC3\xA9 \xC3\xA0 cr\xC3\xA9" "er sur platform.openai.com (quelques centimes par mois). Le son n'est "
            "envoy\xC3\xA9 que pendant l'\xC3\xA9" "coute. Vide : pas de bouton micro.</small>");
     if (s.openaiKey.length())
         h += F("<label class=chk><input type=checkbox name=oaidel value=1>Supprimer la cl\xC3\xA9 enregistr\xC3\xA9" "e</label>");
     h += F("<label for=sttmodel>Mod\xC3\xA8le de transcription</label><input id=sttmodel name=sttmodel maxlength=60 value=\"");
     h += esc(s.sttModel) + F("\"><small>\xC3\x80 changer seulement si OpenAI renomme ce mod\xC3\xA8le.</small></div></details>");
+
+    // --- Deezer : favoris d'un profil public (api.deezer.com/user/<numéro>, sans clé)
+    h += F("<details class=card><summary>Favoris Deezer</summary><div class=in>"
+           "<label for=deezer>Profil Deezer</label><input id=deezer name=deezer maxlength=120 inputmode=url "
+           "placeholder='123456789 ou https://www.deezer.com/fr/profile/123456789' value=\"");
+    h += esc(s.deezerUser) +
+         F("\"><small>Sur deezer.com, ouvre ton profil : son num\xC3\xA9ro est \xC3\xA0 la fin de l'adresse. Colle le "
+           "num\xC3\xA9ro ou l'adresse. Tes albums et morceaux favoris s'affichent alors sur le Tab5 (le profil doit "
+           "\xC3\xAAtre public). Vide : pas de favoris Deezer.</small></div></details>");
 
     // --- Avancé
     h += F("<details class=card><summary>Avanc\xC3\xA9</summary><div class=in>");
@@ -258,6 +268,8 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         key.trim();
         if (key.length()) next.openaiKey = key;
         if (server.hasArg("oaidel")) next.openaiKey = "";
+        const String deezerIn = server.arg("deezer");
+        next.deezerUser = wr::deezerUserId(deezerIn.c_str()).c_str();
         next.sttModel = server.arg("sttmodel");
         next.sttModel.trim();
         if (!next.sttModel.length()) next.sttModel = "gpt-4o-mini-transcribe";
@@ -275,6 +287,8 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         else if (next.openaiKey.length() && !tokenOk(next.openaiKey, 20, 200))
             err = "Clé OpenAI invalide : colle-la sans espace ni retour à la ligne.";
         else if (!tokenOk(next.sttModel, 1, 60)) err = "Nom de modèle de transcription invalide.";
+        else if (deezerIn.length() && !next.deezerUser.length())
+            err = "Profil Deezer : colle le numéro ou l'adresse deezer.com/…/profile/<numéro> (pas un lien court).";
         else if (!presetsTextIsAuto(next.presetsText) &&
                  !wr::parsePresets(next.presetsText.c_str(), next.presets, perr))
             err = String("Presets : ") + perr.c_str();

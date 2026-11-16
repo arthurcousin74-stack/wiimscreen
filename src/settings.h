@@ -22,8 +22,9 @@ struct Settings {
     bool visualizer = false;  // vue ambiance : spectre du son de la pièce (micro) — expérimental
     bool motionWake = true;  // soulever / déplacer le Tab5 rallume l'écran
     int sleepMin = 0;        // mise en veille (extinction) après N minutes sans appui ni lecture ; 0 = jamais
-    String openaiKey;        // commande vocale : clé API OpenAI (vide = pas de bouton micro)
+    String openaiKey;        // dictée de la recherche : clé API OpenAI (vide = pas de bouton micro)
     String sttModel = "gpt-4o-mini-transcribe";  // modèle de transcription OpenAI
+    String deezerUser;  // numéro du profil Deezer (favoris publics, api.deezer.com/user/<n>) ; vide = aucun
 
     bool voiceEnabled() const { return openaiKey.length() > 20; }
 

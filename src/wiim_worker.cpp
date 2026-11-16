@@ -269,8 +269,6 @@ void WiimWorker::run() {
         favSave_.wanted = false;
         String play = favPlay_;
         favPlay_ = "";
-        String searchTest = searchTest_;
-        searchTest_ = "";
         String search = search_;
         search_ = "";
         const int searchSource = searchSourceReq_;
@@ -292,10 +290,10 @@ void WiimWorker::run() {
             runDeezerFavorites();
         }
         if (play.length()) runPlayFavorite(play);
-        if (searchTest.length()) runSearchTest(searchTest);
         if (search.length()) {
             if (searchSource == 1) runDeezerSearch(search);
             else if (searchSource == 2) runQobuzFavoriteList(search);
+            else if (searchSource == 3) runDeezerFavoriteList(search);
             else runSearch(search);
         }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
@@ -623,213 +621,6 @@ static int createQueueQuiet(const std::string& control, const std::string& ctx, 
     return upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
 }
 
-void WiimWorker::testQobuzSearch(const String& query) {
-    xSemaphoreTake(lock_, portMAX_DELAY);
-    searchTest_ = query.length() ? query : String("Miles Davis");
-    xSemaphoreGive(lock_);
-    xTaskNotifyGive(task_);
-}
-
-// Essai sans clé : le WiiM lit-il lui-même les pistes d'une file Qobuz qui n'a qu'une adresse
-// (album, puis recherche de morceaux) ? Fait jouer de la musique : lancé seulement depuis le journal.
-void WiimWorker::runSearchTest(const String& query) { runNoPlayTest(query); }
-
-// Essai : charger une file sans la lancer. Le WiiM lance toute file créée par CreateQueue ; d'autres actions de
-// PlayQueue (signatures relevées par la bibliothèque Go « wiimplay ») pourraient charger sans lire :
-// SearchQueueOnline(QueueName, SearchKey, Queuelimit), GetQueueOnline(QueueName, QueueID, QueueType, Queuelimit,
-// QueueAutoInsert), BackUpQueue(QueueContext), SetQueuePolicy(QueueName). Son coupé pendant l'essai ; la musique
-// d'avant est remise à la fin. Pour chaque essai : code HTTP, pistes obtenues, et si la lecture a changé.
-void WiimWorker::runNoPlayTest(const String& query) {
-    const std::string q = query.length() ? query.c_str() : "Daft Punk";
-    logEvent("Essai \xC2\xAB charger sans lire \xC2\xBB (\xC2\xAB %s \xC2\xBB)\xE2\x80\xA6", q.c_str());
-    std::string control, templ, resp;
-    if (!findPlayQueue(control, false)) return;
-    if (!qobuzModel(control, templ)) {
-        logEvent("Essai : aucune file Qobuz comme mod\xC3\xA8le (lance un album Qobuz depuis l'app)");
-        return;
-    }
-    const wr::QueueInfo model = wr::parseQueueContext(templ);
-    std::string albumId;
-    {
-        size_t a = model.searchUrl.find("album_id=");
-        if (a != std::string::npos) albumId = model.searchUrl.substr(a + 9, model.searchUrl.find('&', a) - a - 9);
-    }
-    const Playback before = snapshot(control);
-    const bool muted = before.known && !before.muted && client_.command("setPlayerCmd:mute:1") == WiimError::None;
-    // Lecture changée ? (titre ou état de lecture différents de ceux d'avant l'essai)
-    auto playbackChanged = [&]() {
-        wr::PlayerStatus st;
-        wr::TrackMeta m;
-        if (client_.status(st) != WiimError::None) return false;
-        if (client_.metaInfo(m) == WiimError::None) st.title = m.title;
-        return st.playing != before.playing || st.title != before.title;
-    };
-    // Réponse : une QueueContext ? pistes et premiers titres
-    auto report = [&](const char* label, int code, const std::string& body) {
-        std::string raw, ctx;
-        if (wr::xmlElement(body, "QueueContext", raw)) ctx = wr::xmlUnescape(raw);
-        const wr::QueueInfo r = wr::parseQueueContext(ctx);
-        logEvent("Essai %s : HTTP %d, %u octets, %d piste(s)", label, code, (unsigned)body.size(), r.tracks);
-        for (size_t i = 0; i < r.items.size() && i < 2; ++i)
-            logLong("  - ", r.items[i].title + " \xE2\x80\x94 " + r.items[i].artist);
-        if (!ctx.empty() && r.tracks == 0) logLong("  ", wr::maskSecrets(ctx.substr(0, 110)));
-        if (code != 200 && !body.empty()) {
-            std::string fault;
-            if (wr::xmlElement(body, "errorDescription", fault) || wr::xmlElement(body, "faultstring", fault))
-                logLong("  erreur : ", fault);
-        }
-        if (!ctx.empty()) serialDump(label, ctx, model.user);
-    };
-    auto settle = [&](const char* label) {
-        pause(4000, false);
-        logEvent("  %s : lecture %s", label, playbackChanged() ? "CHANG\xC3\xA9" "E" : "inchang\xC3\xA9" "e");
-    };
-    auto call = [&](const char* action, const std::vector<std::pair<std::string, std::string>>& args) {
-        resp.clear();
-        return upnpRequest(control, action, wr::soapBody(kPlayQueue, action, args), resp);
-    };
-    // A. Recherche par le WiiM, plusieurs noms de file possibles
-    for (const std::string& name : {std::string("Qobuz"), std::string("wiimscreen-recherche"), model.listName}) {
-        const int c = call("SearchQueueOnline", {{"QueueName", name}, {"SearchKey", q}, {"Queuelimit", "20"}});
-        report(("A SearchQueueOnline(" + name.substr(0, 24) + ")").c_str(), c, resp);
-        if (c == 200) settle("A");
-    }
-    // B. Album par son identifiant
-    if (!albumId.empty()) {
-        for (const char* type : {"Qobuz", "album"}) {
-            const int c = call("GetQueueOnline", {{"QueueName", "wiimscreen-album"}, {"QueueID", albumId},
-                                                  {"QueueType", type}, {"Queuelimit", "20"}, {"QueueAutoInsert", "0"}});
-            report((std::string("B GetQueueOnline(") + type + ")").c_str(), c, resp);
-            if (c == 200) settle("B");
-        }
-    }
-    // C. File de recherche mise de côté (BackUpQueue), puis relue
-    {
-        const std::string name = "wiimscreen-sauvegarde";
-        const std::string url = "https://www.qobuz.com/api.json/0.2/track/search?query=" + wr::urlQueryEncode(q) +
-                                "&offset=0&limit=20";
-        const int c = call("BackUpQueue", {{"QueueContext", wr::queueFromTemplate(templ, name, url)}});
-        logEvent("Essai C BackUpQueue : HTTP %d", c);
-        if (c == 200) {
-            settle("C");
-            wr::QueueInfo back;
-            readQueueStable(this, control, name, 6, back);
-            logEvent("  C relue : %d piste(s)", back.tracks);
-            for (size_t i = 0; i < back.items.size() && i < 2; ++i) logLong("  - ", back.items[i].title);
-        }
-    }
-    // D. SetQueuePolicy sur une file, puis CreateQueue de cette file
-    {
-        const std::string name = "wiimscreen-politique";
-        const int p = call("SetQueuePolicy", {{"QueueName", name}});
-        const std::string url = "https://www.qobuz.com/api.json/0.2/track/search?query=" + wr::urlQueryEncode(q) +
-                                "&offset=0&limit=20";
-        const char* policy = "0";
-        const int c = createQueueQuiet(control, wr::queueFromTemplate(templ, name, url), policy);
-        logEvent("Essai D SetQueuePolicy %d puis CreateQueue %d", p, c);
-        if (c == 200) settle("D");
-    }
-    for (const char* n : {"wiimscreen-album", "wiimscreen-sauvegarde", "wiimscreen-politique"})
-        call("DeleteQueue", {{"QueueName", n}});
-    restoreAfterSearch(control, before);
-    if (muted) {
-        pause(600, false);
-        client_.command("setPlayerCmd:mute:0");
-    }
-    logEvent("Essai \xC2\xAB charger sans lire \xC2\xBB : termin\xC3\xA9 (son r\xC3\xA9tabli)");
-}
-
-// Essai : favoris Qobuz lus par le WiiM (ancien essai, gardé pour référence)
-void WiimWorker::runFavoritesTest(const String& query) {
-    (void)query;
-    logEvent("Essai favoris Qobuz (sans lecture)\xE2\x80\xA6");
-    std::string control, templ, resp;
-    if (!findPlayQueue(control, false)) return;
-    if (!qobuzModel(control, templ)) {
-        logEvent("Essai : aucune file Qobuz comme mod\xC3\xA8le (lance un album Qobuz depuis l'app, puis r\xC3\xA9" "essaie)");
-        return;
-    }
-    const std::string base = "https://www.qobuz.com/api.json/0.2/";
-    const std::pair<const char*, std::string> variants[] = {
-        {"favoris morceaux", base + "favorite/getUserFavorites?type=tracks&offset=0&limit=50"},
-        {"favoris albums", base + "favorite/getUserFavorites?type=albums&offset=0&limit=50"},
-    };
-    for (auto& v : variants) {
-        const std::string name = std::string("wiimscreen-essai-") + std::to_string(++searchCount_ % 2);
-        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
-        const std::string ctx = wr::queueFromTemplate(templ, name, v.second);
-        const char* policy = "0";
-        int create = createQueueQuiet(control, ctx, policy);
-        logEvent("Essai %s : CreateQueue %d (QueuePolicy %s)", v.first, create, policy);
-        logLong("envoy\xC3\xA9 ", v.second);
-        if (create != 200) continue;
-        wr::QueueInfo q;
-        const bool found = readQueueStable(this, control, name, 10, q);
-        if (!q.searchUrl.empty()) logLong(q.searchUrl == v.second ? "relu (identique) " : "relu ", wr::maskSecrets(q.searchUrl));
-        logEvent("  %d piste(s)%s", found ? q.tracks : 0, found ? "" : " (rien de charg\xC3\xA9)");
-        for (size_t i = 0; i < q.items.size() && i < 5; ++i)
-            logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
-        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
-    }
-    logEvent("Essai favoris Qobuz : termin\xC3\xA9 (rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9)");
-    runDeezerTest(control, query.length() ? query : String("Daft Punk"));
-}
-
-// Essai Deezer : recherche publique Deezer (sans clé), puis files « Deezer2 » (passerelle airable du
-// WiiM) avec l'album et le morceau trouvés, et quelques adresses de recherche airable possibles.
-void WiimWorker::runDeezerTest(const std::string& control, const String& query) {
-    std::string templ, resp;
-    if (!fav::sourceModel("Deezer2", templ)) {
-        for (auto& n : queueNames(control, false)) {
-            std::string ctx;
-            if (browseQueue(control, n, ctx) == 200 && wr::parseQueueContext(ctx).sourceName.rfind("Deezer", 0) == 0) {
-                fav::saveSourceModel(wr::parseQueueContext(ctx).sourceName, ctx);
-                templ = ctx;
-                break;
-            }
-        }
-    }
-    if (templ.empty()) {
-        logEvent("Essai Deezer : aucun mod\xC3\xA8le (lance un album Deezer depuis l'app puis touche File du WiiM)");
-        return;
-    }
-    const wr::QueueInfo model = wr::parseQueueContext(templ);
-    const std::string base = wr::urlOrigin(model.searchUrl);
-    logEvent("Essai Deezer (\xC2\xAB %s \xC2\xBB), source %s, passerelle %s", query.c_str(), model.sourceName.c_str(),
-             base.empty() ? "?" : "airable");
-    if (base.empty()) return;
-    // Recherche publique Deezer : morceaux, avec leur album
-    int code = -1;
-    std::vector<wr::DeezerTrack> found = deezerSearch(query.c_str(), 10, code);
-    logEvent("  api.deezer.com : %d, %u morceau(x)", code, (unsigned)found.size());
-    for (size_t i = 0; i < found.size() && i < 2; ++i)
-        logLong("  - ", found[i].title + " \xE2\x80\x94 " + found[i].artist + " (album " + found[i].album + ")");
-    std::vector<std::pair<std::string, std::string>> variants;
-    if (!found.empty()) {
-        variants.push_back({"album Deezer", base + "/deezer/album/" + std::to_string(found[0].albumId)});
-        variants.push_back({"morceau Deezer", base + "/deezer/track/" + std::to_string(found[0].id)});
-    }
-    const std::string enc = wr::urlQueryEncode(query.c_str());
-    variants.push_back({"recherche airable 1", base + "/deezer/search?q=" + enc});
-    variants.push_back({"recherche airable 2", base + "/deezer/search/tracks?q=" + enc});
-    for (auto& v : variants) {
-        const std::string name = std::string("wiimscreen-essai-") + std::to_string(++searchCount_ % 2);
-        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
-        const char* policy = "0";
-        int create = createQueueQuiet(control, wr::queueFromTemplate(templ, name, v.second), policy);
-        logEvent("Essai %s : CreateQueue %d", v.first.c_str(), create);
-        logLong("envoy\xC3\xA9 ", v.second.substr(base.size()));  // sans l'adresse de la passerelle
-        if (create != 200) continue;
-        wr::QueueInfo q;
-        const bool ok = readQueueStable(this, control, name, 8, q);
-        logEvent("  %d piste(s)", ok ? q.tracks : 0);
-        for (size_t i = 0; i < q.items.size() && i < 2; ++i)
-            logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
-        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
-    }
-    logEvent("Essai Deezer : termin\xC3\xA9 (rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9)");
-}
-
 // ---------------------------------------------------------------------------
 // Recherche Qobuz sans clé : le WiiM lit lui-même les résultats d'une file dont l'adresse est une
 // recherche de morceaux (vérifié sur un WiiM, 2026-11). La file est relue pour afficher les résultats.
@@ -1029,14 +820,38 @@ void WiimWorker::runQobuzFavorites() {
     push(std::move(ev));
 }
 
-// Favoris Deezer : le WiiM donne-t-il un jeton Deezer (GetUserInfo, nom du compte à deviner) ? Si oui, l'API
-// publique Deezer donne les albums favoris (user/me/albums). Le jeton reste en mémoire, jamais journalisé.
-void WiimWorker::runDeezerFavorites() {
-    std::string control;
-    if (!findPlayQueue(control, false)) return;
-    if (deezerToken_.empty()) {
-        // Non vérifié (aucun jeton Deezer constaté) : une seule tentative par démarrage, pas à chaque rafraîchissement
-        if (deezerTried_) return;
+// GET https://api.deezer.com/<path> (API publique, HTTPS vérifié). Deezer répond 200 avec {"error":…} quand il
+// refuse (profil privé, jeton refusé) : `error` reçoit alors son message.
+static int deezerGet(const std::string& path, std::string& out, std::string& error) {
+    WiFiClientSecure tls;
+    tls.setCACertBundle(ca_bundle_start, caBundleSize());
+    tls.setHandshakeTimeout(8);
+    HTTPClient http;
+    http.setConnectTimeout(6000);
+    http.setTimeout(10000);
+    http.setReuse(false);
+    int code = -1;
+    out.clear();
+    error.clear();
+    if (http.begin(tls, ("https://api.deezer.com/" + path).c_str())) {
+        code = http.GET();
+        CapStream s(kMaxBody);
+        if (code == 200) http.writeToStream(&s);
+        http.end();
+        out.swap(s.data);
+        const std::string e = wr::jsonTop(out, "error");
+        if (!e.empty()) error = wr::jsonText(wr::jsonTop(e, "message"));
+        if (!e.empty() && error.empty()) error = "refus de Deezer";
+    }
+    return code;
+}
+
+// Favoris Deezer : profil public donné dans la page de configuration (api.deezer.com/user/<numéro>, sans clé),
+// sinon un jeton Deezer donné par le WiiM (GetUserInfo, non vérifié : essayé une fois par démarrage).
+// Le jeton reste en mémoire, jamais journalisé.
+std::string WiimWorker::deezerUserPath(const std::string& control) {
+    if (cfg_.deezerUser.length()) return "user/" + std::string(cfg_.deezerUser.c_str());
+    if (deezerToken_.empty() && !deezerTried_ && control.size()) {
         deezerTried_ = true;
         for (const char* src : {"Deezer", "Deezer2", "deezer"}) {
             std::string resp, result;
@@ -1048,29 +863,55 @@ void WiimWorker::runDeezerFavorites() {
             if (!deezerToken_.empty()) break;
         }
     }
+    return deezerToken_.empty() ? "" : "user/me";
+}
+
+// Ajoute le jeton à une adresse « user/me/… » (jamais journalisée)
+std::string WiimWorker::deezerAuth(const std::string& path) const {
+    if (path.compare(0, 8, "user/me/") != 0) return path;
+    return path + (path.find('?') == std::string::npos ? "?" : "&") + "access_token=" + deezerToken_;
+}
+
+void WiimWorker::runDeezerFavorites() {
+    std::string control;
+    findPlayQueue(control, false);  // seulement pour un jeton du WiiM (sans profil configuré)
+    const std::string user = deezerUserPath(control);
     WiimEvent ev;
     ev.kind = WiimEvent::DeezerFavorites;
-    if (!deezerToken_.empty()) {
-        WiFiClientSecure tls;
-        tls.setCACertBundle(ca_bundle_start, caBundleSize());
-        tls.setHandshakeTimeout(8);
-        HTTPClient http;
-        http.setConnectTimeout(6000);
-        http.setTimeout(10000);
-        http.setReuse(false);
-        int code = -1;
-        if (http.begin(tls, ("https://api.deezer.com/user/me/albums?limit=50&access_token=" + deezerToken_).c_str())) {
-            code = http.GET();
-            CapStream s(kMaxBody);
-            if (code == 200) http.writeToStream(&s);
-            http.end();
-            ev.albums = wr::parseDeezerAlbums(s.data);
-            // Jeton refusé : Deezer répond 200 avec {"error":…} ; on le redemandera au prochain rafraîchissement
-            if (code == 200 && ev.albums.empty() && s.data.find("\"error\"") != std::string::npos) deezerToken_.clear();
-        }
-        ev.ok = code == 200 && !deezerToken_.empty();
-        logEvent("Deezer : albums favoris %d, %u", code, (unsigned)ev.albums.size());
+    if (!user.empty()) {
+        std::string body, err;
+        const int code = deezerGet(deezerAuth(user + "/albums?limit=50"), body, err);
+        ev.albums = wr::parseDeezerAlbums(body);
+        if (!err.empty() && user == "user/me") deezerToken_.clear();  // jeton refusé : redemandé au prochain démarrage
+        ev.ok = code == 200 && err.empty();
+        logEvent("Deezer : albums favoris %d, %u%s%s", code, (unsigned)ev.albums.size(), err.empty() ? "" : " : ",
+                 err.c_str());
     }
+    push(std::move(ev));
+}
+
+// Morceaux favoris Deezer, en liste (rien ne joue avant le choix) ; un appui joue l'album du morceau, à ce morceau
+void WiimWorker::runDeezerFavoriteList(const String& title) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::SearchDone;
+    ev.name = title;
+    std::string control;
+    findPlayQueue(control, false);
+    const std::string user = deezerUserPath(control);
+    if (user.empty()) {
+        ev.text = "indique ton profil Deezer dans la page de configuration";
+        push(std::move(ev));
+        return;
+    }
+    std::string body, err;
+    const int code = deezerGet(deezerAuth(user + "/tracks?limit=100"), body, err);
+    deezerResults_ = wr::parseDeezerTracks(body);
+    searchSource_ = 1;
+    logEvent("Favoris Deezer : %d, %u morceau(x)%s%s", code, (unsigned)deezerResults_.size(), err.empty() ? "" : " : ",
+             err.c_str());
+    ev.ok = code == 200 && err.empty();
+    if (!ev.ok) ev.text = err.empty() ? "Deezer ne r\xC3\xA9pond pas" : "profil Deezer priv\xC3\xA9 ou introuvable (" + String(err.c_str()) + ")";
+    for (auto& t : deezerResults_) ev.tracks.push_back(wr::QueueTrack{t.title, t.artist, t.album, t.cover});
     push(std::move(ev));
 }
 

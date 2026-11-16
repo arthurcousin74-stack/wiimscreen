@@ -49,8 +49,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Qobuz favorites**: the favorite albums of your Qobuz account show as tiles with their album art. One touch plays
   the album. The **Favoris Qobuz** tile shows the list of your favorite tracks. Touch a track to play it.
   Note: album tiles show only if your Qobuz account has favorite albums.
-- **Deezer favorites** (experimental): if your WiiM gives a Deezer access, the favorite albums of your Deezer account
-  also show as tiles. One touch plays the album.
+- **Deezer favorites**: give your Deezer profile number in the setup page. The favorite albums of this profile
+  show as tiles. The **Favoris Deezer** tile shows the list of your favorite tracks. Touch a track to play it. The
+  profile must be public. No key is necessary.
 - **Favorites**: while an album or a playlist plays (for example from Qobuz), touch the heart button at the left
   of the playback buttons. The device keeps a copy of the WiiM play queue. The album then shows as a tile with its
   album art, and one touch plays it again. Touch the heart again to remove the album. You do not need a key for
@@ -83,8 +84,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Over-the-air updates**: install a new firmware from a web browser on your network. The device shows a 6-digit
   code that you must type.
 - **Diagnostics**: the *Journal* (⚙ › *Journal*) shows the last events: touches, commands and the WiiM answers.
-  The *File du WiiM* button reads the play queues of the WiiM and the actions of its queue service. The *Essais*
-  button tests the Qobuz favorites and the Deezer albums. Use these data in bug reports.
+  The *File du WiiM* button reads the play queues of the WiiM and the actions of its queue service. Use these data
+  in bug reports.
 - **Sleep**: ⚙ › *Mise en veille* turns off the Tab5 at once. In the setup page, you can also set an automatic
   sleep (after 30 min, 1 h or 2 h without a touch and without music; the default is "never"). Push the power button
   to turn the Tab5 on again. Note: a touch on the screen cannot wake the Tab5 from this sleep.
@@ -201,18 +202,23 @@ The WiiM must have your accounts (WiiM Home app). The Tab5 gets the favorites wi
 
 1. Play one Qobuz album and one Deezer album from the WiiM Home app. Do this one time only.
 2. For Deezer, on the Tab5, touch ⚙ › *Journal* › **File du WiiM** while the Deezer album plays.
-3. Go back to the main screen (🏠). Swipe the tiles to see the favorite albums. The Tab5 updates the list when it
+3. For Deezer, find your profile number: on deezer.com, open your profile. The number is at the end of the
+   address (`https://www.deezer.com/fr/profile/123456789`). Your profile must be public (Deezer › Settings ›
+   privacy).
+4. Open the setup page (⚙ › **Configuration**). In **Favoris Deezer**, paste the number or the address. Save.
+5. Go back to the main screen (🏠). Swipe the tiles to see the favorite albums. The Tab5 updates the list when it
    updates the presets.
-4. Touch an album. The WiiM plays it.
+6. Touch an album. The WiiM plays it. Or touch **Favoris Qobuz** or **Favoris Deezer**, then touch a track.
 
-Note: the Deezer favorites are experimental. If they do not show, look at the Journal: the lines that start with
-"Deezer :" tell which step failed.
+Note: if the Deezer favorites do not show, look at the Journal: the lines that start with "Deezer :" or
+"Favoris Deezer :" tell which step failed. A short share link (`link.deezer.com/…`) does not contain the number:
+open it in a browser first.
 
 ### Voice search (optional)
 
 1. Make an API key at <https://platform.openai.com>.
 2. Open the setup page (touch ⚙ in the left bar, then **Configuration**). The Tab5 restarts in setup mode.
-3. Paste the key in **Commande vocale**, then save.
+3. Paste the key in **Dictée de la recherche**, then save.
 4. On the search screen, touch the microphone in the search field. Wait for the beep. The music becomes quieter.
 5. Say an artist, a track or an album.
 6. Touch the red button. The Tab5 writes the text and starts the search (Qobuz or Deezer, as selected).
@@ -235,7 +241,7 @@ $0.003 for each minute of sound when we wrote this file. This is a few cents eac
 │ favorites     queue copies (LittleFS)        │  port 49152  │ (queues)     │
 │ discovery     SSDP + getStatusEx             │ ◀─ SSDP ───  └──────┬───────┘
 │ wiim_worker   Qobuz search and favorites     │ ──▶ qobuz.com (access from the WiiM)
-│               Deezer favorites               │ ──▶ api.deezer.com (access from the WiiM)
+│               Deezer favorites               │ ──▶ api.deezer.com (public profile, no key)
 │                                              │                     │ WiiM's own
 │                                              │                     ▼ access
 │                                              │          qobuz.com, airable.io (Deezer)

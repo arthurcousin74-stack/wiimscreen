@@ -20,7 +20,7 @@ The Journal masks tokens and passwords, but check anyway.
 
 | # | Do | Expected | Journal |
 |---|---|---|---|
-| 1.1 | Play music. ⚙ › **Journal** › **Essais** (a long background job, about 30 s). At once touch 🏠, then ⏯ and the volume. | Pause and volume react within about 1 s, not after the job ends. | `WiiM <- setPlayerCmd:… (… ms)` between the `Essai …` lines. |
+| 1.1 | Play a Deezer album from WiiM Home. Search ⌕ › **Deezer** › an artist › touch a result (the WiiM loads the album: several seconds). At once touch 🏠, then the volume. | The volume reacts within about 1 s, not after the album has loaded. | `WiiM <- setPlayerCmd:vol:… (… ms)` before the `Deezer ▶ …` line. |
 | 1.2 | Only with an OpenAI key: search ⌕ › microphone › say an artist › red button. While « Transcription… » shows, touch keys. | The screen stays responsive; the text fills the field; the search starts. | `Transcription : …`, then `Recherche Qobuz : …`. |
 | 1.3 | Leave the Tab5 on for 30 minutes. | A new `Mémoire : …` line every 10 minutes. | Note the numbers. |
 | 1.4 | ⚙ › **Configuration** (setup mode). On the phone, open the page › **Avancé**. | A box **Tout effacer…** is visible. Do not tick it yet (see test 9.3). | — |
@@ -45,7 +45,9 @@ The Journal masks tokens and passwords, but check anyway.
 |---|---|---|---|
 | 3.1 | Search ⌕ › switch to **Deezer** › type an artist › ↵. | Results; no music change. | `Recherche Deezer « … » : 200, N morceau(x)` |
 | 3.2 | Touch a result. | « chargement de l'album… », then the album of this track plays, at this track if possible. | `Deezer ▶ « … » (piste k) : CreateQueue 200, Play 200` |
-| 3.3 | Look at the Journal after the start. | `Deezer : GetUserInfo(…) …, jeton absent` is expected (no Deezer token known). If one says `obtenu`: note it, and check for Deezer album tiles. | `Deezer : …` |
+| 3.3 | Setup page › **Favoris Deezer** › paste your profile number (deezer.com › your profile › number at the end of the address) › save. | After the restart: Deezer album tiles (if you have favorite albums) and a **Favoris Deezer** tile. | `Deezer : albums favoris 200, N` |
+| 3.4 | Touch **Favoris Deezer**. | The list of your favorite tracks; no music change before you choose. | `Favoris Deezer : 200, N morceau(x)` |
+| 3.5 | Touch a track, then a Deezer album tile. | The album of the track plays at this track; the album tile plays the album. | `Deezer ▶ …`, `Album Deezer ▶ …` |
 
 ## 4. Favorites saved on the Tab5
 
@@ -112,7 +114,7 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 | 2.5–2.6 Favoris Qobuz list | | |
 | 2.7–2.8 Qobuz search, no playback before choice | | |
 | 3.1–3.2 Deezer search and play | | |
-| 3.3 Deezer token | | |
+| 3.3–3.5 Deezer favorites (profile) | | |
 | 4.1–4.3 Tab5 favorites | | |
 | 5.x screen and touch | | |
 | 6.x update page from phone | | |

@@ -1143,54 +1143,6 @@ void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     C.fillRect(cx - s / 5, cy + s / 3, s * 2 / 5, s * 2 / 3 - s / 8, bg);
 }
 
-// Écran d'écoute : grand micro dont l'anneau suit la voix
-void Ui::renderVoice(VoicePhase phase, float level) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
-    auto& C = canvas_;
-    background();
-    const int W = C.width(), H = C.height();
-    const int cx = W / 2, cy = H * 38 / 100, R = sc(60);
-    const bool listening = phase == VoicePhase::Listening;
-    if (listening) {
-        const float l = std::max(0.0f, std::min(1.0f, level));
-        // Anneaux bornés : à pleine voix, ils restent au-dessus du titre
-        C.fillCircle(cx, cy, R + sc(14) + (int)(l * sc(50)), mix(bgAt(cy), accent_, 0.18f));
-        C.fillCircle(cx, cy, R + sc(8) + (int)(l * sc(28)), mix(bgAt(cy), accent_, 0.40f));
-    } else {
-        const int a = (int)((millis() / 3) % 360);
-        C.fillArc(cx, cy, R + sc(8), R + sc(14), a, a + 120, accent_);
-    }
-    C.fillCircle(cx, cy, R, listening ? accent_ : kCardHi);
-    micIcon(cx, cy, R / 2, listening ? kBg : kText, listening ? accent_ : kCardHi);
-
-    C.setTextDatum(textdatum_t::top_center);
-    useFont(C, kBig);
-    C.setTextColor(kText);
-    int y = cy + R + sc(70);
-    C.drawString(listening ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6" : "Je r\xC3\xA9" "fl\xC3\xA9" "chis\xE2\x80\xA6", cx, y);
-    y += C.fontHeight() + sc(10);
-    useFont(C, kSmall);
-    C.setTextColor(kText2);
-    if (listening) {
-        C.drawString("\xC2\xAB Joue FIP \xC2\xBB \xC2\xB7 \xC2\xAB Mets France Culture \xC2\xBB \xC2\xB7 "
-                     "\xC2\xAB Plus fort \xC2\xBB \xC2\xB7 \xC2\xAB Suivant \xC2\xBB",
-                     cx, y);
-        y += C.fontHeight() + sc(6);
-        C.drawString("Touche l'\xC3\xA9" "cran quand tu as fini.", cx, y);
-    }
-    // Annuler
-    useFont(C, kSmall);
-    const int bw = sc(150), bh = sc(44);
-    cancelRect_ = wr::Rect{cx - bw / 2, H - sc(30) - bh, bw, bh};
-    C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
-    C.setTextDatum(textdatum_t::middle_center);
-    C.setTextColor(kText);
-    C.drawString("Annuler", cx, cancelRect_.y + bh / 2 + 1);
-    present();
-}
-
 // -------------------------------------------------------------------- zones
 
 bool Ui::hitMic(int x, int y) const {  // micro de la recherche (le seul)
@@ -1198,8 +1150,6 @@ bool Ui::hitMic(int x, int y) const {  // micro de la recherche (le seul)
     const int pad = sc(8);
     return wr::Rect{micRect_.x - pad, micRect_.y - pad, micRect_.w + 2 * pad, micRect_.h + 2 * pad}.contains(x, y);
 }
-
-bool Ui::hitVoiceCancel(int x, int y) const { return cancelRect_.contains(x, y); }
 
 // Boutons de la barre : toute la largeur de la barre compte, et un peu autour
 static bool hitNav(const wr::Rect& rail, const wr::Rect& b, int pad, int x, int y) {
@@ -1341,7 +1291,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     useFont(C, kSmall);
     C.setTextColor(kText2);
     const String ver = String("Version ") + version;
-    if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(36) - qw - sc(190))  // sinon : version dans Réglages
+    if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(24) - qw)  // sinon : version dans Réglages
         C.drawString(ver.c_str(), X + sc(150), Y + sc(6));
     logClose_ = wr::Rect{W - bw - m, Y, bw, bh};
     C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
@@ -1353,21 +1303,11 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
     C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
     C.drawString("File du WiiM", logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
-    // Essai : favoris Qobuz lus par le WiiM (sans lancer la lecture)
-    const int tw = sc(190);
-    logTest_ = wr::Rect{logQueue_.x - sc(12) - tw, Y, tw, bh};
-    useFont(C, kMid);
-    const int titleRight = X + C.textWidth("Journal") + sc(16);
-    useFont(C, kSmall);
-    if (logTest_.x < titleRight) logTest_.y = Y + bh + sc(10), logTest_.x = logClose_.right() - tw;  // portrait : dessous
-    C.fillRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kCard);
-    C.drawRoundRect(logTest_.x, logTest_.y, tw, bh, bh / 2, kTrack);
-    C.drawString("Essais", logTest_.x + tw / 2, logTest_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     useFont(C, kTiny);
     C.setTextDatum(textdatum_t::top_left);
-    const int top = std::max(Y + bh, logTest_.bottom()) + sc(14), lh = C.fontHeight() + sc(2);
+    const int top = Y + bh + sc(14), lh = C.fontHeight() + sc(2);
     const int rowsFit = std::max(1, (H - top - m) / lh), textW = W - X - m;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     std::vector<std::pair<std::string, bool>> rows;  // texte, dernière entrée

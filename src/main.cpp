@@ -55,7 +55,8 @@ static bool g_favBusy = false;                          // enregistrement d'un f
 static std::vector<wr::Favorite> g_favs;
 static std::vector<wr::QobuzAlbum> g_deezerAlbums;  // albums favoris du compte Deezer
 static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Qobuz (lus par l'accès du WiiM)
-static const char* kQobuzFavsId = "qobuz-favoris";  // tuile « Favoris Qobuz » : liste des morceaux favoris
+static const char* kQobuzFavsId = "qobuz-favoris";    // tuile « Favoris Qobuz » : liste des morceaux favoris
+static const char* kDeezerFavsId = "deezer-favoris";  // tuile « Favoris Deezer » (profil Deezer configuré)
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
 static bool g_presetsFromWiim = false;
 static uint32_t g_lastPresetFetch = 0;
@@ -368,6 +369,14 @@ static void refreshTiles() {
         p.slot = 99;
         p.label = "Favoris Qobuz";
         p.favId = kQobuzFavsId;
+        list.push_back(p);
+    }
+    // Favoris Deezer (profil public indiqué dans la configuration) : il faut un modèle de file Deezer du WiiM
+    if (g_favOk && g_settings.deezerUser.length() && fav::hasDeezerModel()) {
+        wr::Preset p;
+        p.slot = 98;
+        p.label = "Favoris Deezer";
+        p.favId = kDeezerFavsId;
         list.push_back(p);
     }
     // Albums favoris Qobuz, avec leur pochette
@@ -705,13 +714,13 @@ static bool handleBars(int x, int y) {
     return false;
 }
 
-static void openQobuzFavorites();
+static void openFavoriteList(int source);
 
 static void playPreset(int p) {
     logEvent("Preset %d : %s", g_presets[p].slot, g_presets[p].label.c_str());
     sound::tap();
-    if (g_presets[p].favId == kQobuzFavsId) {  // liste des morceaux favoris : on choisit, rien ne joue avant
-        openQobuzFavorites();
+    if (g_presets[p].favId == kQobuzFavsId || g_presets[p].favId == kDeezerFavsId) {
+        openFavoriteList(g_presets[p].favId == kDeezerFavsId ? 1 : 0);  // liste : on choisit, rien ne joue avant
         return;
     }
     g_activePreset = p;
@@ -730,25 +739,15 @@ static void playPreset(int p) {
 
 // ------------------------------------------------------------ commande vocale
 //
-// Bouton micro → écoute (la musique est baissée le temps d'écouter) → fin de parole
-// détectée (ou appui) → transcription OpenAI → commande, preset ou radio.
+// Dictée de la recherche : bouton micro → écoute (la musique est baissée le temps d'écouter) → appui sur
+// le bouton rouge → transcription OpenAI en tâche de fond → texte cherché.
 
 static int16_t* g_voiceBuf = nullptr;
 static size_t g_voiceLen = 0;
 static constexpr size_t kVoiceMax = kMicRate * 8;  // 8 s au plus
-static wr::SpeechEndpoint g_endpoint;
 static float g_voiceLevel = 0;
 static uint32_t g_voiceFrame = 0;
 static int g_duckedFrom = -1;  // volume d'avant l'écoute, à rétablir
-
-// Noms propres attendus : aident la transcription (« Couleur 3 », « FIP »…)
-static std::string voiceHint() {
-    std::string h =
-        "T\xC3\xA9l\xC3\xA9" "commande de musique. Commandes : joue, mets, pause, reprends, suivant, "
-        "pr\xC3\xA9" "c\xC3\xA9" "dent, plus fort, moins fort, volume, coupe le son. Radios et presets : ";
-    for (size_t i = 0; i < g_presets.size(); ++i) h += (i ? ", " : "") + g_presets[i].label;
-    return h + ".";
-}
 
 static void stopListening() {
     M5.Mic.end();
@@ -763,15 +762,14 @@ static void stopListening() {
 
 static void renderSearch(int pressedKey = -1);
 
-static void startVoice(bool dictation = false) {
+static void startVoice() {
     if (!g_settings.voiceEnabled()) return;
-    g_dictation = dictation;
+    g_dictation = true;
     if (!g_voiceBuf)
         g_voiceBuf = static_cast<int16_t*>(heap_caps_malloc(kVoiceMax * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!g_voiceBuf) {
-        setMessage("M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter");
-        if (dictation) g_searchStatus = "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter", renderSearch();
-        else show();
+        g_searchStatus = "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter";
+        renderSearch();
         return;
     }
     const auto& p = g_state.player;
@@ -784,96 +782,17 @@ static void startVoice(bool dictation = false) {
     sound::suspend();
     if (!M5.Mic.begin()) {
         stopListening();
-        setMessage("Micro indisponible");
-        if (dictation) g_dictation = false, g_searchStatus = "Micro indisponible", renderSearch();
-        else show();
+        g_dictation = false;
+        g_searchStatus = "Micro indisponible";
+        renderSearch();
         return;
     }
     g_listening = true;
     g_voiceLen = 0;
     g_voiceLevel = 0;
-    g_endpoint = wr::SpeechEndpoint();
     g_micPending = false;
     g_micCur = 0;
-    if (g_dictation) renderSearch();
-    else g_ui.renderVoice(Ui::VoicePhase::Listening, 0);
-}
-
-static void runVoice(const std::string& text) {
-    const wr::VoiceIntent in = wr::parseVoice(text, g_presets);
-    logEvent("Voix : \xC2\xAB %s \xC2\xBB -> intention %d", text.c_str(), (int)in.kind);
-    const String heard = String("\xC2\xAB ") + text.c_str() + " \xC2\xBB";
-    const String dash = " \xE2\x80\x94 ";
-    auto& p = g_state.player;
-    String done;
-    switch (in.kind) {
-        case wr::VoiceIntent::None:
-            sound::error();
-            setMessage("Je n'ai pas compris " + heard);
-            show();
-            return;
-        case wr::VoiceIntent::Play:
-            g_worker.command("setPlayerCmd:resume");
-            p.playing = true;
-            g_statusAt = millis();
-            done = "Lecture";
-            break;
-        case wr::VoiceIntent::Pause:
-            g_worker.command("setPlayerCmd:pause");
-            p.playing = false;
-            done = "Pause";
-            break;
-        case wr::VoiceIntent::Next:
-            g_worker.command("setPlayerCmd:next");
-            done = "Morceau suivant";
-            break;
-        case wr::VoiceIntent::Prev:
-            g_worker.command("setPlayerCmd:prev");
-            done = "Morceau pr\xC3\xA9" "c\xC3\xA9" "dent";
-            break;
-        case wr::VoiceIntent::VolUp:
-        case wr::VoiceIntent::VolDown:
-        case wr::VoiceIntent::SetVolume: {
-            int v = in.kind == wr::VoiceIntent::SetVolume ? in.volume
-                    : p.volume + (in.kind == wr::VoiceIntent::VolUp ? 2 : -2) * g_settings.volStep;
-            v = constrain(v, 0, 100);
-            g_worker.command("setPlayerCmd:vol:" + String(v));
-            p.volume = v;
-            p.muted = false;
-            done = "Volume " + String(v);
-            break;
-        }
-        case wr::VoiceIntent::Mute:
-        case wr::VoiceIntent::Unmute: {
-            bool mute = in.kind == wr::VoiceIntent::Mute;
-            g_worker.command(String("setPlayerCmd:mute:") + (mute ? "1" : "0"));
-            p.muted = mute;
-            done = mute ? "Son coup\xC3\xA9" : "Son r\xC3\xA9tabli";
-            break;
-        }
-        case wr::VoiceIntent::Preset:
-            g_ui.setPage(in.preset / std::max(1, g_ui.perPage()));  // montre la tuile du preset
-            playPreset(in.preset);
-            done = g_presets[in.preset].label.c_str();
-            break;
-        case wr::VoiceIntent::Radio: {
-            wr::RadioStation st;
-            String err;
-            if (!findRadio(in.query, st, err)) {
-                sound::error();
-                setMessage(heard + dash + err);
-                show();
-                return;
-            }
-            g_worker.command("setPlayerCmd:play:" + String(wr::urlEncode(st.url, true).c_str()));
-            g_activePreset = -1;
-            g_ui.setActivePreset(-1);
-            done = String("Radio ") + st.name.c_str();
-            break;
-        }
-    }
-    setMessage(heard + dash + done);  // une erreur du WiiM remplacera ce message
-    show();
+    renderSearch();
 }
 
 static void runSearchQuery();
@@ -952,35 +871,6 @@ static void serviceTranscription() {
     runSearchQuery();
 }
 
-static void finishVoice(bool send) {
-    if (g_dictation) {
-        finishDictation(send);
-        return;
-    }
-    stopListening();
-    if (!send) {
-        show();
-        return;
-    }
-    if (g_voiceLen < kMicRate / 3) {
-        setMessage("Je n'ai rien entendu");
-        show();
-        return;
-    }
-    g_ui.renderVoice(Ui::VoicePhase::Thinking, 0);
-    std::string text;
-    String err;
-    if (!transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, voiceHint(), text,
-                    err)) {
-        logEvent("Transcription : %s", err.c_str());
-        sound::error();
-        setMessage(err);
-        show();
-        return;
-    }
-    runVoice(text);
-}
-
 // Micro pendant l'écoute : enregistre, suit le niveau, détecte la fin de la phrase
 static void serviceVoice() {
     if (!g_listening) return;
@@ -999,27 +889,13 @@ static void serviceVoice() {
     const size_t n = std::min<size_t>(kMicBlock, kVoiceMax - g_voiceLen);
     memcpy(g_voiceBuf + g_voiceLen, b, n * 2);
     g_voiceLen += n;
-    const auto state = g_endpoint.feed(rms);
     g_voiceLevel = std::max(std::min(1.0f, rms * 10), g_voiceLevel * 0.8f);
-    if (g_dictation) {  // recherche : on écoute jusqu'à l'appui sur ■ (ou la limite du tampon)
-        if (millis() - g_voiceFrame > 100) {
-            g_voiceFrame = millis();
-            g_ui.updateSearchField(g_searchQuery, "", false, g_searchSource, g_deezerOk, 1, g_voiceLevel);
-        }
-        if (g_voiceLen >= kVoiceMax) finishDictation(true);
-        return;
-    }
-    if (millis() - g_voiceFrame > 80) {  // ~12 images/s : l'anneau suit la voix
+    // On écoute jusqu'à l'appui sur ■ (ou la limite du tampon)
+    if (millis() - g_voiceFrame > 100) {
         g_voiceFrame = millis();
-        g_ui.renderVoice(Ui::VoicePhase::Listening, g_voiceLevel);
+        g_ui.updateSearchField(g_searchQuery, "", false, g_searchSource, g_deezerOk, 1, g_voiceLevel);
     }
-    if (state == wr::SpeechEndpoint::Done || g_voiceLen >= kVoiceMax) {
-        finishVoice(true);
-    } else if (state == wr::SpeechEndpoint::NothingHeard) {
-        stopListening();
-        setMessage("Je n'ai rien entendu");
-        show();
-    }
+    if (g_voiceLen >= kVoiceMax) finishDictation(true);
 }
 
 // Bande des presets, suivi du doigt : enfoncer, glisser (page), relâcher (lancer)
@@ -1237,20 +1113,23 @@ static void runSearchQuery() {
     renderSearch();
 }
 
-// Tuile « Favoris Qobuz » : liste des morceaux favoris du compte (tâche WiiM), affichée comme des résultats
-static void openQobuzFavorites() {
+// Tuiles « Favoris Qobuz » / « Favoris Deezer » : morceaux favoris du compte (tâche WiiM), affichés comme des
+// résultats. source 0 : Qobuz, 1 : Deezer.
+static void openFavoriteList(int source) {
     if (g_searchBusy) {
         setMessage("Recherche en cours, r\xC3\xA9" "essaie dans un instant", 3000);
         return;
     }
     g_searchBusy = true;
-    g_resultsTitle = "Favoris Qobuz";
-    g_resultsSource = 0;
+    const bool deezer = source == 1;
+    g_resultsTitle = deezer ? "Favoris Deezer" : "Favoris Qobuz";
+    g_resultsSource = source;
     g_searchResults.clear();
     g_resultsPage = 0;
     g_resultsOpen = true;
-    g_ui.renderResults(g_resultsTitle, g_searchResults, 0, "Chargement de tes favoris Qobuz\xE2\x80\xA6");
-    g_worker.search("Favoris Qobuz", 2);
+    g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
+                       String("Chargement de tes favoris ") + (deezer ? "Deezer" : "Qobuz") + "\xE2\x80\xA6");
+    g_worker.search(g_resultsTitle.c_str(), deezer ? 3 : 2);
 }
 
 static void openSearch() {
@@ -1311,7 +1190,8 @@ static void onSearchDone(const WiimEvent& ev) {
         if (g_resultsOpen) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
             g_searchResults.clear();
             g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
-                               !ev.ok ? "Impossible : " + ev.text : String("Aucun morceau favori sur Qobuz"));
+                               !ev.ok ? "Impossible : " + ev.text
+                                      : String("Aucun morceau favori sur ") + (g_resultsSource == 1 ? "Deezer" : "Qobuz"));
         }
     } else {
         g_searchResults = ev.tracks;
@@ -1384,11 +1264,6 @@ void loop() {
             logEvent("Appui File du WiiM");
             g_worker.checkQueue();  // résultat dans le journal (tâche de fond)
             g_logFrame = 0;
-        } else if (t.wasPressed() && g_ui.hitLogTest(t.x, t.y)) {
-            sound::tap();
-            logEvent("Appui Essais (favoris Qobuz, Deezer)");
-            g_worker.testQobuzSearch(g_state.player.artist.c_str());  // artiste en cours, sinon Miles Davis
-            g_logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitSearch(t.x, t.y)) {
             sound::tap();
             g_logOpen = false;
@@ -1423,7 +1298,7 @@ void loop() {
                     finishDictation(false);
                 }
             } else if (g_searchOpen && g_ui.hitMic(t.x, t.y)) {
-                if (!g_searchBusy && !g_stt.busy) startVoice(true);  // bip, puis écoute jusqu'au bouton rouge
+                if (!g_searchBusy && !g_stt.busy) startVoice();  // bip, puis écoute jusqu'au bouton rouge
             } else if (g_ui.hitHome(t.x, t.y)) {
                 sound::tap();
                 g_searchOpen = g_resultsOpen = false;
@@ -1521,8 +1396,6 @@ void loop() {
                 g_menuOpen = false;
                 show();
             }
-        } else if (g_listening) {
-            finishVoice(!g_ui.hitVoiceCancel(t.x, t.y));  // Annuler, ou « j'ai fini »
         } else if (g_ambient) {
             logEvent("Appui en vue ambiance (%d,%d)%s", t.x, t.y, g_ui.hitHome(t.x, t.y) ? " : Accueil" : "");
             exitAmbient();  // vue ambiance : un appui ramène les commandes

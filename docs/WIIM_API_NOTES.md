@@ -227,7 +227,12 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
 
 ### Deezer
 
-- **Favorites (wiimscreen, not yet verified):** `GetUserInfo(AccountSource=Deezer|Deezer2|deezer, RefreshToken=0)`;
+- **Favorites of a public profile (no key, checked 2026-11-16):** `GET https://api.deezer.com/user/<profile number>/albums`,
+  `/tracks` and `/playlists` answer without a token when the profile is public (`{"data":[…],"total":…}`; tracks have
+  the same shape as `search`). A private profile or a refused token gives HTTP 200 with `{"error":{"type":…,
+  "message":…}}`. wiimscreen uses this when the user gives the profile number in the setup page.
+- **Favorites through the WiiM (wiimscreen, not yet verified, used only without a profile number):**
+  `GetUserInfo(AccountSource=Deezer|Deezer2|deezer, RefreshToken=0)`;
   if the Result holds `accessToken`/`access_token`, `GET https://api.deezer.com/user/me/albums?limit=50&access_token=…`
   (`wr::parseDeezerAlbums`); each album plays as a `Deezer2` queue `<airable origin>/deezer/album/<id>`. *File du
   WiiM* logs the linked services from `GetBasicUserInfo` (`showName` values) to find the right `AccountSource`.

@@ -55,17 +55,14 @@ public:
     void render(const UiState& st, int pressedPreset = -1, int pressedTransport = -1);
     // Vue ambiance
     void renderAmbient(const UiState& st);
-    // Commande vocale : bouton micro (si une clé est configurée) et écran d'écoute
-    enum class VoicePhase { Listening, Thinking };
+    // Dictée de la recherche : bouton micro (si une clé OpenAI est configurée)
     void setVoiceEnabled(bool on) { voiceOn_ = on; }
-    void renderVoice(VoicePhase phase, float level);  // level : 0..1
     bool hitMic(int x, int y) const;
     bool hitHome(int x, int y) const;      // Accueil : barre de navigation, ou bouton de la vue ambiance
     bool hitSettings(int x, int y) const;  // Réglages : barre de navigation
     // Bouton ♥ de la vue commandes : 0 caché, 1 vide (ajouter), 2 plein (retirer), 3 en cours
     void setFavorite(int state) { favState_ = state; }
     bool hitFav(int x, int y) const;
-    bool hitVoiceCancel(int x, int y) const;
     // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
     // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
     bool updateProgress(const UiState& st);
@@ -103,7 +100,6 @@ public:
     void renderLog(const std::vector<String>& lines, const char* version);
     bool hitLogClose(int x, int y) const { return logClose_.contains(x, y); }
     bool hitLogQueue(int x, int y) const { return logQueue_.contains(x, y); }
-    bool hitLogTest(int x, int y) const { return logTest_.contains(x, y); }
 
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
@@ -191,7 +187,6 @@ private:
     wr::Rect menuRects_[6];
     wr::Rect logClose_;
     wr::Rect logQueue_;  // Journal : bouton « File du WiiM »
-    wr::Rect logTest_;   // Journal : bouton « Essai recherche »
     std::vector<wr::Rect> pickRects_;
     wr::Rect touchClose_;
     wr::Rect pickRetry_, pickConfig_;

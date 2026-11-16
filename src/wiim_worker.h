@@ -60,12 +60,10 @@ public:
     // rejoue un favori enregistré (évènement FavPlayed). Non bloquant.
     void saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl);
     void playFavorite(const String& id);
-    // Essai (journal) : files Qobuz des favoris (morceaux, albums) chargées par le WiiM, sans lecture
-    void testQobuzSearch(const String& query);
     // Recherche (évènement SearchDone avec les morceaux trouvés), puis lecture d'un résultat (0 pour le
     // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
     // joué par le WiiM (album du morceau, par sa passerelle airable) ; 2 : morceaux favoris du compte Qobuz
-    // (liste, rien ne joue avant le choix). Non bloquant.
+    // (liste, rien ne joue avant le choix) ; 3 : morceaux favoris Deezer (profil configuré). Non bloquant.
     void search(const String& query, int source);
     // Albums favoris du compte Qobuz (évènement QobuzFavorites), lus avec l'accès donné par le WiiM
     void refreshQobuzFavorites();
@@ -104,11 +102,10 @@ private:
     void runQobuzFavorites();
     void runPlayQobuzAlbum(const std::string& albumId);
     void runDeezerFavorites();
+    void runDeezerFavoriteList(const String& title);
+    std::string deezerUserPath(const std::string& control);  // « user/<n> », « user/me » (jeton) ou vide
+    std::string deezerAuth(const std::string& path) const;
     void runPlayDeezerAlbum(const std::string& albumId);
-    void runSearchTest(const String& query);
-    void runDeezerTest(const std::string& control, const String& query);
-    void runNoPlayTest(const String& query);
-    void runFavoritesTest(const String& query);
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
     bool qobuzModel(const std::string& control, std::string& templ);
@@ -139,7 +136,6 @@ private:
     bool queueWanted_ = false;
     FavRequest favSave_;
     String favPlay_;
-    String searchTest_;
     String search_;
     int searchPlay_ = 0;
     int searchCount_ = 0;

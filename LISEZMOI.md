@@ -66,7 +66,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 La transcription de la voix est faite par OpenAI : le Tab5 seul ne sait pas reconnaître du français libre (le moteur hors ligne d'Espressif ne connaît que des commandes en anglais et en chinois).
 
 1. Crée un compte sur https://platform.openai.com, ajoute quelques dollars de crédit, puis crée une clé API (*API keys* > *Create new secret key*).
-2. Ouvre la configuration du Tab5 (bouton ⚙ en bas de la barre de gauche → **Configuration**) et colle la clé dans **Commande vocale : clé API OpenAI**.
+2. Ouvre la configuration du Tab5 (bouton ⚙ en bas de la barre de gauche → **Configuration**) et colle la clé dans **Dictée de la recherche : clé API OpenAI**.
 3. Un bouton micro apparaît dans le champ de l'écran de recherche (loupe de la barre de gauche).
 
 **Coût** : modèle `gpt-4o-mini-transcribe`, facturé à la durée d'audio (environ 0,3 centime de dollar la minute au moment de l'écriture) ; une phrase dure quelques secondes, soit quelques centimes par mois même en usage quotidien.
@@ -125,7 +125,7 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 - **L'écran se rallume tout seul** : le Tab5 est peut-être posé sur un meuble qui vibre fort ; désactive le réveil par mouvement dans la configuration.
 - **« Clé OpenAI refusée »** : clé mal collée ou supprimée → recolle-la dans la configuration. **« Quota OpenAI dépassé »** : plus de crédit sur le compte OpenAI.
 - **« Je n'ai rien entendu »** : parle plus près du Tab5 ; si la musique est très forte, baisse-la d'abord.
-- **« Aucune radio … »** : la station n'est pas dans Radio Browser sous ce nom ; essaie le nom exact (« RTS Couleur 3 »).
+- **Pas de favoris Deezer** : indique le numéro de ton profil Deezer dans la configuration (**Favoris Deezer**) ; ton profil doit être public. Un lien court (`link.deezer.com/…`) ne contient pas le numéro : ouvre-le d'abord dans un navigateur. Le Journal (lignes « Deezer : » et « Favoris Deezer : ») dit ce qui a échoué.
 - **Journal** : moniteur série à 115200 bauds (`pio device monitor`).
 
 ## Développement
@@ -157,13 +157,13 @@ src/wiim_client.*    API WiiM, TLS avec épinglage
 src/portal.*         portail de configuration (point d'accès + DNS + formulaire)
 src/settings.*       réglages en NVS
 src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
-src/voice_service.*  transcription OpenAI, recherche Radio Browser (HTTPS vérifié)
+src/voice_service.*  transcription OpenAI de la dictée (HTTPS vérifié)
 src/ota.*            mise à jour par le Wi-Fi (page web + code affiché à l'écran)
 src/discovery.*      recherche des WiiM sur le Wi-Fi (SSDP + getStatusEx)
 src/fonts/           polices VLW générées (tools/make_vlw.py)
 lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
                      spectre (FFT), lissage du visualiseur, détection de mouvement,
-                     compréhension des phrases, fin de parole, choix de la radio
+                     textes et recherche Deezer, files du WiiM (UPnP), Qobuz
 certs/               certificats racines Mozilla (images en HTTPS)
 tools/preview/       aperçu de l'interface sur PC
 ```
@@ -190,7 +190,7 @@ python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 - Recherche du WiiM : lecture seule (getStatusEx). Quand le Tab5 suit son WiiM à une nouvelle adresse, l'empreinte du certificat enregistrée doit toujours correspondre : un appareil qui se ferait passer pour lui est refusé.
 - Mise à jour par le Wi-Fi : uniquement après un geste sur le Tab5 (menu Réglages), avec un code à 6 chiffres affiché seulement à l'écran, 5 essais au plus, 10 minutes au plus ; l'image est vérifiée par l'ESP32 avant d'être activée.
 - Clé OpenAI : refusée si elle contient des espaces ou des retours à la ligne (elle va dans un en-tête HTTP) ; jamais réaffichée ni écrite dans le journal.
-- Micro : actif uniquement pendant une commande vocale ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
+- Micro : actif uniquement pendant la dictée d'une recherche ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.
 - Images (pochettes, presets) : certificat du serveur vérifié (certificats racines Mozilla) pour les adresses HTTPS ; taille plafonnée à 768 Ko ; seuls JPEG et PNG sont décodés, après vérification de leur signature.
 

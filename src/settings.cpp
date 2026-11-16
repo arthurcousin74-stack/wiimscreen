@@ -38,6 +38,7 @@ bool loadSettings(Settings& s) {
     s.sleepMin = p.getInt("sleep", 0);
     s.openaiKey = p.getString("oaikey", "");
     s.sttModel = p.getString("sttmodel", "gpt-4o-mini-transcribe");
+    s.deezerUser = p.getString("deezeruser", "");
     p.end();
 
     std::string err;
@@ -56,7 +57,7 @@ std::string settingsToBackup(const Settings& s) {
         {"fp", s.fingerprint.c_str()},    {"presets", s.presetsText.c_str()}, {"rotation", std::to_string(s.rotation)},
         {"volstep", std::to_string(s.volStep)}, {"beep", std::to_string(s.beep)}, {"visu2", s.visualizer ? "1" : "0"},
         {"motion", s.motionWake ? "1" : "0"},   {"sleep", std::to_string(s.sleepMin)},
-        {"oaikey", s.openaiKey.c_str()},  {"sttmodel", s.sttModel.c_str()}};
+        {"oaikey", s.openaiKey.c_str()},  {"sttmodel", s.sttModel.c_str()}, {"deezeruser", s.deezerUser.c_str()}};
     return wr::encodeFields(f);
 }
 
@@ -81,6 +82,7 @@ bool settingsFromBackup(const std::string& text, Settings& s) {
         else if (k == "sleep") r.sleepMin = constrain(v.toInt(), 0, 240);
         else if (k == "oaikey") r.openaiKey = v;
         else if (k == "sttmodel") r.sttModel = v.length() ? v : String("gpt-4o-mini-transcribe");
+        else if (k == "deezeruser") r.deezerUser = v;
     }
     if (!r.configured()) return false;
     s = r;
@@ -106,6 +108,7 @@ void saveSettings(const Settings& s) {
     p.putInt("sleep", s.sleepMin);
     p.putString("oaikey", s.openaiKey);
     p.putString("sttmodel", s.sttModel);
+    p.putString("deezeruser", s.deezerUser);
     p.end();
 }
 

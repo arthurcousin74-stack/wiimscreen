@@ -28,18 +28,18 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 |---|---|
 | `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
-| `lib/core/src/voice.*` | Voice intent parsing (French), speech endpointing, Radio Browser parsing, WAV header |
+| `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, URL encoding, WAV header |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
 | `lib/core/src/qobuz.*` | Depth-aware JSON helpers, Qobuz tracks/albums parsing, `GetUserInfo` access parsing |
 | `test/test_core/test_main.cpp` | Unity tests for everything in `lib/core` |
 | `src/main.cpp` | Setup, main loop (touch, drawing, applying WiiM state), ambient view, voice flow, menus |
-| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery, play queues (favorites, Qobuz/Deezer search, Journal tests) |
+| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery, play queues (favorites, Qobuz/Deezer search and favorites) |
 | `src/ui.*` | All drawing (off-screen M5Canvas in PSRAM → display) |
 | `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
 | `src/discovery.*` | SSDP + `getStatusEx` discovery |
 | `src/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
-| `src/voice_service.*` | OpenAI transcription (voice search), Radio Browser search (no longer used by the UI) |
+| `src/voice_service.*` | OpenAI transcription (dictation in the search field) |
 | `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/settings.*` | NVS-backed settings |
@@ -113,7 +113,7 @@ Built and unit-tested; screens verified via the PC preview. No other board has b
 
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
 navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM
-(`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates.
+(`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates, the Favoris Qobuz list.
 
 **Not yet confirmed on hardware:** favorite replay, Deezer search screen and playback at a track, restoring the music
 after a Qobuz search, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,
