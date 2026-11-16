@@ -30,7 +30,7 @@ Keep pull requests focused: one feature or fix at a time.
 
 ## Porting to another board
 
-See [Other ESP32 boards](README.md#other-esp32-boards) in the README. Add a `[env:<board>]` in `platformio.ini`,
+See [Other ESP32 boards](docs/DEVELOPERS.md#other-esp32-boards) in docs/DEVELOPERS.md. Add a `[env:<board>]` in `platformio.ini`,
 keep board differences small and isolated (pins, audio bus, panel), add the screen size to the `checkLayout` tests,
 and include photos of the running screens in your pull request.
 

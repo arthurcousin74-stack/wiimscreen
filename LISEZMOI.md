@@ -5,7 +5,11 @@
 Firmware libre (MIT) pour cartes ESP32 à écran tactile, qui pilote un streamer WiiM sur le réseau local et affiche ce
 qui est en cours de lecture. **Pour l'instant, seul le M5Stack Tab5** (ESP32-P4, écran tactile couleur 5" 1280×720)
 **a été testé** : c'est la carte prise en charge, et celle de ce guide. Le portage vers d'autres cartes ESP32 est
-décrit dans le [README](README.md#other-esp32-boards) (en anglais).
+décrit dans [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards) (en anglais).
+
+> **Langue** : l'interface est en anglais par défaut. Pour l'avoir en français : page de configuration (sur le
+> téléphone) › **Language / Langue** › **Français**, puis **Save and restart**. Les noms de boutons de ce guide sont
+> ceux de l'interface en français. Le Journal reste en français dans les deux langues.
 
 ![Écran principal](docs/apercu.png)
 

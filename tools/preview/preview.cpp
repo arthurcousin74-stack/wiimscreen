@@ -326,7 +326,15 @@ int main(int argc, char** argv) {
         save(out, "32-favoris-qobuz.ppm");
         ui.renderSearch("miles", "", false, -1, 2, false);  // Qobuz | Albums (pas de Deezer)
         save(out, "35-albums.ppm");
-        ui.renderResults("miles", found, 0, wr::L("7 albums \xC2\xB7 tap to play, the heart makes it a tile", "7 albums \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile"),
+        const std::vector<wr::QueueTrack> albums = {
+            {"Kind of Blue", "Miles Davis", wr::L("5 tracks", "5 pistes"), ""},
+            {"Bitches Brew", "Miles Davis", wr::L("6 tracks", "6 pistes"), ""},
+            {"Sketches of Spain", "Miles Davis", wr::L("5 tracks", "5 pistes"), ""},
+            {"'Round About Midnight", "Miles Davis Quintet", wr::L("6 tracks", "6 pistes"), ""},
+            {"In a Silent Way", "Miles Davis", wr::L("2 tracks", "2 pistes"), ""},
+            {"Ascenseur pour l'\xC3\xA9" "chafaud", "Miles Davis", wr::L("26 tracks", "26 pistes"), ""},
+            {"Milestones", "Miles Davis", wr::L("6 tracks", "6 pistes"), ""}};
+        ui.renderResults("miles", albums, 0, wr::L("7 albums \xC2\xB7 tap to play, the heart makes it a tile", "7 albums \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile"),
                          -1, {1, 0, 1, 0, 0, 0, 0});
         save(out, "36-albums-resultats.ppm");
     }
