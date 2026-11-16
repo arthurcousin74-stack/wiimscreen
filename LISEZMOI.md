@@ -85,9 +85,11 @@ recherche tapée au clavier ; touche celui à écouter.
 Une fois ce firmware installé par USB, les versions suivantes s'installent sans câble :
 
 1. Télécharge l'artefact **wiim-remote-tab5** de la dernière exécution (onglet **Actions** de GitHub) et dézippe-le.
-2. Sur le Tab5 : bouton ⚙ (barre de gauche) → **Mise à jour**. L'écran affiche une adresse (`http://192.168.x.x`) et un code à 6 chiffres.
-3. Sur un ordinateur du même Wi-Fi, ouvre cette adresse, saisis le code, choisis `wiim-remote-tab5.bin`, **Installer**.
-4. Une barre de progression s'affiche sur l'ordinateur et sur le Tab5, puis il redémarre sur la nouvelle version (affichée en bas du menu Réglages).
+2. Sur le Tab5 : bouton ⚙ (barre de gauche) → **Mise à jour**. L'écran affiche un QR code, une adresse (`http://192.168.x.x`) et un code à 6 chiffres.
+3. Sur un téléphone ou un ordinateur du même Wi-Fi, scanne le QR code ou ouvre cette adresse, saisis le code, choisis le fichier `.bin`, **Installer**.
+4. Une barre de progression s'affiche sur le téléphone (ou l'ordinateur) et sur le Tab5, puis il redémarre sur la nouvelle version (affichée en bas du menu Réglages).
+
+La page ne s'ouvre pas sur le téléphone ? Coupe les données mobiles et vérifie qu'il est sur le Wi-Fi de la maison (pas un réseau invité). L'adresse doit commencer par `http://` et non `https://`. Sur iPhone avec un autre navigateur que Safari : Réglages › ce navigateur › autoriser « Réseau local ».
 
 C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie utile. Le nouveau firmware est écrit à côté de l'ancien et vérifié avant d'être utilisé : un fichier incomplet, pour un autre appareil ou interrompu en route laisse l'ancien en place. Le mode mise à jour se ferme avec **Annuler**, après 5 codes faux ou au bout de 10 minutes.
 

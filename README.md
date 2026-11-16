@@ -149,14 +149,21 @@ You need Chrome or Edge on a computer. You do not have to install software.
 ### Update the firmware later
 
 1. On the Tab5, touch the ⚙ button in the left bar.
-2. Select **Mise à jour** (update). The Tab5 shows an address and a 6-digit code.
-3. On a computer on the same network, open the address in a web browser.
-4. Type the code and select the new `.bin` file.
-5. Click **Installer** (install). The Tab5 restarts with the new firmware.
+2. Select **Mise à jour** (update). The Tab5 shows a QR code, an address and a 6-digit code.
+3. Connect a phone or a computer to the same Wi-Fi network as the Tab5.
+4. Scan the QR code with the phone. Or type the address in a web browser. Start the address with `http://`.
+5. Type the code and select the new `.bin` file.
+6. Click **Installer** (install). The Tab5 restarts with the new firmware.
+
+If the page does not open on a phone:
+- Turn off mobile data. Make sure that the phone uses the home Wi-Fi, not a guest network.
+- Make sure that the address starts with `http://`, not `https://`. The Tab5 has no HTTPS page.
+- On an iPhone, with a browser other than Safari: allow "Local Network" for this browser in Settings.
 
 Note: an update keeps your settings (Wi-Fi, WiiM, OpenAI key, options) and your favorites. A complete USB flash at
 address `0x0` erases the settings area, but the Tab5 also keeps a copy of the settings with the favorites. At the
-next start, it puts the settings back from this copy. To erase everything, use "Erase flash" in esptool-js.
+next start, it puts the settings back from this copy. To erase everything, use **Tout effacer** (erase all) in
+the **Avancé** section of the setup page, or "Erase flash" in esptool-js.
 
 A full guide in French is in [LISEZMOI.md](LISEZMOI.md).
 

@@ -19,7 +19,7 @@ static const char kPage[] PROGMEM = R"HTML(<title>Mise à jour du Tab5</title><s
 <header><div class=logo><i></i></div><div><h1>Mise à jour</h1><p>Télécommande WiiM · version <b>%VERSION%</b></p></div></header>
 <form id=f class=card><label for=code>Code affiché sur le Tab5</label>
 <input id=code name=code inputmode=numeric autocomplete=one-time-code maxlength=6 pattern='[0-9]{6}' placeholder='······' required>
-<label>Firmware</label><label class=file id=z><input type=file name=fw id=fw accept=.bin required>
+<label>Firmware</label><label class=file id=z><input type=file name=fw id=fw required>
 <span id=n>Choisir <b>wiim-remote-tab5.bin</b></span></label>
 <small>Le fichier de la dernière version sur GitHub (dézippé s'il est dans un .zip).</small>
 <button class=btn id=go>Installer</button>

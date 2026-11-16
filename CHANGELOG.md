@@ -8,6 +8,8 @@ Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show
 Hardware testing in progress.
 
 ### Added
+- Update screen: QR code of the update page, so a phone opens it without typing the address. The page no
+  longer filters the file picker on `.bin` (some phones greyed the file out).
 - Setup page › *Avancé* › *Tout effacer*: factory reset (settings, OpenAI key, favorites and their backup).
 - Memory report in the Journal at start and every 10 minutes (internal heap, minimum, PSRAM, WiiM task stack), to
   find leaks in long tests.

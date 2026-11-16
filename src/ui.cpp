@@ -1499,6 +1499,14 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
+    const bool landscape = W > H;
+    // QR code de l'adresse : le téléphone ouvre la page sans rien taper (et sans « https:// » ajouté par le navigateur)
+    const int pad = sc(14);
+    const int qr = landscape ? std::min(H - 2 * m - sc(150), W * 3 / 10) : W / 2;
+    const int qx = landscape ? W - m - pad - qr : (W - qr) / 2;
+    const int qy = landscape ? m + sc(20) + pad : H - sc(24) - sc(44) - sc(40) - pad - qr;
+    C.fillRoundRect(qx - pad, qy - pad, qr + 2 * pad, qr + 2 * pad, sc(16), kText);
+    C.qrcode(url.c_str(), qx, qy, qr);
     C.setTextDatum(textdatum_t::top_left);
     useFont(C, kBig);
     C.setTextColor(kText);
@@ -1506,7 +1514,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     int y = m + C.fontHeight() + sc(24);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString("1. Sur ton ordinateur (m\xC3\xAAme Wi-Fi), ouvre :", m, y);
+    C.drawString("1. Sur le m\xC3\xAAme Wi-Fi, scanne le QR code ou ouvre :", m, y);
     y += C.fontHeight() + sc(8);
     useFont(C, kBig);
     C.setTextColor(accent_);
@@ -1514,7 +1522,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     y += C.fontHeight() + sc(18);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString("2. Saisis ce code, puis choisis le fichier wiim-remote-tab5.bin :", m, y);
+    C.drawString("2. Saisis ce code, puis choisis le fichier .bin :", m, y);
     y += C.fontHeight() + sc(8);
     // Code en gros, chiffres espacés
     useFont(C, kBig);
@@ -1534,7 +1542,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::top_left);
     if (percent >= 0) {
-        const int bw = W - 2 * m, bh = sc(14);
+        const int bw = landscape ? qx - pad - sc(30) - m : W - 2 * m, bh = sc(14);
         C.fillRoundRect(m, y, bw, bh, bh / 2, kTrack);
         C.fillRoundRect(m, y, std::max(bh, bw * std::min(100, percent) / 100), bh, bh / 2, accent_);
         y += bh + sc(12);
