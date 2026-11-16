@@ -42,9 +42,16 @@ std::vector<std::string> jsonValuesOf(const std::string& json, const std::string
 
 // GetUserInfo (WiiM UPnP) Result: {"clientId":…,"accessToken":…,"userName":…} — false if a field is missing
 // or not usable in an HTTP header (printable ASCII only, no spaces).
+// `user` (userName, the account name) is kept for the Qobuz queue model below; never log it.
+// Seen on a real WiiM (2026-11-16): this token works for track/album search, but Qobuz answers 401 « User
+// authentication is required » for favorite/getUserFavorites and user/get (headers, query or Bearer).
 struct QobuzAccess {
-    std::string appId, token;
+    std::string appId, token, user;
 };
 bool parseQobuzAccess(const std::string& json, QobuzAccess& out);
+
+// Model of a WiiM Qobuz queue (PlayList, no tracks) for queueFromTemplate, built from the account name, the same
+// fields as the queues the WiiM stores itself (BrowseQueue, 2026-11-16). Empty if `user` is empty.
+std::string qobuzQueueModel(const std::string& user);
 
 }  // namespace wr

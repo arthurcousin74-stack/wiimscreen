@@ -381,6 +381,8 @@ static void test_layout() {
     // Statut "loading" : en lecture et en chargement
     PlayerStatus s = parsePlayerStatus("{\"status\":\"loading\"}");
     TEST_ASSERT_TRUE(s.playing && s.loading);
+    s = parsePlayerStatus("{\"status\":\"load\"}");  // WiiM, chargement d'une file
+    TEST_ASSERT_TRUE(s.playing && s.loading);
 }
 
 static void test_accent() {
@@ -782,6 +784,16 @@ static void test_qobuz_json() {
     QobuzAccess acc;
     TEST_ASSERT_TRUE(parseQobuzAccess("{\"userName\":\"x\",\"clientId\":\"123456789\",\"accessToken\":\"abc-DEF_9\"}", acc));
     TEST_ASSERT_EQUAL_STRING("123456789", acc.appId.c_str());
+    TEST_ASSERT_EQUAL_STRING("x", acc.user.c_str());
+    // Modèle de file Qobuz construit depuis le nom du compte : utilisable par queueFromTemplate
+    const std::string model = qobuzQueueModel("a&b@example.org");
+    TEST_ASSERT_TRUE(model.find("<Login_username>a&amp;b@example.org</Login_username>") != std::string::npos);
+    const std::string q = queueFromTemplate(model, "wiimscreen-1", "https://www.qobuz.com/api.json/0.2/album/get?album_id=7");
+    const QueueInfo qi = parseQueueContext(q);
+    TEST_ASSERT_EQUAL_STRING("Qobuz", qi.sourceName.c_str());
+    TEST_ASSERT_EQUAL_STRING("wiimscreen-1", qi.listName.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=7", qi.searchUrl.c_str());
+    TEST_ASSERT_TRUE(qobuzQueueModel("").empty());
     TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\",\"accessToken\":\"bad\\r\\ntoken\"}", acc));  // en-tête HTTP
     TEST_ASSERT_FALSE(parseQobuzAccess("{\"clientId\":\"1\"}", acc));
 }

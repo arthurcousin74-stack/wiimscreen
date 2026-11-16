@@ -1,4 +1,5 @@
 #include "qobuz.h"
+#include "upnp.h"
 
 #include <cctype>
 #include <cstdlib>
@@ -205,9 +206,20 @@ bool parseQobuzAccess(const std::string& json, QobuzAccess& out) {
     QobuzAccess a;
     a.appId = jsonText(jsonTop(json, "clientId"));
     a.token = jsonText(jsonTop(json, "accessToken"));
+    a.user = jsonText(jsonTop(json, "userName"));
     if (!headerSafe(a.appId) || !headerSafe(a.token)) return false;
     out = a;
     return true;
+}
+
+std::string qobuzQueueModel(const std::string& user) {
+    if (user.empty()) return "";
+    return "<?xml version=\"1.0\"?><PlayList><ListName>Qobuz</ListName><ListInfo><SourceName>Qobuz</SourceName>"
+           "<SearchUrl></SearchUrl><Login_username>" +
+           xmlEscape(user) +
+           "</Login_username><MarkSearch>0</MarkSearch><TrackNumber>0</TrackNumber><TotalNumber>0</TotalNumber>"
+           "<Quality>0</Quality><UpdateTime>0</UpdateTime><LastPlayIndex>1</LastPlayIndex><UserId>0</UserId>"
+           "<StationBackup>0</StationBackup></ListInfo><Tracks></Tracks></PlayList>";
 }
 
 }  // namespace wr

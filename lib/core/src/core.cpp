@@ -179,8 +179,9 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     std::string v;
     if (!jsonString(json, "status", v)) return st;
     st.ok = true;
-    st.playing = (v == "play" || v == "loading");
-    st.loading = (v == "loading");
+    // "load" : vu sur un WiiM (2026-11-16) pendant le chargement d'une file ; "loading" sur d'autres LinkPlay
+    st.loading = (v == "loading" || v == "load");
+    st.playing = (v == "play" || st.loading);
     if (jsonString(json, "vol", v)) st.volume = std::max(0, std::min(100, std::atoi(v.c_str())));
     if (jsonString(json, "Title", v)) st.title = decodeHexText(v);
     if (jsonString(json, "Artist", v)) st.artist = decodeHexText(v);

@@ -146,9 +146,12 @@ private:
     wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
     bool haveQobuz_ = false;
     bool qobuzFavsWanted_ = false;
+    bool qobuzFavDenied_ = false;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
     bool deezerTried_ = false;  // favoris Deezer : une tentative par démarrage
     std::string deezerToken_;  // jeton Deezer donné par le WiiM (mémoire seulement), vide si inconnu
     std::string searchQueue_;  // file des derniers résultats affichés
+    std::string searchUrl_;    // son adresse (SearchUrl), pour la recréer au moment du choix
+    std::vector<std::string> searchTitles_;  // titres des résultats affichés, dans l'ordre
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;

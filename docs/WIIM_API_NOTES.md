@@ -225,6 +225,29 @@ every linked service with its `showName`. Treat the token as a secret: never log
 `SearchUrl`) + `PlayQueueWithIndex` at the index found by title. The queue-based search (with mute and restore)
 remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `QueueContext` only.
 
+**Checked on a real WiiM with the `simreal` simulator (2026-11-16):**
+
+- The `GetUserInfo(Qobuz)` token works for `track/search` (200), but **Qobuz answers 401 « User authentication is
+  required »** for `favorite/getUserFavorites` (tracks, albums, with or without `user_id`) and `user/get`, with the
+  token in `X-User-Auth-Token`, in the query (`user_auth_token`), as `Authorization: Bearer`, signed
+  (`request_ts`/`request_sig` with the `appSecret` the Result also holds) and after `RefreshToken=1`. So no
+  favorite-album tiles from the direct API; the *Favoris Qobuz* list uses the queue fallback (the WiiM fetches
+  `getUserFavorites?type=tracks` itself, with mute and restore). The worker stops asking after the first 401.
+  The Result also holds `userName` (the `Login_username` of Qobuz queues), `userId`, `appSecret`, `expires_in`.
+- PlayQueue `GetUserFavorites(AccountSource, MediaType, Filter)`: 500 `UserRegister failed` for every value tried.
+- `GetUserInfo(Deezer2)` → 200 with the WiiM's **airable** access (`baseUrl`, `collection.url`, `search.url`,
+  `secret`, `userId`, `userName`), **no Deezer token**; `Deezer` and `deezer` → 500. Deezer favorites therefore need
+  the profile number.
+- `BrowseQueue(TotalQueue)` lists the stored queues as `<List1><Name>…</Name><ListInfo><Source>…` (not
+  `<ListName>`); the `Name` can differ from the queue's own `ListName` but `BrowseQueue(Name)` works.
+- **`DeleteQueue` stops playback**, even for a queue name that does not exist: note what plays (and mute) first.
+- **Shuffle** (`getPlayerStatus` `loop` 3, `GetQueueLoopMode` 3): `CreateQueue` reshuffles the queue shortly after
+  it is created; `PlayQueueWithIndex` follows the order `BrowseQueue` shows at that moment. Find a track by its title
+  in a fresh read-back, and check `getMetaInfo` after playing.
+- `getPlayerStatus` `status` is `load` (not `loading`) while a queue loads (~1–2.5 s); a `seek` sent then is lost.
+- The WiiM keeps only one or two queues: recreating one (restore) can drop the list's queue, so a list built from a
+  queue is played again by recreating it from its `SearchUrl`.
+
 ### Deezer
 
 - **Favorites of a public profile (no key, checked 2026-11-16):** `GET https://api.deezer.com/user/<profile number>/albums`,
