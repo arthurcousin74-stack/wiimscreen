@@ -20,7 +20,8 @@ Open source · runs on ESP32 · tested on the M5Stack Tab5
 </div>
 
 - **No cloud, no phone app.** The device uses the local interfaces of the WiiM (HTTP API and UPnP).
-- **No key for Qobuz or Deezer.** The WiiM gives its own Qobuz access. The Deezer search uses the public catalog.
+- **No key or password on the device.** Your WiiM plays Qobuz and Deezer with its own login. The Deezer search uses
+  the public Deezer catalog.
 - **English or French.** Select the language in the setup page.
 
 > **Status: beta.** Only the [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5) is tested. The checklist for
@@ -35,7 +36,7 @@ Open source · runs on ESP32 · tested on the M5Stack Tab5
 | **Control** | Play, pause, next, previous, volume and mute. A ring turns on a button until the WiiM does the command. |
 | **Tiles** | Presets of the WiiM, your favorites and a **Flow** tile, with their images. Swipe for the next page. |
 | **Favorites** | Touch the heart while an album or a playlist plays. One touch on its tile plays it again. |
-| **Qobuz** | Search tracks or albums. Touch a result to play it. Touch the heart of an album to add it as a tile. Your favorite tracks show in the **Qobuz favorites** tile. |
+| **Qobuz** | Search tracks. Touch a result to play it. Your favorite tracks show in the **Qobuz favorites** tile. Optional: album search with a heart to add an album as a tile (see [Unofficial interfaces](#unofficial-interfaces)). |
 | **Deezer** | Search the Deezer catalog. **Flow** becomes a tile automatically. Favorites of a public profile show as tiles. |
 | **Voice search** | Optional. Say an artist or a title. Uses OpenAI speech-to-text with your own key. |
 | **Ambient view** | After 60 s without a touch: large album art and text, and an optional sound spectrum. |
@@ -76,17 +77,19 @@ latest [Actions](../../actions) run (artifact `wiim-remote-tab5`).
 ## How to
 
 <details>
-<summary><b>Search Qobuz (tracks or albums)</b></summary>
+<summary><b>Search Qobuz</b></summary>
 
-The WiiM must have your Qobuz account (WiiM Home app › Qobuz).
+The WiiM must have your Qobuz account (WiiM Home app › Qobuz). Play one Qobuz album from the WiiM Home app one time:
+the Tab5 copies the Qobuz settings of the WiiM from this play queue.
 
-1. Touch the magnifying glass in the left bar.
-2. Select **Qobuz** (tracks) or **Albums** below the search field.
-3. Type an artist, a track or an album, then touch **Search**. The music does not change.
-4. Touch a result. For a track, the WiiM plays its album from this track.
+1. Touch the magnifying glass in the left bar. Make sure that **Qobuz** is selected below the search field.
+2. Type an artist or a track, then touch **Search**.
+3. Wait approximately 10 seconds. Your WiiM does the search. The music stops during the search, then comes back.
+4. Touch a result. The WiiM plays it.
 
-To add an album as a tile without playing it, touch the heart at the right of the album. Touch it again to remove
-the tile.
+With the **Direct Qobuz search** option (setup page › **Advanced**), the search takes 1 second, the music does not
+stop, and an **Albums** choice shows: touch the heart of an album to add it as a tile without playing it. This
+option is not official: refer to [Unofficial interfaces](#unofficial-interfaces).
 
 </details>
 
@@ -164,12 +167,29 @@ puts it back. To erase everything, use **Advanced** › **Erase everything** in 
 | **Board** | [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5): ESP32-P4, 5" 1280×720 touchscreen, 32 MB PSRAM. The battery is optional. This is the only tested board. |
 | **Other boards** | ESP32-S3 or ESP32-P4 boards with a touchscreen and PSRAM. A port is possible: refer to [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards). |
 
+## Unofficial interfaces
+
+wiimscreen uses only the local interfaces of your WiiM, on your own network. Some of them are not documented:
+
+| Interface | Status | What it is used for |
+|---|---|---|
+| WiiM HTTP API (`httpapi.asp`) | Documented by WiiM / LinkPlay | Status, playback, volume, presets |
+| UPnP discovery and services | Standard | Find the WiiM |
+| UPnP `PlayQueue` service | Not documented. The WiiM Home app uses it. | Play albums, playlists, favorites and search results. A WiiM firmware update can change it. |
+| Deezer public API | Public, no key | Deezer search, favorites of a public profile |
+| **Direct Qobuz search** (option, **off** by default) | **Not official** | The WiiM gives the Qobuz access of its own integration over UPnP (`GetUserInfo`). With the option, the Tab5 uses this access to search Qobuz directly. Qobuz does not approve this use. |
+
+With the default settings, the Tab5 never reads or uses a Qobuz or Deezer access: your WiiM does all the requests
+to the streaming services. The Tab5 downloads only the album art.
+
 ## Privacy and security
 
-- All data stays on your local network, except album art, searches, the Qobuz and Deezer requests, and voice search.
+- All data stays on your local network, except album art, the Deezer search, voice search and (with the option) the
+  direct Qobuz search.
 - The device keeps the fingerprint of the WiiM certificate and checks it before each request.
 - Other HTTPS connections use the Mozilla root certificates.
-- The Qobuz access from the WiiM stays in memory only. The device does not show or log passwords, keys or tokens.
+- With the direct Qobuz search option, the Qobuz access from the WiiM stays in memory only. The device does not
+  show or log passwords, keys or tokens.
 - Setup mode and update mode start only after an action on the device. They use a random password or a 6-digit code.
 
 More data: [SECURITY.md](SECURITY.md).

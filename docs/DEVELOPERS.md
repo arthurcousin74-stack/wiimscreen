@@ -53,18 +53,23 @@ gives new tracks each time.
 
 ### Qobuz
 
-`GetUserInfo(Qobuz)` gives an application ID and a token. The Tab5 keeps them in memory only. With this access, the
-Tab5 searches Qobuz (`track/search`, `album/search`) and shows the results: the music does not change. Qobuz refuses
-this token for the favorites (HTTP 401). Thus the **Qobuz favorites** list comes from a queue: the WiiM reads
-`favorite/getUserFavorites?type=tracks` itself. Because the WiiM starts a queue at once, the Tab5 mutes the WiiM
-and then puts back the music that played before (same track, same position).
+**Default (official parts only).** The WiiM does the Qobuz requests itself. For a search, the Tab5 sends a queue
+whose `SearchUrl` is `track/search?query=…`; the WiiM fills it with its own Qobuz login. The **Qobuz favorites**
+list is the same with `favorite/getUserFavorites?type=tracks`. Because the WiiM starts a queue at once, the Tab5
+mutes the WiiM and then puts back the music that played before (same track, same position). The WiiM does not fill
+a queue from an album search, so album search needs the option below.
+
+**Option "Direct Qobuz search" (`Settings::qobuzDirect`, off by default, not official).** `GetUserInfo(Qobuz)` gives
+the application ID and a token of the WiiM's Qobuz integration. The Tab5 keeps them in memory only and uses them for
+`track/search` and `album/search`: faster, and the music does not change. Qobuz does not approve this use of another
+application's ID. Qobuz refuses this token for the favorites (HTTP 401). With the option off, the Tab5 never calls
+`GetUserInfo`.
 
 ### Deezer
 
 The Tab5 searches the public Deezer catalog (`api.deezer.com/search`, no key). An album plays as an airable queue
 (`<airable address>/deezer/album/<id>`). The favorites come from a public profile (`api.deezer.com/user/<number>`).
-The Deezer access of the WiiM is an airable access, not a Deezer token: the Tab5 cannot read your Deezer library
-with it.
+The Deezer access of the WiiM is an airable access, not a Deezer token. The Tab5 does not ask for it.
 
 ## Build from source
 

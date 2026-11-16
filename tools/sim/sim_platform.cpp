@@ -202,6 +202,7 @@ void sim::defaultSettings() {
     prefs()["host"] = "wiim.sim";
     prefs()["wiimname"] = "WiiM simul\xC3\xA9";
     prefs()["deezeruser"] = "123456";
+    prefs()["qobuzdirect"] = "1";  // fake WiiM: the tour also covers the album search (opt-in on a real Tab5)
 #endif
     prefs()["oaikey"] = "sim-cle-factice-pour-le-micro";  // shows the microphone (dictation is simulated)
     savePrefs();

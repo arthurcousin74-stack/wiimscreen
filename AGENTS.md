@@ -128,7 +128,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
   **shuffle on**, `CreateQueue` reshuffles: find a track by title in a fresh `BrowseQueue`, never reuse an old
   index. Status `load` = loading; seek only once it plays. (Seen with `simreal` on a real WiiM, 2026-11-16.)
-- The Qobuz token from `GetUserInfo` is refused (401) for favorites: only search works directly. Album tiles come
+- **Direct Qobuz search is opt-in** (`Settings::qobuzDirect`, setup page › Advanced, off by default): it reuses
+  the WiiM's Qobuz app ID and token from `GetUserInfo`, which Qobuz does not approve. With it off, `qobuzAccess()`
+  returns false and `GetUserInfo` is never called; search and the favorites list go through WiiM queues, and the
+  Albums choice is hidden (the WiiM does not fill a queue from `album/search`). Do not add new uses of the WiiM's
+  Qobuz credentials outside this option. The token is refused (401) for favorites anyway. Album tiles come
   from the album search (♥ saves a queue `album/get?album_id=…`, key `wr::qobuzAlbumKey`, nothing plays).
 - **♥ state**: the worker reads `CurrentQueue` once per track change and puts its `wr::queueKey` in
   `WiimReport::queueKey`; `currentFavorite()` matches favorites by that key first, then by album (Flow has no album).

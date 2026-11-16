@@ -1129,6 +1129,7 @@ void setup() {
     g_ui.begin(g_settings);
     g_ui.setVisualizer(g_settings.visualizer);
     g_ui.setVoiceEnabled(g_settings.voiceEnabled());
+    g_ui.setAlbumSearch(g_settings.qobuzDirect);  // la recherche d'albums demande l'accès Qobuz direct (non officiel)
 
     String portalReason;
     if (takePortalRequest(portalReason)) runSetupPortal(g_settings, g_ui, portalReason);  // demandé avant le redémarrage
@@ -1210,6 +1211,7 @@ static void openSearch() {
     g_searchOpen = true;
     g_deezerOk = g_favOk && fav::hasDeezerModel();
     if (!g_deezerOk && g_searchSource == 1) g_searchSource = 0;
+    if (!g_settings.qobuzDirect && g_searchSource == 2) g_searchSource = 0;
     g_searchStatus = g_searchBusy ? String(wr::L("Searching\xE2\x80\xA6", "Recherche en cours\xE2\x80\xA6")) : String();
     renderSearch();
 }

@@ -267,6 +267,20 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
                    "Seulement apr\xC3\xA8s une r\xC3\xA9initialisation ou un changement de WiiM.");
         h += F("</small>");
     }
+    // Recherche Qobuz directe : non officielle, désactivée par défaut, expliquée telle quelle
+    h += F("<label class=chk><input type=checkbox name=qobuzdirect value=1");
+    if (s.qobuzDirect) h += F(" checked");
+    h += F(">");
+    h += wr::L("Direct Qobuz search (unofficial)", "Recherche Qobuz directe (non officielle)");
+    h += F("</label><small>");
+    h += wr::L("Faster search, no music interruption, and album search. The Tab5 then asks Qobuz with the Qobuz "
+               "access that your WiiM shares on your network: this is not an official Qobuz API. Off (default): "
+               "your WiiM searches itself, and the music stops a few seconds during a search.",
+               "Recherche plus rapide, sans couper la musique, et recherche d'albums. Le Tab5 interroge alors Qobuz "
+               "avec l'acc\xC3\xA8s Qobuz que ton WiiM partage sur ton r\xC3\xA9seau : ce n'est pas une API "
+               "officielle de Qobuz. D\xC3\xA9sactiv\xC3\xA9" "e (par d\xC3\xA9" "faut) : ton WiiM cherche "
+               "lui-m\xC3\xAAme, et la musique s'arr\xC3\xAAte quelques secondes pendant une recherche.");
+    h += F("</small>");
     h += F("<label class=chk><input type=checkbox name=wipe value=1 id=wipe>");
     h += wr::L("Erase everything: settings, OpenAI key and favorites",
                "Tout effacer : r\xC3\xA9glages, cl\xC3\xA9 OpenAI et favoris");
@@ -416,6 +430,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.beep = constrain(server.arg("beep").toInt(), 0, 3);
         next.visualizer = server.arg("visu") != "0";
         next.motionWake = server.arg("motion") != "0";
+        next.qobuzDirect = server.hasArg("qobuzdirect");  // case non cochée : absente du formulaire
         next.sleepMin = constrain(server.arg("sleep").toInt(), 0, 240);
         String key = server.arg("oaikey");
         key.trim();

@@ -59,6 +59,7 @@ public:
     void renderAmbient(const UiState& st);
     // Dictée de la recherche : bouton micro (si une clé OpenAI est configurée)
     void setVoiceEnabled(bool on) { voiceOn_ = on; }
+    void setAlbumSearch(bool on) { albumsOn_ = on; }  // choix « Albums » (recherche Qobuz directe seulement)
     bool hitMic(int x, int y) const;
     bool hitHome(int x, int y) const;      // Accueil : barre de navigation, ou bouton de la vue ambiance
     bool hitSettings(int x, int y) const;  // Réglages : barre de navigation
@@ -192,6 +193,7 @@ private:
     uint32_t progDuration_ = 0;
     // Commande vocale
     bool voiceOn_ = false;
+    bool albumsOn_ = false;
     wr::Rect cancelRect_;
     wr::Rect menuRects_[6];
     wr::Rect logClose_;

@@ -827,6 +827,9 @@ void WiimWorker::runPlayDeezer(int i) {
 // sans toucher à la lecture. Le jeton reste en mémoire : jamais journalisé, affiché ni enregistré.
 
 bool WiimWorker::qobuzAccess(const std::string& control, bool refresh) {
+    // Accès direct non officiel (identifiant d'application et jeton Qobuz du WiiM) : seulement si on l'a choisi
+    // (configuration › Avancé). Sinon, GetUserInfo n'est jamais appelé : le Tab5 ne détient aucun accès Qobuz.
+    if (!cfg_.qobuzDirect) return false;
     if (haveQobuz_ && !refresh) return true;
     haveQobuz_ = false;
     std::string resp, result;
@@ -881,7 +884,7 @@ void WiimWorker::runQobuzFavorites() {
     if (model && !hadModel) logEvent("Qobuz : mod\xC3\xA8le de file enregistr\xC3\xA9 (tuile Favoris Qobuz)");
     if (!fav::hasDeezerModel() && deezerModel(control, templ))  // file Deezer gardée par le WiiM : recherche Deezer
         logEvent("Deezer : mod\xC3\xA8le de file copi\xC3\xA9 depuis le WiiM");
-    if (qobuzFavDenied_) {  // Qobuz a déjà refusé l'accès du WiiM aux favoris : pas de nouvel essai
+    if (qobuzFavDenied_ || !cfg_.qobuzDirect) {  // refusé par Qobuz, ou accès direct non choisi : pas d'essai
         ev.ok = model && !hadModel;  // seulement pour afficher la tuile « Favoris Qobuz »
         if (ev.ok) push(std::move(ev));
         return;
@@ -921,38 +924,10 @@ static int deezerGet(const std::string& path, std::string& out, std::string& err
     return code;
 }
 
-// Favoris Deezer : profil public donné dans la page de configuration (api.deezer.com/user/<numéro>, sans clé),
-// sinon un jeton Deezer donné par le WiiM (GetUserInfo, non vérifié : essayé une fois par démarrage).
-// Le jeton reste en mémoire, jamais journalisé.
-std::string WiimWorker::deezerUserPath(const std::string& control) {
-    if (cfg_.deezerUser.length()) return "user/" + std::string(cfg_.deezerUser.c_str());
-    if (deezerToken_.empty() && !deezerTried_ && control.size()) {
-        deezerTried_ = true;
-        // Vu sur un WiiM (2026-11-16) : « Deezer2 » répond 200 avec l'accès airable du WiiM (pas de jeton Deezer),
-        // « Deezer » et « deezer » répondent 500. On s'arrête à la première réponse 200.
-        for (const char* src : {"Deezer2", "Deezer"}) {
-            std::string resp, result;
-            const int c = upnpRequest(control, "GetUserInfo",
-                                      wr::soapBody(kPlayQueue, "GetUserInfo", {{"AccountSource", src}, {"RefreshToken", "0"}}),
-                                      resp);
-            if (c == 200 && wr::xmlElement(resp, "Result", result)) deezerToken_ = wr::parseAccessToken(wr::xmlUnescape(result));
-            if (c == 200 || !deezerToken_.empty()) {
-                logEvent("Deezer : GetUserInfo(%s) %d, %s", src, c,
-                         deezerToken_.empty() ? "pas de jeton Deezer (le WiiM passe par airable) : favoris avec le "
-                                                "num\xC3\xA9ro de profil Deezer de la configuration"
-                                              : "jeton obtenu");
-                break;
-            }
-            logEvent("Deezer : GetUserInfo(%s) %d", src, c);
-        }
-    }
-    return deezerToken_.empty() ? "" : "user/me";
-}
-
-// Ajoute le jeton à une adresse « user/me/… » (jamais journalisée)
-std::string WiimWorker::deezerAuth(const std::string& path) const {
-    if (path.compare(0, 8, "user/me/") != 0) return path;
-    return path + (path.find('?') == std::string::npos ? "?" : "&") + "access_token=" + deezerToken_;
+// Favoris Deezer : profil public donné dans la configuration (api.deezer.com/user/<numéro>, sans clé), sinon rien.
+// (Le WiiM ne donne pas de jeton Deezer : GetUserInfo(Deezer2) répond avec l'accès airable du WiiM, qu'on ne lit pas.)
+std::string WiimWorker::deezerUserPath(const std::string&) {
+    return cfg_.deezerUser.length() ? "user/" + std::string(cfg_.deezerUser.c_str()) : "";
 }
 
 void WiimWorker::runDeezerFavorites() {
@@ -963,9 +938,8 @@ void WiimWorker::runDeezerFavorites() {
     ev.kind = WiimEvent::DeezerFavorites;
     if (!user.empty()) {
         std::string body, err;
-        const int code = deezerGet(deezerAuth(user + "/albums?limit=50"), body, err);
+        const int code = deezerGet(user + "/albums?limit=50", body, err);
         ev.albums = wr::parseDeezerAlbums(body);
-        if (!err.empty() && user == "user/me") deezerToken_.clear();  // jeton refusé : redemandé au prochain démarrage
         ev.ok = code == 200 && err.empty();
         logEvent("Deezer : albums favoris %d, %u%s%s", code, (unsigned)ev.albums.size(), err.empty() ? "" : " : ",
                  err.c_str());
@@ -987,7 +961,7 @@ void WiimWorker::runDeezerFavoriteList(const String& title) {
         return;
     }
     std::string body, err;
-    const int code = deezerGet(deezerAuth(user + "/tracks?limit=100"), body, err);
+    const int code = deezerGet(user + "/tracks?limit=100", body, err);
     deezerResults_ = wr::parseDeezerTracks(body);
     searchSource_ = 1;
     logEvent("Favoris Deezer : %d, %u morceau(x)%s%s", code, (unsigned)deezerResults_.size(), err.empty() ? "" : " : ",
@@ -1036,6 +1010,12 @@ void WiimWorker::runQobuzAlbumSearch(const String& query) {
     ev.name = query;
     std::string control, body;
     qobuzAlbums_.clear();
+    if (!cfg_.qobuzDirect) {  // le WiiM ne remplit pas une file depuis une recherche d'albums (vérifié, 2026-11-16)
+        ev.text = wr::L("album search needs the direct Qobuz search (setup page \xE2\x80\xBA Advanced)",
+                        "la recherche d'albums demande la recherche Qobuz directe (configuration \xE2\x80\xBA Avanc\xC3\xA9)");
+        push(std::move(ev));
+        return;
+    }
     const uint32_t t0 = millis();
     const int code = findPlayQueue(control, false)
                          ? qobuzGet(control, "album/search?query=" + wr::urlQueryEncode(query.c_str()) + "&limit=50", body)
@@ -1141,7 +1121,13 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
     const bool restarted = before.posMs > 8000 && st.positionMs + 4000 < before.posMs;
     const bool changed = st.playing && (!before.playing || st.title != before.title || restarted);
     if (!changed) {
-        logEvent("Apr\xC3\xA8s la recherche : rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9");
+        // Rien ne jouait et le WiiM est resté en pause sur la file de recherche : arrêt, comme avant la recherche
+        if (!before.playing && !st.playing && !st.title.empty() && st.title != before.title) {
+            const WiimError e = client_.command("setPlayerCmd:stop");
+            logEvent("Apr\xC3\xA8s la recherche : file de recherche arr\xC3\xAAt\xC3\xA9" "e (%s)", wiimErrorName(e));
+        } else {
+            logEvent("Apr\xC3\xA8s la recherche : rien n'a \xC3\xA9t\xC3\xA9 lanc\xC3\xA9");
+        }
         return;
     }
     std::string resp;
@@ -1207,8 +1193,10 @@ void WiimWorker::runSearch(const String& query) {
         push(std::move(ev));
         return;
     }
-    // Recherche directe (accès Qobuz donné par le WiiM) : rien ne joue avant que l'on choisisse
-    {
+    // Recherche directe (accès Qobuz donné par le WiiM, non officielle, si choisie) : rien ne joue avant le choix
+    if (!cfg_.qobuzDirect) {
+        logEvent("Recherche Qobuz par une file du WiiM (recherche directe non choisie)");
+    } else {
         std::string body;
         const uint32_t t0 = millis();
         const int code = qobuzGet(control, "track/search?query=" + wr::urlQueryEncode(query.c_str()) + "&limit=40", body);
@@ -1381,7 +1369,8 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
         push(std::move(ev));
         return;
     }
-    logEvent("Favoris Qobuz : acc\xC3\xA8s direct %d, liste par une file du WiiM", code);
+    if (cfg_.qobuzDirect) logEvent("Favoris Qobuz : acc\xC3\xA8s direct %d, liste par une file du WiiM", code);
+    else logEvent("Favoris Qobuz : liste par une file du WiiM (recherche directe non choisie)");
     if (!qobuzModel(control, templ)) {
         ev.text = wr::L("first start a Qobuz album from the WiiM Home app", "lance d'abord un album Qobuz depuis l'app WiiM Home");
         push(std::move(ev));

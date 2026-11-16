@@ -118,8 +118,7 @@ private:
     void runPlayQobuzAlbum(const std::string& albumId);
     void runDeezerFavorites();
     void runDeezerFavoriteList(const String& title);
-    std::string deezerUserPath(const std::string& control);  // « user/<n> », « user/me » (jeton) ou vide
-    std::string deezerAuth(const std::string& path) const;
+    std::string deezerUserPath(const std::string& control);  // « user/<n> » (profil configuré) ou vide
     void runPlayDeezerAlbum(const std::string& albumId);
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
@@ -164,8 +163,6 @@ private:
     bool qobuzFavDenied_ = false;
     std::string queueTitle_, queueKey_;  // file en cours relue à chaque changement de morceau (et toutes les 60 s)
     uint32_t queueReadAt_ = 0;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
-    bool deezerTried_ = false;  // favoris Deezer : une tentative par démarrage
-    std::string deezerToken_;  // jeton Deezer donné par le WiiM (mémoire seulement), vide si inconnu
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string searchUrl_;    // son adresse (SearchUrl), pour la recréer au moment du choix
     std::vector<std::string> searchTitles_;  // titres des résultats affichés, dans l'ordre

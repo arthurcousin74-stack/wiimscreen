@@ -32,6 +32,7 @@ The Journal masks tokens and passwords, but check anyway.
 
 | # | Do | Expected | Journal |
 |---|---|---|---|
+| 2.0 | Default settings (direct Qobuz search **off**): search ⌕ › Qobuz › « miles davis » › ↵. | The **Albums** choice is not shown. Results after about 10 s; the music stops during the search and comes back. No `Qobuz : accès…` line in the Journal. Then turn on setup page › **Advanced** › **Direct Qobuz search** for tests 2.1–2.11. | `Recherche Qobuz par une file du WiiM (recherche directe non choisie)` |
 | 2.1 | Look at the Journal after the start. | `Qobuz : accès par le WiiM obtenu (GetUserInfo 200)`. If it says `indisponible`, note the code: many tests below then use the slower fallback. | `Qobuz : accès …` |
 | 2.2 | Same Journal. | `Qobuz : albums favoris 200, N`. N = number of favorite **albums** in your Qobuz account. On the WiiM tested with the simulator (2026-11-16), Qobuz refuses this (no other way found, see WIIM_API_NOTES): `albums favoris 401, 0 (Qobuz refuse l'accès du WiiM aux favoris…)`. Note which one you get. | `Qobuz : albums favoris …` |
 | 2.3 | 🏠 › swipe the tiles. | If N > 0: album tiles with covers after the presets. With 401: no album tiles, but the **Favoris Qobuz** tile shows (also on a new Tab5: the model is copied from the WiiM's queues). | `Qobuz : modèle de file enregistré` |

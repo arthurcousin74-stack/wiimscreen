@@ -40,6 +40,7 @@ bool loadSettings(Settings& s) {
     s.sttModel = p.getString("sttmodel", "gpt-4o-mini-transcribe");
     s.deezerUser = p.getString("deezeruser", "");
     s.lang = p.getString("lang", "en");
+    s.qobuzDirect = p.getBool("qobuzdirect", false);
     p.end();
 
     std::string err;
@@ -59,7 +60,7 @@ std::string settingsToBackup(const Settings& s) {
         {"volstep", std::to_string(s.volStep)}, {"beep", std::to_string(s.beep)}, {"visu2", s.visualizer ? "1" : "0"},
         {"motion", s.motionWake ? "1" : "0"},   {"sleep", std::to_string(s.sleepMin)},
         {"oaikey", s.openaiKey.c_str()},  {"sttmodel", s.sttModel.c_str()}, {"deezeruser", s.deezerUser.c_str()},
-        {"lang", s.lang.c_str()}};
+        {"lang", s.lang.c_str()},         {"qobuzdirect", s.qobuzDirect ? "1" : "0"}};
     return wr::encodeFields(f);
 }
 
@@ -86,6 +87,7 @@ bool settingsFromBackup(const std::string& text, Settings& s) {
         else if (k == "sttmodel") r.sttModel = v.length() ? v : String("gpt-4o-mini-transcribe");
         else if (k == "deezeruser") r.deezerUser = v;
         else if (k == "lang") r.lang = v;
+        else if (k == "qobuzdirect") r.qobuzDirect = v == "1";
     }
     if (!r.configured()) return false;
     s = r;
@@ -113,6 +115,7 @@ void saveSettings(const Settings& s) {
     p.putString("sttmodel", s.sttModel);
     p.putString("deezeruser", s.deezerUser);
     p.putString("lang", s.lang);
+    p.putBool("qobuzdirect", s.qobuzDirect);
     p.end();
 }
 

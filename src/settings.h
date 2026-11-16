@@ -25,6 +25,9 @@ struct Settings {
     String openaiKey;        // dictée de la recherche : clé API OpenAI (vide = pas de bouton micro)
     String sttModel = "gpt-4o-mini-transcribe";  // modèle de transcription OpenAI
     String deezerUser;  // numéro du profil Deezer (favoris publics, api.deezer.com/user/<n>) ; vide = aucun
+    // Recherche Qobuz directe (non officielle) : le Tab5 interroge Qobuz avec l'accès que le WiiM partage en UPnP
+    // (GetUserInfo). Désactivée par défaut : le WiiM cherche lui-même (la musique s'interrompt quelques secondes).
+    bool qobuzDirect = false;
     String lang = "en";  // langue de l'interface : "en" (par défaut) ou "fr" (wr::langFromCode)
 
     bool voiceEnabled() const { return openaiKey.length() > 20; }

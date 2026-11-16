@@ -995,7 +995,8 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     srcRects_[0] = srcRects_[1] = srcRects_[2] = wr::Rect{};
     {
         // Qobuz (morceaux) | Albums (Qobuz) | Deezer (si une file Deezer est connue), à droite de la ligne d'état
-        std::vector<std::pair<int, const char*>> chips = {{0, "Qobuz"}, {2, "Albums"}};
+        std::vector<std::pair<int, const char*>> chips = {{0, "Qobuz"}};
+        if (albumsOn_) chips.push_back({2, "Albums"});
         if (sources) chips.push_back({1, "Deezer"});
         const int n = (int)chips.size(), gap = sc(8), ch = sc(40), cy = fy + fh + sc(6);
         const int cw = std::min(sc(124), (W * 60 / 100 - (n - 1) * gap) / n);

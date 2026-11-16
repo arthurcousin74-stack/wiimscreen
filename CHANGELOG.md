@@ -3,6 +3,19 @@
 Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show their version at the bottom of
 the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
+## [Unreleased]
+
+### Changed
+- **Direct Qobuz search is now an option, off by default** (setup page › Advanced). It reuses the Qobuz access of
+  the WiiM's own integration (`GetUserInfo`), which is not an official Qobuz API. By default the WiiM does the
+  Qobuz search and the favorites list itself (the music stops a few seconds during a search) and the Tab5 never
+  reads a Qobuz access; the Albums choice shows only with the option. README: new "Unofficial interfaces" section.
+- The Tab5 no longer asks the WiiM for a Deezer access (there is no Deezer token, only airable's).
+
+### Fixed
+- After a search through the WiiM, when nothing played before, the WiiM is stopped again (not left paused on a
+  result).
+
 ## [0.1.0-beta] — 2026-11-16 — first public release
 
 Beta: only the M5Stack Tab5 is tested. Items marked *(simulator)* were verified with the real-WiiM simulator

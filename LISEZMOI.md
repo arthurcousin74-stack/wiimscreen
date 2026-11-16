@@ -186,6 +186,18 @@ curl -o certs/cacrt_all.pem https://raw.githubusercontent.com/espressif/esp-idf/
 python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
 ```
 
+## Interfaces non officielles
+
+wiimscreen n'utilise que les interfaces locales de ton WiiM, sur ton réseau. L'API HTTP (`httpapi.asp`) est
+documentée par WiiM ; le service UPnP `PlayQueue` (files de lecture) ne l'est pas : c'est celui de l'app WiiM Home,
+et une mise à jour du WiiM peut le changer.
+
+Par défaut, c'est le WiiM qui interroge Qobuz et Deezer avec son propre compte : la recherche Qobuz passe par une
+file du WiiM (environ 10 s, la musique s'arrête pendant la recherche puis revient), et le Tab5 ne lit jamais
+d'accès Qobuz ou Deezer. L'option **Recherche Qobuz directe (non officielle)** (configuration › **Avancé**) rend la
+recherche immédiate et ajoute la recherche d'albums : le Tab5 interroge alors Qobuz avec l'accès que le WiiM
+partage en UPnP (`GetUserInfo`), ce que Qobuz n'a pas approuvé. À toi de choisir.
+
 ## Notes de sécurité
 
 - Le Wi-Fi de configuration est protégé par un mot de passe aléatoire de 10 caractères (générateur matériel), affiché uniquement sur l'écran. Il n'existe que pendant la configuration.
