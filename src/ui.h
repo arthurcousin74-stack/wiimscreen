@@ -2,7 +2,9 @@
 
 #include <M5Unified.h>
 
+#include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "art.h"
@@ -114,9 +116,14 @@ public:
     void updateSearchField(const std::string& query, const String& status, bool busy, int source, bool sources,
                            int mic = 0, float level = 0);
     const std::vector<wr::Key>& keys() const { return keys_; }
-    // hearts : vide, ou un cœur par ligne (0 vide, 1 plein) : albums que l'on peut mettre en tuile
+    // hearts : vide, ou un cœur par ligne (0 vide, 1 plein) : albums que l'on peut mettre en tuile.
+    // covers : vide, ou une image par ligne (nullptr : pas encore là) ; une ligne dont `art` est vide garde son numéro
     void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
-                       const String& status, int pressed = -1, const std::vector<int>& hearts = {});
+                       const String& status, int pressed = -1, const std::vector<int>& hearts = {},
+                       const std::vector<const ArtImage*>& covers = {});
+    // Pochette arrivée après l'affichage de la liste : seule sa case est redessinée (si la ligne est visible)
+    void updateResultCover(int index, const ArtImage* img);
+    int resultsFirst() const { return resultsFirst_; }
     int resultsPerPage() const { return resultsPerPage_; }
     int hitResult(int x, int y) const;   // indice global du morceau, ou -1
     int hitResultHeart(int x, int y) const;  // indice global de la ligne dont le cœur est touché, ou -1
@@ -205,6 +212,9 @@ private:
     std::vector<wr::Key> keys_;           // clavier affiché
     std::vector<wr::Rect> resultRects_;   // lignes de résultats affichées
     std::vector<wr::Rect> heartRects_;    // leurs cœurs (vide sans cœurs)
+    std::vector<wr::Rect> coverRects_;    // leurs pochettes (rectangle vide : numéro à la place)
+    std::map<std::string, std::unique_ptr<M5Canvas>> coverThumbs_;  // pochettes décodées, par adresse
+    void drawResultCover(const wr::Rect& r, const ArtImage* img);
     int resultsFirst_ = 0, resultsPerPage_ = 1;
     wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
     wr::Rect srcRects_[3];  // choix Qobuz | Deezer | Albums du clavier (indice = source)

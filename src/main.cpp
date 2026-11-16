@@ -23,6 +23,7 @@
 #include <atomic>
 #include <cmath>
 #include <map>
+#include <set>
 
 #include "art.h"
 #include "core.h"
@@ -58,6 +59,8 @@ static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Q
 static const char* kQobuzFavsId = "qobuz-favoris";    // tuile « Favoris Qobuz » : liste des morceaux favoris
 static const char* kDeezerFavsId = "deezer-favoris";  // tuile « Favoris Deezer » (profil Deezer configuré)
 static std::map<std::string, ArtImage> g_presetImages;  // images des presets, par adresse
+static std::map<std::string, ArtImage> g_resultImages;  // pochettes de la liste de résultats (jusqu'à la suivante)
+static std::set<std::string> g_coverRequested;          // pochettes de résultats demandées au téléchargement
 static bool g_presetsFromWiim = false;
 static uint32_t g_lastPresetFetch = 0;
 
@@ -478,12 +481,24 @@ static void checkImages() {
         bool used = false;
         for (auto& p : g_presets)
             if (p.picUrl == img.url) used = true;
+        if (!used && g_coverRequested.count(img.url)) {  // pochette d'une ligne de résultats
+            const std::string url = img.url;
+            ArtImage& stored = g_resultImages[url];
+            stored = std::move(img);
+            if (g_resultsOpen && !g_searchOpen)
+                for (size_t i = 0; i < g_searchResults.size(); ++i)
+                    if (g_searchResults[i].art == url) g_ui.updateResultCover((int)i, &stored);
+            continue;
+        }
         if (!used) continue;  // piste ou liste déjà changée : image périmée
         std::string url = img.url;
         ArtImage& stored = g_presetImages[url];
         stored = std::move(img);
         for (size_t i = 0; i < g_presets.size(); ++i)
             if (g_presets[i].picUrl == url) g_ui.setPresetArt((int)i, &stored);
+        if (g_resultsOpen && !g_searchOpen && g_coverRequested.count(url))  // même image dans la liste ouverte
+            for (size_t i = 0; i < g_searchResults.size(); ++i)
+                if (g_searchResults[i].art == url) g_ui.updateResultCover((int)i, &stored);
         changed = true;
     }
     if (changed) show();
@@ -1211,6 +1226,26 @@ static int albumFavIndex(size_t i) {
     return -1;
 }
 
+// Image déjà téléchargée pour cette adresse (résultats, presets, pochette en cours), sinon nullptr
+static const ArtImage* knownImage(const std::string& url) {
+    if (url.empty()) return nullptr;
+    auto r = g_resultImages.find(url);
+    if (r != g_resultImages.end()) return &r->second;
+    auto p = g_presetImages.find(url);
+    if (p != g_presetImages.end()) return &p->second;
+    return g_art.url == url ? &g_art : nullptr;
+}
+
+// Pochettes des lignes de la page affichée : demandées une fois chacune (pas toute la liste d'un coup)
+static void requestCovers() {
+    const int first = g_ui.resultsFirst(), n = g_ui.resultsPerPage();
+    for (int i = first; i < first + n && i < (int)g_searchResults.size(); ++i) {
+        const std::string& url = g_searchResults[i].art;
+        if (url.empty() || knownImage(url) || !g_coverRequested.insert(url).second) continue;
+        g_artFetcher.request(url);
+    }
+}
+
 static void renderResultsList(int pressed, const String& status) {
     std::vector<int> hearts;
     String sub = status;
@@ -1220,7 +1255,10 @@ static void renderResultsList(int pressed, const String& status) {
             sub = String((int)g_searchResults.size()) + (g_searchResults.size() > 1 ? " albums" : " album") +
                   " \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile";
     }
-    g_ui.renderResults(g_resultsTitle, g_searchResults, g_resultsPage, sub, pressed, hearts);
+    std::vector<const ArtImage*> covers;
+    for (auto& t : g_searchResults) covers.push_back(knownImage(t.art));
+    g_ui.renderResults(g_resultsTitle, g_searchResults, g_resultsPage, sub, pressed, hearts, covers);
+    requestCovers();
 }
 
 // Cœur d'un album trouvé : ajouté en tuile (tâche WiiM : il faut le modèle de file Qobuz), ou retiré
@@ -1258,6 +1296,8 @@ static void onSearchDone(const WiimEvent& ev) {
     } else {
         g_searchResults = ev.tracks;
         g_resultsPage = 0;
+        g_resultImages.clear();  // pochettes de la liste précédente (PSRAM)
+        g_coverRequested.clear();
         g_searchStatus = "";
         if (g_searchOpen || g_resultsOpen) {  // toujours sur le clavier ou la liste : on montre les résultats
             g_searchOpen = false;
@@ -1407,6 +1447,7 @@ void loop() {
         serviceTranscription();
         serviceVoice();
         serviceWiim();
+        checkImages();  // pochettes des résultats (et des tuiles) arrivées pendant la liste
         delay(5);
         return;
     }

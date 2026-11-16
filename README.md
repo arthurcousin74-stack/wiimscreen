@@ -57,11 +57,11 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
   album art, and one touch plays it again. Touch the heart again to remove the album. You do not need a key for
   the streaming service. The device keeps a maximum of 24 favorites.
 - **Qobuz search** without a key: touch the magnifying glass in the left bar and type an artist or a track on the
-  on-screen keyboard. The device searches Qobuz with the access that your WiiM gives. It shows the results (title,
-  artist, album). The music does not change until you touch a result. Then the WiiM plays the album of this track,
+  on-screen keyboard. The device searches Qobuz with the access that your WiiM gives. It shows the results (album
+  art, title, artist, album). The music does not change until you touch a result. Then the WiiM plays the album of this track,
   from this track. Refer to [Search Qobuz](#search-qobuz).
-- **Qobuz album search**: on the search screen, select **Albums**. The device shows the albums (title, artist,
-  number of tracks). Touch an album to play it. Touch the heart of an album to add it as a tile, without playing it.
+- **Qobuz album search**: on the search screen, select **Albums**. The device shows the albums (album art, title,
+  artist, number of tracks). Touch an album to play it. Touch the heart of an album to add it as a tile, without playing it.
   Touch the heart again to remove the tile.
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first

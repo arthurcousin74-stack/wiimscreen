@@ -999,7 +999,7 @@ void WiimWorker::runQobuzAlbumSearch(const String& query) {
     if (!ev.ok) ev.text = code < 0 ? "pas d'acc\xC3\xA8s \xC3\xA0 Qobuz par le WiiM" : "Qobuz ne r\xC3\xA9pond pas";
     ev.albums = qobuzAlbums_;
     for (auto& a : qobuzAlbums_)
-        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, a.tracks > 0 ? std::to_string(a.tracks) + " pistes" : "",
+        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, a.tracks > 1 ? std::to_string(a.tracks) + " pistes" : a.tracks == 1 ? "1 piste" : "",
                                            a.image});
     push(std::move(ev));
 }

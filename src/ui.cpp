@@ -1034,7 +1034,8 @@ int Ui::hitKey(int x, int y) const {
 
 // Résultats : une ligne par morceau (titre, artiste · album), par pages
 void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
-                       const String& status, int pressed, const std::vector<int>& hearts) {
+                       const String& status, int pressed, const std::vector<int>& hearts,
+                       const std::vector<const ArtImage*>& covers) {
     ambientShown_ = false;
     view_ = View::Other;
     railShown_ = false;
@@ -1073,18 +1074,29 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     resultsFirst_ = page * resultsPerPage_;
     resultRects_.clear();
     heartRects_.clear();
+    coverRects_.clear();
     for (int k = 0; k < resultsPerPage_ && resultsFirst_ + k < (int)items.size(); ++k) {
         const int i = resultsFirst_ + k;
         const wr::Rect r{X, top + k * (rowH + gap), W, rowH};
         resultRects_.push_back(r);
         const uint32_t bg = i == pressed ? kCardHi : kCard;
         C.fillRoundRect(r.x, r.y, r.w, r.h, sc(12), bg);
-        // Numéro, titre, artiste · album
-        useFont(C, kSmall);
-        C.setTextDatum(textdatum_t::middle_center);
-        C.setTextColor(kText2);
-        C.drawString(String(i + 1).c_str(), r.x + sc(30), r.y + r.h / 2 + 1);
+        // Pochette (ou numéro), titre, artiste · album
         int tx = r.x + sc(60), tw = r.w - sc(80);
+        if (!items[i].art.empty()) {
+            const int d = r.h - sc(12);
+            const wr::Rect cr{r.x + sc(6), r.y + sc(6), d, d};
+            coverRects_.push_back(cr);
+            drawResultCover(cr, i < (int)covers.size() ? covers[i] : nullptr);
+            tx = cr.right() + sc(14);
+            tw = r.right() - sc(20) - tx;
+        } else {
+            coverRects_.push_back(wr::Rect{});
+            useFont(C, kSmall);
+            C.setTextDatum(textdatum_t::middle_center);
+            C.setTextColor(kText2);
+            C.drawString(String(i + 1).c_str(), r.x + sc(30), r.y + r.h / 2 + 1);
+        }
         if (i < (int)hearts.size()) {  // cœur à droite : vide (ajouter en tuile) ou plein (retirer)
             const int d = r.h - sc(16);
             const wr::Rect h{r.x + r.w - sc(8) - d, r.y + sc(8), d, d};
@@ -1134,6 +1146,35 @@ int Ui::hitResult(int x, int y) const {
     for (size_t k = 0; k < resultRects_.size(); ++k)
         if (resultRects_[k].contains(x, y)) return resultsFirst_ + (int)k;
     return -1;
+}
+
+// Pochette d'une ligne : décodée une fois (cache par adresse), case sombre tant qu'elle n'est pas arrivée
+void Ui::drawResultCover(const wr::Rect& r, const ArtImage* img) {
+    auto& C = canvas_;
+    if (img && img->ok()) {
+        auto it = coverThumbs_.find(img->url);
+        if (it == coverThumbs_.end()) {
+            if (coverThumbs_.size() >= 48) coverThumbs_.clear();  // ~48 × 60×60×2 o au plus, en PSRAM
+            auto t = std::unique_ptr<M5Canvas>(new M5Canvas());
+            t->setPsram(true);
+            t->setColorDepth(16);
+            if (t->createSprite(r.w, r.h) && decode(*t, img, kCardHi)) it = coverThumbs_.emplace(img->url, std::move(t)).first;
+            else it = coverThumbs_.emplace(img->url, nullptr).first;  // illisible : pas de nouvel essai
+        }
+        if (it->second && it->second->width() == r.w) {
+            roundedPush(*it->second, r.x, r.y, sc(6), false, kCard);
+            return;
+        }
+    }
+    C.fillRoundRect(r.x, r.y, r.w, r.h, sc(6), kCardHi);
+}
+
+void Ui::updateResultCover(int index, const ArtImage* img) {
+    const int k = index - resultsFirst_;
+    if (k < 0 || k >= (int)coverRects_.size() || coverRects_[k].w <= 0) return;
+    const wr::Rect& r = coverRects_[k];
+    drawResultCover(r, img);
+    presentRect(r);
 }
 
 int Ui::hitResultHeart(int x, int y) const {
