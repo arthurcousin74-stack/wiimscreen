@@ -270,6 +270,15 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   (`wr::parseDeezerAlbums`); each album plays as a `Deezer2` queue `<airable origin>/deezer/album/<id>`. *File du
   WiiM* logs the linked services from `GetBasicUserInfo` (`showName` values) to find the right `AccountSource`.
 
+- **Deezer Flow** from WiiM Home: queue `ListName` **Flow**, `SourceName` `Deezer2`, `ContentType` `station`, a
+  `PicUrl` (Flow picture on `assets.airable.io`), `SearchUrl` `https://<id>.airable.io/deezer/mix/<mix id>`, one
+  track at a time. The same mix id was seen twice, hours apart (2026-11-16). A queue recreated from that SearchUrl
+  **without tracks** fills (1 track after ~1 s) and plays new Flow tracks: wiimscreen saves Flow with ♥ this way
+  (`wr::isLiveQueue`). Not verified: whether the mix id stays the same over days.
+- Airable addresses tried as a queue `SearchUrl` that stay **empty** (2026-11-16): `/deezer/flow`, `/deezer/collection`
+  (« My Library », from `GetUserInfo(Deezer2)`), `/deezer/collection/{tracks,favourites,favorites,songs,loved,track}`,
+  `/deezer/{favourites,favorites,loved}`, `/deezer/user/{flow,tracks}`, `/deezer/mix/flow`. Albums, playlists and
+  mixes by id work. Deezer favorites therefore still need the public profile number.
 - A Deezer **mix** (Flow) started from WiiM Home also gives a `Deezer2` queue (`SearchUrl`
   `https://<id>.airable.io/deezer/mix/<id>`, 1 track at a time); it is a valid model for album queues (checked
   2026-11-16: Deezer search result played at its track).

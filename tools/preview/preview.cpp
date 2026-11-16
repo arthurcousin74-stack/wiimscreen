@@ -283,6 +283,8 @@ int main(int argc, char** argv) {
             save(out, "26-recherche-portrait.ppm");
             up.renderResults("aretha franklin", found, 0, "");
             save(out, "27-resultats-portrait.ppm");
+            up.renderMenu("57-219c0bc");
+            save(out, "37-menu-portrait.ppm");
             up.renderSearch("miles", "", false, -1, 2, true);  // Qobuz | Albums | Deezer
             save(out, "33-albums-portrait.ppm");
             up.renderResults("miles", found, 0, "", -1, {1, 0, 0, 0, 0, 0, 0});

@@ -96,7 +96,11 @@ bool add(wr::Favorite& f, const std::string& queueContext, std::string& error) {
         return false;
     }
     char idBuf[12];
-    snprintf(idBuf, sizeof idBuf, "%08lx", (unsigned long)esp_random());
+    // Identifiant nouveau, différent de ceux déjà pris (sinon un favori écrasait le fichier d'un autre)
+    for (bool taken = true; taken;) {
+        snprintf(idBuf, sizeof idBuf, "%08lx", (unsigned long)esp_random());
+        taken = std::any_of(g_list.begin(), g_list.end(), [&](const wr::Favorite& x) { return x.id == idBuf; });
+    }
     f.id = same != g_list.end() ? same->id : idBuf;
     if (!writeFile(path(f.id).c_str(), queueContext)) {
         error = "\xC3\xA9" "criture impossible (m\xC3\xA9moire pleine ?)";

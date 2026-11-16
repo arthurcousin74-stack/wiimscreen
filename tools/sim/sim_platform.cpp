@@ -3,6 +3,7 @@
 // The real src/main.cpp runs unchanged: setup() once, then loop() again and again. M5.update() (called by the
 // app in every loop and every waiting screen) reads the mouse as the touch screen and shows the display canvas in
 // the window. With --script, taps come from a file and screenshots are written (no window needed: --headless).
+#include <random>
 #include <SDL2/SDL.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -42,7 +43,11 @@ uint32_t micros() {
 void delay(uint32_t ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 long random(long max) { return max > 0 ? std::rand() % max : 0; }
 long random(long min, long max) { return max > min ? min + std::rand() % (max - min) : min; }
-uint32_t esp_random() { return (uint32_t)std::rand() * 2654435761u; }
+// Seeded once per run (an unseeded std::rand gave the same favorite id at every start: two favorites shared a file)
+uint32_t esp_random() {
+    static std::mt19937 gen{std::random_device{}()};
+    return gen();
+}
 
 // ------------------------------------------------------------------ Serial, restart
 

@@ -208,6 +208,8 @@ QueueInfo parseQueueContext(const std::string& xml) {
         if (xmlElement(info, "Login_username", v)) q.user = trim(xmlUnescape(v));
         if (xmlElement(info, "requestQuality", v) || xmlElement(info, "Quality", v)) q.quality = trim(v);
         if (xmlElement(info, "TrackNumber", v)) q.declaredTracks = std::atoi(trim(v).c_str());
+        if (xmlElement(info, "PicUrl", v)) q.picUrl = trim(xmlUnescape(v));
+        if (xmlElement(info, "ContentType", v)) q.contentType = trim(xmlUnescape(v));
     }
     std::string tracks;
     if (xmlElement(list, "Tracks", tracks)) {
@@ -238,6 +240,14 @@ QueueInfo parseQueueContext(const std::string& xml) {
         }
     }
     return q;
+}
+
+bool isLiveQueue(const QueueInfo& q) {
+    if (q.contentType == "station") return true;
+    const std::string origin = urlOrigin(q.searchUrl);
+    if (origin.empty()) return false;
+    const std::string path = q.searchUrl.substr(origin.size(), q.searchUrl.find('?') - origin.size());  // sans requête
+    return path.find("/mix/") != std::string::npos;
 }
 
 std::string queueKey(const QueueInfo& q) {

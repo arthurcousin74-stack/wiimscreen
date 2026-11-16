@@ -408,8 +408,13 @@ static void refreshTiles() {
     show();
 }
 
-// Favori correspondant à ce qui joue (même album, même artiste)
+static std::string g_queueKey;  // clé de la file qui joue (relevé du WiiM), vide si inconnue
+
+// Favori correspondant à ce qui joue : même file (clé), sinon même album et même artiste
 static std::string currentFavorite() {
+    if (!g_queueKey.empty())
+        for (auto& f : g_favs)
+            if (f.key == g_queueKey) return f.id;
     const UiState& st = g_state;
     const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
     if (album.empty()) return "";
@@ -521,6 +526,10 @@ static void applyReport(const WiimReport& r) {
         }
         next.player = st;
         g_statusAt = r.at;
+        if (r.queueKey != g_queueKey) {
+            g_queueKey = r.queueKey;
+            show();  // le ♥ peut changer
+        }
 
         if (next.meta.artUrl != g_artWanted) {
             g_artWanted = next.meta.artUrl;

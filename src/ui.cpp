@@ -1289,14 +1289,20 @@ int Ui::hitDots(int x, int y) const {
 static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const char* sub, uint32_t dot, int sc16) {
     C.fillRoundRect(r.x, r.y, r.w, r.h, sc16, kCard);
     C.fillCircle(r.x + sc16 * 2, r.y + r.h / 2, sc16 * 2 / 3, dot);
+    // Titre et sous-titre centrés ensemble dans la rangée (le titre débordait au-dessus du bord, vu au simulateur)
     C.setTextDatum(textdatum_t::top_left);
+    useFont(C, kSmall);
+    const int subH = C.fontHeight();
     useFont(C, kMid);
+    const int titleH = C.fontHeight(), gap = sc16 / 4;
+    const int top = r.y + (r.h - titleH - gap - subH) / 2;
     C.setTextColor(kText);
-    const int tx = r.x + sc16 * 4;
-    C.drawString(title, tx, r.y + r.h / 2 - C.fontHeight());
+    const int tx = r.x + sc16 * 4, tw = r.right() - sc16 - tx;  // textes coupés (…) à la largeur de la rangée
+    auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
+    C.drawString(wr::wrapText(title, tw, 1, measure)[0].c_str(), tx, top);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString(sub, tx, r.y + r.h / 2 + sc16 / 4);
+    C.drawString(wr::wrapText(sub, tw, 1, measure)[0].c_str(), tx, top + titleH + gap);
 }
 
 void Ui::renderMenu(const char* version) {
@@ -1308,8 +1314,16 @@ void Ui::renderMenu(const char* version) {
     navRail(1);
     const wr::Rect& A = layout_.content;
     const int W = A.w, H = C.height();
-    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = sc(58), gap = sc(8);
-    const int x = A.x + (W - bw) / 2, y0 = A.y + sc(92);
+    // Hauteur des rangées : celle des deux lignes de texte (marges comprises dans la police), au moins sc(58)
+    useFont(C, kMid);
+    const int titleH = C.fontHeight();
+    useFont(C, kSmall);
+    const int textH = titleH + sc(4) + C.fontHeight();
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = std::max(sc(58), textH + sc(2)), gap = sc(8);
+    // Titre « Réglages », 5 rangées, Fermer, version : le tout tient dans la hauteur (rangées remontées si besoin)
+    const int below = sc(14) + sc(44) + sc(40);
+    const int y0 = std::min(A.y + sc(92), A.bottom() - below - 5 * bh - 4 * gap);
+    const int x = A.x + (W - bw) / 2;
     C.setTextDatum(textdatum_t::bottom_center);
     useFont(C, kBig);
     C.setTextColor(kText);

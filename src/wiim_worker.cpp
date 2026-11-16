@@ -183,6 +183,8 @@ void WiimWorker::learnIdentity() {
     push(std::move(ev));
 }
 
+static int browseQueue(const std::string& control, const std::string& name, std::string& ctx);
+
 void WiimWorker::pollOnce() {
     WiimReport r;
     xSemaphoreTake(lock_, portMAX_DELAY);
@@ -218,7 +220,18 @@ void WiimWorker::pollOnce() {
                 if (!m.artist.empty()) st.artist = m.artist;
                 if (!m.album.empty()) st.album = m.album;
             }
+            // File qui joue (clé du ♥) : une requête UPnP locale par changement de morceau, pas à chaque relevé
+            if (r.metaOk && (st.title != queueTitle_ || millis() - queueReadAt_ > 60000)) {
+                queueTitle_ = st.title;
+                queueReadAt_ = millis();
+                std::string control, ctx;
+                queueKey_.clear();
+                if (!st.title.empty() && findPlayQueue(control, false) && browseQueue(control, "CurrentQueue", ctx) == 200 &&
+                    !ctx.empty())
+                    queueKey_ = wr::queueKey(wr::parseQueueContext(ctx));
+            }
         }
+        r.queueKey = queueKey_;
         r.player = st;
     }
     r.at = millis();
@@ -578,6 +591,15 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
     f.artist = r.artist.c_str();
     f.source = q.sourceName;
     f.artUrl = r.artUrl.c_str();
+    if (wr::isLiveQueue(q)) {
+        // Flow Deezer, mix : nom et image de la liste (pas l'album du morceau du moment), gardée sans ses pistes
+        // pour que le WiiM en donne de nouvelles à chaque lecture
+        const bool ours = q.listName.empty() || q.listName.rfind("wiimscreen", 0) == 0;
+        f.title = ours ? "Mix Deezer" : q.listName;
+        f.artist.clear();
+        if (!q.picUrl.empty()) f.artUrl = q.picUrl;
+        best = wr::queueFromTemplate(best, q.listName, q.searchUrl);
+    }
     std::string err;
     ev.ok = fav::add(f, best, err);
     ev.text = ev.ok ? f.title.c_str() : err.c_str();
@@ -1389,7 +1411,11 @@ void WiimWorker::runPlayFavorite(const String& id) {
         wr::QueueInfo q = wr::parseQueueContext(ctx);
         const uint32_t t0 = millis();
         int c = 0, p = -1, loaded = q.tracks;
-        if (q.tracks > 0 || q.searchUrl.empty()) {
+        if (wr::isLiveQueue(q) && q.tracks > 0) {  // Flow enregistré avec sa piste du moment : file sans pistes
+            ctx = wr::queueFromTemplate(ctx, q.listName, q.searchUrl);
+            loaded = 0;
+        }
+        if (loaded > 0 || q.searchUrl.empty()) {
             p = sendQueue(control, ctx, q.listName, c);  // pistes dans la copie : lecture tout de suite
         } else {
             // Album sans pistes (cœur de la recherche d'albums) : le WiiM les lit depuis SearchUrl. On attend

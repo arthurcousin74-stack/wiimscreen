@@ -52,6 +52,8 @@ struct QueueInfo {
     std::string searchUrl;     // for streaming services: where the player fetches the tracks
     std::string user;          // Login_username (account linked on the player)
     std::string quality;       // requestQuality or Quality
+    std::string picUrl;        // PicUrl: picture of the list itself (e.g. Deezer Flow), may be empty
+    std::string contentType;   // ContentType: "station" for Deezer Flow / mixes (seen 2026-11-16)
     int declaredTracks = -1;   // TrackNumber, -1 if absent
     int tracks = 0;            // <TrackN> elements present
     std::vector<std::string> titles;  // track titles (from the DIDL-Lite metadata), 200 at most
@@ -62,6 +64,9 @@ QueueInfo parseQueueContext(const std::string& xml);
 // Identity of a queue, to recognise the same album/playlist again: the SearchUrl without its paging
 // parameters (offset, limit) for streaming services, otherwise source + list name.
 std::string queueKey(const QueueInfo& q);
+// Queue whose tracks change at each play (Deezer Flow and mixes: ContentType "station", or an airable ".../mix/..."
+// SearchUrl). Saved without its tracks and recreated from its SearchUrl, so that it brings new tracks.
+bool isLiveQueue(const QueueInfo& q);
 
 // A queue saved on the remote ("favorite"), replayed later with CreateQueue + PlayQueueWithIndex.
 struct Favorite {

@@ -52,6 +52,8 @@ The Journal masks tokens and passwords, but check anyway.
 | 3.4 | Touch **Favoris Deezer**. | The list of your favorite tracks; no music change before you choose. | `Favoris Deezer : 200, N morceau(x)` |
 | 3.5 | Touch a track, then a Deezer album tile. | The album of the track plays at this track; the album tile plays the album. | `Deezer ▶ …`, `Album Deezer ▶ …` |
 
+| 3.6 | In WiiM Home, start Deezer **Flow**. On the Tab5, touch ♥. Play something else, then touch the **Flow** tile. | The heart fills; a **Flow** tile with the Flow picture. The tile starts Flow again (a new track); the heart is filled while Flow plays. | `Favori « Flow » (Deezer2, …) : OK`, `Favori ▶ « Flow » : CreateQueue 200, 1 piste(s), PlayQueueWithIndex 200` |
+
 ## 4. Favorites saved on the Tab5
 
 | # | Do | Expected | Journal |
@@ -120,6 +122,7 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 | 2.11 covers in result lists | | |
 | 3.1–3.2 Deezer search and play | | |
 | 3.3–3.5 Deezer favorites (profile) | | |
+| 3.6 Deezer Flow tile | | |
 | 4.1–4.3 Tab5 favorites | | |
 | 5.x screen and touch | | |
 | 6.x update page from phone | | |

@@ -633,6 +633,23 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL_STRING("so***@ex***", maskAccount(q.user).c_str());
     TEST_ASSERT_EQUAL_STRING("ar***", maskAccount("arthur").c_str());
     TEST_ASSERT_FALSE(parseQueueContext("<nothing/>").ok);
+    // Flow Deezer (forme vue sur un WiiM, 2026-11-16) : file « station », image de la liste, une piste à la fois
+    {
+        const QueueInfo flow = parseQueueContext(
+            "<?xml version=\"1.0\"?><PlayList><ListName>Flow</ListName><ListInfo><SourceName>Deezer2</SourceName>"
+            "<SearchUrl>https://abc.airable.io/deezer/mix/XyZ</SearchUrl><PicUrl>http://assets.airable.io/p.png</PicUrl>"
+            "<ContentType>station</ContentType><TrackNumber>1</TrackNumber></ListInfo><Tracks></Tracks></PlayList>");
+        TEST_ASSERT_TRUE(isLiveQueue(flow));
+        TEST_ASSERT_EQUAL_STRING("http://assets.airable.io/p.png", flow.picUrl.c_str());
+        QueueInfo mix;  // sans ContentType : reconnue par l'adresse
+        mix.searchUrl = "https://abc.airable.io/deezer/mix/XyZ";
+        TEST_ASSERT_TRUE(isLiveQueue(mix));
+        QueueInfo album;
+        album.searchUrl = "https://abc.airable.io/deezer/album/123";
+        TEST_ASSERT_FALSE(isLiveQueue(album));
+        album.searchUrl = "https://www.qobuz.com/api.json/0.2/track/search?query=/mix/";
+        TEST_ASSERT_FALSE(isLiveQueue(album));  // « /mix/ » dans la requête, pas dans le chemin : pas une file vivante
+    }
 }
 
 static void test_favorites() {

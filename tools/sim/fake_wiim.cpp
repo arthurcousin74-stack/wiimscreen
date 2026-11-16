@@ -126,6 +126,7 @@ WiimReport report(uint32_t seq) {
     r.meta.artUrl = a.art();
     r.meta.sampleRate = radio ? 48000 : 96000;
     r.meta.bitDepth = radio ? 16 : 24;
+    if (!radio) r.queueKey = wr::qobuzAlbumKey(a.id);  // same key as the favorites of this album
     return r;
 }
 

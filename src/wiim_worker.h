@@ -28,6 +28,7 @@ struct WiimReport {
     bool metaOk = false;      // getMetaInfo lu à ce relevé (sinon garder le précédent)
     uint32_t at = 0;          // millis() à la fin du relevé
     uint32_t cmdSeq = 0;      // commandes déjà exécutées quand le relevé a commencé
+    std::string queueKey;     // clé (wr::queueKey) de la file qui joue, vide si inconnue : le ♥ reconnaît un favori
 };
 
 struct WiimEvent {
@@ -158,7 +159,9 @@ private:
     wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
     bool haveQobuz_ = false;
     bool qobuzFavsWanted_ = false;
-    bool qobuzFavDenied_ = false;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
+    bool qobuzFavDenied_ = false;
+    std::string queueTitle_, queueKey_;  // file en cours relue à chaque changement de morceau (et toutes les 60 s)
+    uint32_t queueReadAt_ = 0;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
     bool deezerTried_ = false;  // favoris Deezer : une tentative par démarrage
     std::string deezerToken_;  // jeton Deezer donné par le WiiM (mémoire seulement), vide si inconnu
     std::string searchQueue_;  // file des derniers résultats affichés
