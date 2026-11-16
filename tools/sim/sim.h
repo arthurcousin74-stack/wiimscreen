@@ -9,6 +9,7 @@ namespace sim {
 const std::string& stateDir();  // settings.txt (the simulated NVS)
 const std::string& outDir();    // screenshots
 bool quiet();
+const std::string& relay();    // relay address host:port ("real WiiM" build), default 127.0.0.1:8787
 [[noreturn]] void restart();    // like ESP.restart(): the program starts again
 void defaultSettings();         // first start: settings of a configured Tab5
 

@@ -1,4 +1,5 @@
-// Simulator: Wi-Fi is always connected (the fake WiiM is in the same process).
+// Simulator: Wi-Fi is always connected. In the "real WiiM" build (env simreal), network connections go through
+// the relay (tools/relay/wiim_relay.py) — see net_relay.cpp. In the fake build they are never opened.
 #pragma once
 #include "Arduino.h"
 
@@ -22,8 +23,43 @@ struct WiFiSim {
 };
 extern WiFiSim WiFi;
 
+// A TCP connection, opened by the relay (plain TCP, or TLS when the object is a WiFiClientSecure)
 class WiFiClient {
 public:
-    virtual ~WiFiClient() = default;
+    WiFiClient() = default;
+    WiFiClient(const WiFiClient&) = delete;
+    WiFiClient& operator=(const WiFiClient&) = delete;
+    virtual ~WiFiClient() { stop(); }
+    int connect(const char* host, uint16_t port);
+    size_t write(const uint8_t* b, size_t n);
+    size_t print(const char* s) { return write(reinterpret_cast<const uint8_t*>(s), std::strlen(s)); }
+    int printf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
+    int available();
+    int read();
+    int read(uint8_t* b, size_t n);
+    bool connected();
+    void stop();
+    void setTimeout(uint32_t ms) { timeoutMs_ = ms; }
+    void setConnectionTimeout(uint32_t ms) { connectMs_ = ms; }
+    bool isSecure() const { return tls_; }
+
+protected:
+    bool tls_ = false;
+    int fd_ = -1;
+    bool eof_ = false;
+    uint32_t timeoutMs_ = 5000, connectMs_ = 5000;
+    uint8_t fingerprint_[32] = {};
+    bool hasFingerprint_ = false;
 };
-class WiFiClientSecure : public WiFiClient {};
+
+class WiFiClientSecure : public WiFiClient {
+public:
+    WiFiClientSecure() { tls_ = true; }
+    void setInsecure() {}                         // the relay checks public servers; the WiiM is pinned by the app
+    void setCACertBundle(const uint8_t*, size_t) {}
+    void setHandshakeTimeout(int) {}
+    bool getFingerprintSHA256(uint8_t out[32]) const {
+        if (hasFingerprint_) std::memcpy(out, fingerprint_, 32);
+        return hasFingerprint_;
+    }
+};

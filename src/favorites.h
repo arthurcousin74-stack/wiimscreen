@@ -5,6 +5,7 @@
 // /fav/index.txt (wr::favoritesToText) and one /fav/<id>.xml per favorite.
 // Thread-safe: the WiiM task adds, the main loop lists and removes.
 
+#include <cstdint>
 #include <string>
 #include <vector>
 

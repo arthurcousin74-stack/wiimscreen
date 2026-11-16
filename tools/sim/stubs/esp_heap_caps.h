@@ -6,3 +6,5 @@
 inline void* heap_caps_malloc(size_t n, unsigned) { return std::malloc(n); }
 inline size_t heap_caps_get_free_size(unsigned caps) { return caps & MALLOC_CAP_SPIRAM ? 30000u * 1024 : 300u * 1024; }
 inline size_t heap_caps_get_minimum_free_size(unsigned) { return 250u * 1024; }
+inline void heap_caps_free(void* p) { std::free(p); }
+inline void* heap_caps_realloc(void* p, size_t n, unsigned) { return std::realloc(p, n); }

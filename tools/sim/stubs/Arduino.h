@@ -112,11 +112,40 @@ private:
     std::string s_;
 };
 
+// Arduino streams (CapStream, BoundedBuffer… derive from Stream)
+class Print {
+public:
+    virtual ~Print() = default;
+    virtual size_t write(uint8_t c) = 0;
+    virtual size_t write(const uint8_t* b, size_t n) {
+        size_t k = 0;
+        while (k < n && write(b[k])) ++k;
+        return k;
+    }
+    size_t write(const char* s) { return write(reinterpret_cast<const uint8_t*>(s), std::strlen(s)); }
+    size_t print(const char* s) { return write(s); }
+    size_t print(const String& s) { return write(s.c_str()); }
+};
+class Stream : public Print {
+public:
+    virtual int available() = 0;
+    virtual int read() = 0;
+    virtual int peek() = 0;
+    virtual void flush() {}
+};
+
+bool quietSerial();
+
 struct SerialSim {
     void begin(unsigned long) {}
     void println(const char* s);
     void println(const String& s) { println(s.c_str()); }
     void print(const char* s);
+    size_t write(const uint8_t* b, size_t n) {
+        if (!quietSerial()) fwrite(b, 1, n, stdout);
+        return n;
+    }
+    size_t write(const char* b, size_t n) { return write(reinterpret_cast<const uint8_t*>(b), n); }
     int printf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));
     void flush() {}
 };
@@ -130,3 +159,9 @@ struct EspSim {
 extern EspSim ESP;
 
 uint32_t esp_random();
+
+// ESP-IDF log macros (warnings go to the terminal)
+#define log_e(fmt, ...) fprintf(stderr, "[E] " fmt "\n", ##__VA_ARGS__)
+#define log_w(fmt, ...) fprintf(stderr, "[W] " fmt "\n", ##__VA_ARGS__)
+#define log_i(fmt, ...) ((void)0)
+#define log_d(fmt, ...) ((void)0)

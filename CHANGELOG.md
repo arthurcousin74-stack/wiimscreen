@@ -10,6 +10,8 @@ Hardware testing in progress.
 ### Added
 - PC simulator (`pio run -e sim`, tools/sim/README.md): the real app with a fake WiiM in a window (mouse = touch),
   scripted taps and screenshots; CI runs a tour of the screens on every push.
+- Simulator with your real WiiM (`pio run -e simreal`): the Tab5's own network code through a small relay on the
+  home network (`tools/relay/wiim_relay.py`, Python standard library). CI checks it against a mock WiiM.
 
 ### Fixed (found with the simulator)
 - The search result message showed an empty box instead of "▶" (no such glyph in the font): now "Lecture : …".

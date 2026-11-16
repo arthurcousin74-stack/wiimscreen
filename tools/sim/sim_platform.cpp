@@ -46,6 +46,8 @@ uint32_t esp_random() { return (uint32_t)std::rand() * 2654435761u; }
 
 // ------------------------------------------------------------------ Serial, restart
 
+bool quietSerial() { return sim::quiet(); }
+
 void SerialSim::println(const char* s) {
     if (!sim::quiet()) printf("%s\n", s);
 }
@@ -188,9 +190,14 @@ void sim::defaultSettings() {
     if (prefs().count("ssid")) return;
     // First start: already configured, so the simulator opens on the main screen (not the setup portal)
     prefs()["ssid"] = "Simulateur";
+#ifdef SIM_REAL
+    // Real WiiM through the relay: the app looks for it (discovery by the relay), as a new Tab5 does
+    prefs()["host"] = "";
+#else
     prefs()["host"] = "wiim.sim";
     prefs()["wiimname"] = "WiiM simul\xC3\xA9";
     prefs()["deezeruser"] = "123456";
+#endif
     prefs()["oaikey"] = "sim-cle-factice-pour-le-micro";  // shows the microphone (dictation is simulated)
     savePrefs();
 }
@@ -351,13 +358,19 @@ void SimM5::update() {
 // ------------------------------------------------------------------ options
 
 namespace {
+#ifdef SIM_REAL
+std::string g_state = ".pio/simreal-state", g_out = ".pio/sim-out";
+#else
 std::string g_state = ".pio/sim-state", g_out = ".pio/sim-out";
+#endif
+std::string g_relay = getenv("WIIM_RELAY") ? getenv("WIIM_RELAY") : "127.0.0.1:8787";
 bool g_quiet = false;
 std::vector<std::string> g_argv;
 }  // namespace
 
 const std::string& sim::stateDir() { return g_state; }
 const std::string& sim::outDir() { return g_out; }
+const std::string& sim::relay() { return g_relay; }
 bool sim::quiet() { return g_quiet; }
 
 void sim::restart() {
@@ -410,6 +423,7 @@ int main(int argc, char** argv) {
         else if (a == "--scale") g_scale = std::max(0.25f, std::strtof(next().c_str(), nullptr));
         else if (a == "--state") g_state = next();
         else if (a == "--out") g_out = next();
+        else if (a == "--relay") g_relay = next();
         else if (a == "--script") {
             if (!loadScript(next())) return 1;
         } else if (a == "--reset") {
@@ -417,7 +431,7 @@ int main(int argc, char** argv) {
         } else {
             fprintf(stderr,
                     "usage: %s [--scale 0.6] [--script fichier] [--headless] [--state dossier] [--out dossier] "
-                    "[--reset] [--quiet]\n",
+                    "[--reset] [--quiet] [--relay h\xC3\xB4te:port]\n",
                     argv[0]);
             return a == "--help" ? 0 : 1;
         }

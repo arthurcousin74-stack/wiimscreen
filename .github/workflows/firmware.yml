@@ -44,6 +44,12 @@ jobs:
           timeout 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
           pip install pillow && python tools/preview/topng.py .pio/sim-out/*.ppm
 
+      # "Real WiiM" simulator: simulator -> relay -> mock WiiM (status, command, certificate pinning)
+      - name: Simulateur et relais (WiiM simulé en HTTPS)
+        run: |
+          pio run -e simreal
+          ./tools/relay/selftest.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: sim-screens

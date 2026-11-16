@@ -1,5 +1,7 @@
 # Simulator
 
+Two builds: `sim` (fake WiiM, works anywhere) and `simreal` (your real WiiM through a relay, see below).
+
 The real application (`src/main.cpp`, `src/ui.cpp`, `src/log.cpp`, `src/settings.cpp` and `lib/core`) running on
 a PC, with a **fake WiiM**. The window is the Tab5 screen; the mouse is the finger.
 
@@ -40,8 +42,60 @@ python tools/preview/topng.py .pio/sim-out/*.ppm
 
 CI runs `tools/sim/scripts/tour.txt` on every push (artifact `sim-screens`): a crash or a hang fails the build.
 
+## Real WiiM mode (relay)
+
+`pio run -e simreal` builds the simulator with the **real network code of the Tab5** (`src/wiim_worker.cpp`,
+`wiim_client.cpp`, `art.cpp`, `favorites.cpp`): polling, commands, presets, Qobuz/Deezer search and favorites,
+covers, certificate pinning. Only the lowest layer changes: each connection goes through the relay
+(`tools/relay/wiim_relay.py`), which opens it on your home network and does the TLS. Favorites are files in
+`.pio/simreal-state/fs`.
+
+1. On a computer of your home network (Python 3.8 or later, nothing to install), start the relay:
+
+   ```bash
+   python3 tools/relay/wiim_relay.py
+   ```
+
+   It shows the WiiMs that it finds. If it finds none, give the address: `--wiim 192.168.1.50`.
+2. On the same computer, start the simulator:
+
+   ```bash
+   pio run -e simreal && .pio/build/simreal/program --scale 0.75
+   ```
+
+   On the first start, it looks for the WiiM (like a new Tab5). If it finds several, touch yours.
+3. To use the relay of another computer: `--relay <address>:8787` on the simulator and `--listen 0.0.0.0:8787`
+   on the relay (then anyone on your network can use the relay: only on a trusted network).
+
+The relay listens on 127.0.0.1 by default. It connects only to private addresses (your WiiM), and to public
+hosts only with TLS on port 443 (certificate checked) or HTTP on port 80. It logs host and port only, never the
+data (Qobuz and Deezer tokens are in the HTTP headers). `tools/relay/selftest.sh` checks the chain with a mock
+WiiM (CI runs it).
+
+Dictation stays simulated (no OpenAI call). The setup and update web pages are not available.
+
+### Windows
+
+The simulator builds in WSL (Ubuntu in Windows). The relay runs in WSL or directly in Windows (`py
+tools\relay\wiim_relay.py`).
+
+1. In PowerShell as administrator: `wsl --install`, then restart.
+2. So that WSL sees your home network (and `127.0.0.1` is shared with Windows), create
+   `%UserProfile%\.wslconfig` with:
+
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+
+   Then run `wsl --shutdown` and open Ubuntu again. (Windows 11 22H2 or later.)
+3. In Ubuntu: `sudo apt install -y build-essential libsdl2-dev python3-venv git`, then
+   `python3 -m venv ~/pio && ~/pio/bin/pip install platformio "click<8.2"`, then clone the repository and use
+   `~/pio/bin/pio` in the commands above.
+4. If Windows asks whether Python may use the network: allow private networks.
+
 ## Next steps
 
-- Browser version (Emscripten: SDL2 runs in the browser; the main loop needs `emscripten_set_main_loop`).
-- "Real WiiM" mode: the same `WiimWorker` interface backed by a small relay on the home network (a browser page
-  cannot reach the WiiM directly: self-signed certificate, CORS, no SSDP).
+- Browser version (Emscripten: SDL2 runs in the browser; the main loop needs `emscripten_set_main_loop`). It can
+  use the same relay through a WebSocket (a browser page cannot reach the WiiM directly: self-signed certificate,
+  CORS, no SSDP).
