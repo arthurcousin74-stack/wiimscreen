@@ -3,7 +3,10 @@
 
 #include <string>
 
+#include <algorithm>
+
 #include "core.h"
+#include "i18n.h"
 #include "dsp.h"
 #include "voice.h"
 #include "firmware.h"
@@ -701,7 +704,34 @@ static void test_queue_template() {
 }
 
 static void test_keyboard() {
+    // Langue : QWERTY et textes anglais par défaut, AZERTY et textes français en français ; mêmes touches
+    TEST_ASSERT_TRUE(lang() == Lang::En);
+    {
+        auto en = keyboardLayout(Rect{100, 200, 1160, 500});
+        TEST_ASSERT_EQUAL_STRING("q", en[10].text.c_str());
+        TEST_ASSERT_EQUAL_STRING("Search", en.back().label.c_str());
+        setLang(Lang::Fr);
+        auto fr = keyboardLayout(Rect{100, 200, 1160, 500});
+        TEST_ASSERT_EQUAL_STRING("a", fr[10].text.c_str());
+        TEST_ASSERT_EQUAL_STRING("Chercher", fr.back().label.c_str());
+        TEST_ASSERT_EQUAL((int)en.size(), (int)fr.size());
+        TEST_ASSERT_EQUAL_STRING("Effacer", L("Clear", "Effacer"));
+        setLang(Lang::En);
+        TEST_ASSERT_EQUAL_STRING("Clear", L("Clear", "Effacer"));
+        TEST_ASSERT_TRUE(langFromCode("fr") == Lang::Fr && langFromCode("de") == Lang::En && langFromCode("") == Lang::En);
+        TEST_ASSERT_EQUAL_STRING("fr", langCode(Lang::Fr));
+        // Lettres : chacune une seule fois dans les deux dispositions
+        for (auto* k : {&en, &fr}) {
+            std::string letters;
+            for (auto& key : *k)
+                if (key.kind == Key::Char && key.text.size() == 1 && key.text[0] >= 'a' && key.text[0] <= 'z') letters += key.text;
+            std::sort(letters.begin(), letters.end());
+            TEST_ASSERT_EQUAL_STRING("abcdefghijklmnopqrstuvwxyz", letters.c_str());
+        }
+    }
+    for (Lang lg : {Lang::En, Lang::Fr})
     for (const Rect& area : {Rect{100, 200, 1160, 500}, Rect{20, 600, 680, 640}, Rect{80, 150, 860, 380}}) {
+        setLang(lg);
         auto keys = keyboardLayout(area);
         TEST_ASSERT_EQUAL(10 + 10 + 10 + 9 + 3, (int)keys.size());
         int enter = 0, back = 0;
@@ -716,6 +746,7 @@ static void test_keyboard() {
         TEST_ASSERT_EQUAL(1, enter);
         TEST_ASSERT_EQUAL(1, back);
     }
+    setLang(Lang::En);
     TEST_ASSERT_EQUAL_STRING("caf", utf8PopBack("caf\xC3\xA9").c_str());  // « é » : deux octets retirés
     TEST_ASSERT_EQUAL_STRING("ab", utf8PopBack("abc").c_str());
     TEST_ASSERT_EQUAL_STRING("", utf8PopBack("").c_str());

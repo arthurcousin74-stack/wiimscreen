@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "favorites.h"
+#include "i18n.h"
 #include "log.h"
 #include "sim.h"
 #include "voice.h"
@@ -384,11 +385,11 @@ void WiimWorker::runQobuzAlbumSearch(const String& query) {
         if (a.tracks.empty() || !wr::sharesWord(q, {a.artist, a.title})) continue;
         qobuzAlbums_.push_back(wr::QobuzAlbum{a.id, a.title, a.artist, a.art(), (int)a.tracks.size()});
         P.results.push_back({(int)i, 0});
-        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, std::to_string(a.tracks.size()) + " pistes", a.art()});
+        ev.tracks.push_back(wr::QueueTrack{a.title, a.artist, std::to_string(a.tracks.size()) + wr::L(" tracks", " pistes"), a.art()});
     }
     ev.ok = q != "erreur";
     if (!ev.ok) {
-        ev.text = "Qobuz ne r\xC3\xA9pond pas";
+        ev.text = wr::L("Qobuz is not responding", "Qobuz ne r\xC3\xA9pond pas");
         ev.tracks.clear();
         qobuzAlbums_.clear();
     }
@@ -427,7 +428,7 @@ void WiimWorker::runSearch(const String& query) {
     }
     logEvent("Recherche (simul\xC3\xA9" "e) \xC2\xAB %s \xC2\xBB : %u morceau(x)", query.c_str(), (unsigned)found.size());
     const bool fail = q == "erreur";
-    push(listEvent(query, fail ? std::vector<std::pair<int, int>>{} : found, !fail, "le WiiM ne r\xC3\xA9pond pas"));
+    push(listEvent(query, fail ? std::vector<std::pair<int, int>>{} : found, !fail, wr::L("the WiiM is not responding", "le WiiM ne r\xC3\xA9pond pas")));
 }
 
 void WiimWorker::runDeezerSearch(const String& query) { runSearch(query); }
@@ -458,7 +459,7 @@ void WiimWorker::runPlaySearchResult(int index) {
         play(P.results[index - 1].first, P.results[index - 1].second);
         ev.ok = true;
     } else {
-        ev.text = "morceau introuvable";
+        ev.text = wr::L("track not found", "morceau introuvable");
     }
     push(std::move(ev));
     nextPoll_ = millis() + 300;
@@ -478,7 +479,7 @@ void WiimWorker::runPlayFavorite(const String& id) {
         ev.ok = true;
         logEvent("Favori \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (simul\xC3\xA9)", catalog()[a].title);
     } else {
-        ev.text = "favori introuvable";
+        ev.text = wr::L("favorite not found", "favori introuvable");
     }
     push(std::move(ev));
     nextPoll_ = millis() + 300;
@@ -490,7 +491,7 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
     ev.kind = WiimEvent::FavSaved;
     const Album& a = catalog()[P.album];
     if (a.tracks.empty()) {
-        ev.text = "une radio ne peut pas \xC3\xAAtre un favori";
+        ev.text = wr::L("a radio station cannot be a favorite", "une radio ne peut pas \xC3\xAAtre un favori");
     } else {
         wr::Favorite f;
         f.key = wr::qobuzAlbumKey(a.id);  // same key as an album saved from the album search

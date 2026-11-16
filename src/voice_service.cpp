@@ -1,5 +1,7 @@
 #include "voice_service.h"
 
+#include "i18n.h"
+
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -22,11 +24,11 @@ bool transcribe(const int16_t* pcm, size_t samples, uint32_t sampleRate, const S
                 const String& model, const std::string& hint, std::string& text, String& error) {
     text.clear();
     if (WiFi.status() != WL_CONNECTED) {
-        error = "Pas de Wi-Fi";
+        error = wr::L("No Wi-Fi", "Pas de Wi-Fi");
         return false;
     }
     // Corps multipart : modèle, langue, indices, puis le fichier WAV
-    std::string pre = field("model", model.c_str()) + field("language", "fr") + field("response_format", "json");
+    std::string pre = field("model", model.c_str()) + field("language", wr::langCode(wr::lang())) + field("response_format", "json");
     if (!hint.empty()) pre += field("prompt", hint.substr(0, 600));
     pre += std::string("--") + kBoundary +
            "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voix.wav\"\r\n"
@@ -36,7 +38,7 @@ bool transcribe(const int16_t* pcm, size_t samples, uint32_t sampleRate, const S
     const size_t len = pre.size() + 44 + pcmBytes + post.size();
     auto* body = static_cast<uint8_t*>(heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!body) {
-        error = "Mémoire insuffisante";
+        error = wr::L("Not enough memory", "Mémoire insuffisante");
         return false;
     }
     size_t at = 0;
@@ -64,21 +66,23 @@ bool transcribe(const int16_t* pcm, size_t samples, uint32_t sampleRate, const S
         http.end();
         if (code == 200) {
             ok = wr::jsonString(resp.c_str(), "text", text);
-            if (!ok) error = "Réponse inattendue d'OpenAI";
+            if (!ok) error = wr::L("Unexpected response from OpenAI", "Réponse inattendue d'OpenAI");
         } else if (code == 401) {
-            error = "Clé OpenAI refusée : vérifie-la dans la configuration";
+            error = wr::L("OpenAI key refused: check it in the setup", "Clé OpenAI refusée : vérifie-la dans la configuration");
         } else if (code == 429) {
-            error = "Quota OpenAI dépassé (crédit ou limite de débit)";
+            error = wr::L("OpenAI quota exceeded (credit or rate limit)", "Quota OpenAI dépassé (crédit ou limite de débit)");
         } else if (code == 404 || code == 400) {
-            error = "OpenAI refuse la requête (" + String(code) + ") : vérifie le modèle de transcription";
+            error = String(wr::L("OpenAI refused the request (", "OpenAI refuse la requête (")) + String(code) +
+                    wr::L("): check the transcription model", ") : vérifie le modèle de transcription");
         } else if (code < 0) {
-            error = "OpenAI injoignable";
+            error = wr::L("OpenAI unreachable", "OpenAI injoignable");
         } else {
-            error = "Erreur OpenAI " + String(code);
+            error = String(wr::L("OpenAI error ", "Erreur OpenAI ")) + String(code);
         }
         if (!ok) log_w("transcription : HTTP %d %s", code, resp.substring(0, 200).c_str());
     } else {
-        error = "OpenAI injoignable";
+        error = wr::L("OpenAI unreachable", "OpenAI injoignable");
+
     }
     heap_caps_free(body);
     return ok;

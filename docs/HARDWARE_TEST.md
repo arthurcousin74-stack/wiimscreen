@@ -4,6 +4,9 @@ Use this list to check the firmware on a real Tab5. Each test says what to do, w
 Journal line to note (Settings ⚙ › **Journal**). Write the result in the table at the end: ✅ works, ❌ fails
 (with what you saw), ⏭ not tested.
 
+The screen texts quoted in this list are the French ones (setup page › **Language** › Français). In English (the
+default) the screens say the same in English. The Journal is in French in both languages.
+
 Before you report a result, remove private data: WiiM IP address, account names, the airable sub-domain number.
 The Journal masks tokens and passwords, but check anyway.
 

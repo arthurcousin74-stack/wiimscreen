@@ -27,6 +27,7 @@
 
 #include "art.h"
 #include "core.h"
+#include "i18n.h"
 #include "discovery.h"
 #include "dsp.h"
 #include "favorites.h"
@@ -235,12 +236,14 @@ static void setMessage(const String& m, uint32_t durationMs = 8000) {
 static String errorText(WiimError e, const String& fingerprint = String()) {
     switch (e) {
         case WiimError::None: return "";
-        case WiimError::Network: return "WiiM injoignable : v\xC3\xA9rifie qu'il est allum\xC3\xA9";
+        case WiimError::Network:
+            return wr::L("WiiM unreachable: check that it is on", "WiiM injoignable : v\xC3\xA9rifie qu'il est allum\xC3\xA9");
         case WiimError::PinMismatch:
-            return "Certificat du WiiM inattendu (" + fingerprint.substring(0, 12) +
-                   "\xE2\x80\xA6). Appui long ici pour reconfigurer";
-        case WiimError::Http: return "R\xC3\xA9ponse inattendue du WiiM";
-        case WiimError::Refused: return "Le WiiM a refus\xC3\xA9 la commande";
+            return String(wr::L("Unexpected WiiM certificate (", "Certificat du WiiM inattendu (")) +
+                   fingerprint.substring(0, 12) +
+                   wr::L("\xE2\x80\xA6). Long press here to reconfigure", "\xE2\x80\xA6). Appui long ici pour reconfigurer");
+        case WiimError::Http: return wr::L("Unexpected response from the WiiM", "R\xC3\xA9ponse inattendue du WiiM");
+        case WiimError::Refused: return wr::L("The WiiM refused the command", "Le WiiM a refus\xC3\xA9 la commande");
     }
     return "";
 }
@@ -312,7 +315,8 @@ static void serviceMotion(uint32_t now) {
 static void restartIntoPortal(const String& reason) {
     logEvent("Configuration : red\xC3\xA9marrage en mode configuration");
     requestPortal(reason);
-    g_ui.showInfo("Configuration", "Le Tab5 red\xC3\xA9marre en mode configuration\xE2\x80\xA6");
+    g_ui.showInfo(wr::L("Setup", "Configuration"),
+                  wr::L("The Tab5 is restarting in setup mode\xE2\x80\xA6", "Le Tab5 red\xC3\xA9marre en mode configuration\xE2\x80\xA6"));
     delay(600);
     ESP.restart();
 }
@@ -327,7 +331,9 @@ static void goToSleep(const char* why) {
     logEvent("Mise en veille (%s)", why);
     if (g_listening) stopListening();
     sound::confirm();
-    g_ui.showInfo("Mise en veille", "Le Tab5 s'\xC3\xA9teint. Appuie sur son bouton d'alimentation pour le rallumer.");
+    g_ui.showInfo(wr::L("Sleep", "Mise en veille"),
+                  wr::L("The Tab5 is turning off. Press its power button to turn it back on.",
+                        "Le Tab5 s'\xC3\xA9teint. Appuie sur son bouton d'alimentation pour le rallumer."));
     setBrightness(kBrightOn);
     delay(2500);
     setBrightness(0);
@@ -373,7 +379,7 @@ static void refreshTiles() {
     if (g_favOk && fav::hasQobuzModel()) {
         wr::Preset p;
         p.slot = 99;
-        p.label = "Favoris Qobuz";
+        p.label = wr::L("Qobuz favorites", "Favoris Qobuz");
         p.favId = kQobuzFavsId;
         list.push_back(p);
     }
@@ -381,7 +387,8 @@ static void refreshTiles() {
     if (g_favOk && g_settings.deezerUser.length() && fav::hasDeezerModel()) {
         wr::Preset p;
         p.slot = 98;
-        p.label = "Favoris Deezer";
+        p.label = wr::L("Deezer favorites", "Favoris Deezer");
+
         p.favId = kDeezerFavsId;
         list.push_back(p);
     }
@@ -609,10 +616,12 @@ static void serviceWiim() {
                     sound::confirm();
                     refreshTiles();
                     if (g_resultsOpen && g_resultsSource == 2) renderResultsList();  // cœur plein
-                    setMessage("\xC2\xAB " + ev.text + " \xC2\xBB ajout\xC3\xA9 aux favoris", 5000);
+                    setMessage(String(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + ev.text +
+                                   wr::L("\xE2\x80\x9D added to favorites", " \xC2\xBB ajout\xC3\xA9 aux favoris"),
+                               5000);
                 } else {
                     sound::error();
-                    setMessage("Favori non enregistr\xC3\xA9 : " + ev.text);
+                    setMessage(String(wr::L("Favorite not saved: ", "Favori non enregistr\xC3\xA9 : ")) + ev.text);
                 }
                 show();
                 break;
@@ -636,13 +645,13 @@ static void serviceWiim() {
                     sound::error();
                     g_activePreset = -1;
                     g_ui.setActivePreset(-1);
-                    setMessage("Favori : " + ev.text);
+                    setMessage(String(wr::L("Favorite: ", "Favori : ")) + ev.text);
                 }
                 g_worker.pollSoon();
                 show();
                 break;
             case WiimEvent::Pinned:
-                setMessage("Certificat du WiiM enregistr\xC3\xA9");
+                setMessage(wr::L("WiiM certificate saved", "Certificat du WiiM enregistr\xC3\xA9"));
                 show();
                 break;
             case WiimEvent::PinMismatch:
@@ -652,7 +661,8 @@ static void serviceWiim() {
                 break;
             case WiimEvent::Moved:
                 g_settings.host = ev.text;
-                setMessage("WiiM retrouv\xC3\xA9 \xC3\xA0 sa nouvelle adresse (" + ev.text + ")");
+                setMessage(String(wr::L("WiiM found at its new address (", "WiiM retrouv\xC3\xA9 \xC3\xA0 sa nouvelle adresse (")) +
+                           ev.text + ")");
                 show();
                 break;
             case WiimEvent::Identity:
@@ -695,7 +705,9 @@ static void useWiim(const WiimDevice& d) {
 // Sans adresse enregistrée : recherche sur le Wi-Fi, choix sur l'écran s'il y en a plusieurs
 static void chooseWiim() {
     for (;;) {
-        g_ui.showInfo("Recherche du WiiM\xE2\x80\xA6", "Le Tab5 cherche les lecteurs WiiM sur ton Wi-Fi.");
+        g_ui.showInfo(wr::L("Looking for the WiiM\xE2\x80\xA6", "Recherche du WiiM\xE2\x80\xA6"),
+                      wr::L("The Tab5 is looking for WiiM players on your Wi-Fi.",
+                            "Le Tab5 cherche les lecteurs WiiM sur ton Wi-Fi."));
         std::vector<WiimDevice> found = discoverWiims();
         if (found.size() == 1) {
             useWiim(found[0]);
@@ -715,7 +727,8 @@ static void chooseWiim() {
                     return;
                 }
                 if (c == Ui::PickRetry) sound::tap(), retry = true;
-                if (c == Ui::PickConfig) restartIntoPortal("Saisis l'adresse IP du WiiM.");
+                if (c == Ui::PickConfig) restartIntoPortal(wr::L("Enter the IP address of the WiiM.", "Saisis l'adresse IP du WiiM."));
+
             }
             delay(20);
         }
@@ -812,7 +825,7 @@ static void startVoice() {
     if (!g_voiceBuf)
         g_voiceBuf = static_cast<int16_t*>(heap_caps_malloc(kVoiceMax * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (!g_voiceBuf) {
-        g_searchStatus = "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter";
+        g_searchStatus = wr::L("Not enough memory to listen", "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter");
         renderSearch();
         return;
     }
@@ -827,7 +840,7 @@ static void startVoice() {
     if (!M5.Mic.begin()) {
         stopListening();
         g_dictation = false;
-        g_searchStatus = "Micro indisponible";
+        g_searchStatus = wr::L("Microphone unavailable", "Micro indisponible");
         renderSearch();
         return;
     }
@@ -853,8 +866,10 @@ struct SttJob {
 static SttJob g_stt;
 
 static void sttTask(void*) {
-    static const std::string hint = "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
-                                    "fran\xC3\xA7" "ais ou en anglais.";
+    // Indication pour la transcription, dans la langue de l'interface (choisie à l'exécution, pas à l'initialisation)
+    const std::string hint = wr::L("Music search: artist names, track and album titles, in English or French.",
+                                   "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
+                                   "fran\xC3\xA7" "ais ou en anglais.");
     std::string text;
     String err;
     const bool ok = transcribe(g_voiceBuf, g_voiceLen, kMicRate, g_settings.openaiKey, g_settings.sttModel, hint, text, err);
@@ -869,7 +884,7 @@ static void finishDictation(bool send) {
     stopListening();
     g_dictation = false;
     if (!send || g_voiceLen < kMicRate / 3) {
-        g_searchStatus = send ? String("Je n'ai rien entendu") : String();
+        g_searchStatus = send ? String(wr::L("I didn't hear anything", "Je n'ai rien entendu")) : String();
         renderSearch();
         return;
     }
@@ -880,7 +895,7 @@ static void finishDictation(bool send) {
     // Pile en RAM interne (TLS) ; cœur 0, comme la tâche WiiM : le cœur 1 reste à l'écran et au toucher
     if (xTaskCreatePinnedToCore(sttTask, "stt", 16 * 1024, nullptr, 1, nullptr, 0) != pdPASS) {
         g_stt.busy = false;
-        g_searchStatus = "M\xC3\xA9moire insuffisante pour la transcription";
+        g_searchStatus = wr::L("Not enough memory for the transcription", "M\xC3\xA9moire insuffisante pour la transcription");
         renderSearch();
     }
 }
@@ -908,7 +923,7 @@ static void serviceTranscription() {
     g_searchQuery = text;
     g_searchStatus = "";
     if (text.empty()) {
-        g_searchStatus = "Je n'ai rien compris";
+        g_searchStatus = wr::L("I didn't understand anything", "Je n'ai rien compris");
         renderSearch();
         return;
     }
@@ -989,14 +1004,15 @@ static void handleTap(int x, int y) {
             fav::remove(id);
             logEvent("Favori retir\xC3\xA9 (%s)", id.c_str());
             refreshTiles();
-            setMessage("Retir\xC3\xA9 des favoris", 4000);
+            setMessage(wr::L("Removed from favorites", "Retir\xC3\xA9 des favoris"), 4000);
         } else {
             const UiState& st = g_state;
             const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
             logEvent("Appui Favori : %s", album.c_str());
             g_favBusy = true;
             g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
-            setMessage("Ajout aux favoris\xE2\x80\xA6", 15000);
+            setMessage(wr::L("Adding to favorites\xE2\x80\xA6", "Ajout aux favoris\xE2\x80\xA6"), 15000);
+
         }
         show();
         return;
@@ -1063,23 +1079,27 @@ static void connectWifi() {
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.begin(g_settings.ssid.c_str(), g_settings.pass.c_str());
-    g_ui.showInfo("Connexion\xE2\x80\xA6", "R\xC3\xA9seau Wi-Fi : " + g_settings.ssid);
+    g_ui.showInfo(wr::L("Connecting\xE2\x80\xA6", "Connexion\xE2\x80\xA6"),
+                  String(wr::L("Wi-Fi network: ", "R\xC3\xA9seau Wi-Fi : ")) + g_settings.ssid);
 
     uint32_t start = millis();
     bool shownError = false;
     while (WiFi.status() != WL_CONNECTED) {
         M5.update();
         if (!shownError && millis() - start > kWifiTimeoutMs) {
-            g_ui.showInfo("Wi-Fi injoignable",
-                          "Impossible de rejoindre \xC2\xAB " + g_settings.ssid +
-                              " \xC2\xBB. Nouvel essai en cours. Si le r\xC3\xA9seau ou le mot de passe a chang\xC3\xA9, "
-                              "touche l'\xC3\xA9" "cran pour reconfigurer.",
-                          "Touche l'\xC3\xA9" "cran pour ouvrir la configuration");
+            g_ui.showInfo(wr::L("Wi-Fi unreachable", "Wi-Fi injoignable"),
+                          String(wr::L("Cannot join \xE2\x80\x9C", "Impossible de rejoindre \xC2\xAB ")) + g_settings.ssid +
+                              wr::L("\xE2\x80\x9D. Trying again. If the network or the password has changed, "
+                                    "touch the screen to reconfigure.",
+                                    " \xC2\xBB. Nouvel essai en cours. Si le r\xC3\xA9seau ou le mot de passe a chang\xC3\xA9, "
+                                    "touche l'\xC3\xA9" "cran pour reconfigurer."),
+                          wr::L("Touch the screen to open the setup", "Touche l'\xC3\xA9" "cran pour ouvrir la configuration"));
             shownError = true;
         }
         if (shownError && M5.Touch.getDetail().wasPressed()) {
             sound::tap();
-            restartIntoPortal("Le Wi-Fi \xC2\xAB " + g_settings.ssid + " \xC2\xBB est injoignable.");
+            restartIntoPortal(String(wr::L("The Wi-Fi \xE2\x80\x9C", "Le Wi-Fi \xC2\xAB ")) + g_settings.ssid +
+                              wr::L("\xE2\x80\x9D is unreachable.", " \xC2\xBB est injoignable."));
         }
         delay(20);
     }
@@ -1104,6 +1124,7 @@ void setup() {
         restored = true;
     }
     if (g_settings.configured() && g_favOk) fav::saveSettingsBackup(settingsToBackup(g_settings));
+    wr::setLang(wr::langFromCode(g_settings.lang.c_str()));  // langue de l'interface (anglais par défaut)
     sound::begin(g_settings.beep);
     g_ui.begin(g_settings);
     g_ui.setVisualizer(g_settings.visualizer);
@@ -1111,8 +1132,10 @@ void setup() {
 
     String portalReason;
     if (takePortalRequest(portalReason)) runSetupPortal(g_settings, g_ui, portalReason);  // demandé avant le redémarrage
-    if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, "Premi\xC3\xA8re configuration.");
-    if (!presetsOk) runSetupPortal(g_settings, g_ui, "La liste de presets enregistr\xC3\xA9" "e est invalide.");
+    if (!g_settings.configured()) runSetupPortal(g_settings, g_ui, wr::L("First setup.", "Premi\xC3\xA8re configuration."));
+    if (!presetsOk)
+        runSetupPortal(g_settings, g_ui,
+                       wr::L("The saved preset list is invalid.", "La liste de presets enregistr\xC3\xA9" "e est invalide."));
 
     logEvent("D\xC3\xA9marrage, version %s", FW_VERSION);
     if (restored) logEvent("R\xC3\xA9glages remis depuis la copie de secours (Wi-Fi, WiiM, cl\xC3\xA9, options)");
@@ -1152,9 +1175,11 @@ static void runSearchQuery() {
     g_searchBusy = true;
     g_resultsTitle = q;
     g_resultsSource = g_searchSource;
-    g_searchStatus = g_searchSource == 1   ? String("Recherche sur Deezer\xE2\x80\xA6")
-                     : g_searchSource == 2 ? String("Recherche d'albums sur Qobuz\xE2\x80\xA6")
-                                           : String("Recherche sur Qobuz par ton WiiM\xE2\x80\xA6");
+    g_searchStatus = g_searchSource == 1   ? String(wr::L("Searching Deezer\xE2\x80\xA6", "Recherche sur Deezer\xE2\x80\xA6"))
+                     : g_searchSource == 2 ? String(wr::L("Searching Qobuz albums\xE2\x80\xA6",
+                                                          "Recherche d'albums sur Qobuz\xE2\x80\xA6"))
+                                           : String(wr::L("Searching Qobuz through your WiiM\xE2\x80\xA6",
+                                                          "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6"));
     g_worker.search(q.c_str(), g_searchSource == 2 ? 4 : g_searchSource);
     renderSearch();
 }
@@ -1163,18 +1188,21 @@ static void runSearchQuery() {
 // résultats. source 0 : Qobuz, 1 : Deezer.
 static void openFavoriteList(int source) {
     if (g_searchBusy) {
-        setMessage("Recherche en cours, r\xC3\xA9" "essaie dans un instant", 3000);
+        setMessage(wr::L("Search in progress, try again in a moment",
+                         "Recherche en cours, r\xC3\xA9" "essaie dans un instant"),
+                   3000);
         return;
     }
     g_searchBusy = true;
     const bool deezer = source == 1;
-    g_resultsTitle = deezer ? "Favoris Deezer" : "Favoris Qobuz";
+    g_resultsTitle = deezer ? wr::L("Deezer favorites", "Favoris Deezer") : wr::L("Qobuz favorites", "Favoris Qobuz");
     g_resultsSource = source;
     g_searchResults.clear();
     g_resultsPage = 0;
     g_resultsOpen = true;
     g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
-                       String("Chargement de tes favoris ") + (deezer ? "Deezer" : "Qobuz") + "\xE2\x80\xA6");
+                       deezer ? wr::L("Loading your Deezer favorites\xE2\x80\xA6", "Chargement de tes favoris Deezer\xE2\x80\xA6")
+                              : wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
     g_worker.search(g_resultsTitle.c_str(), deezer ? 3 : 2);
 }
 
@@ -1182,7 +1210,7 @@ static void openSearch() {
     g_searchOpen = true;
     g_deezerOk = g_favOk && fav::hasDeezerModel();
     if (!g_deezerOk && g_searchSource == 1) g_searchSource = 0;
-    g_searchStatus = g_searchBusy ? String("Recherche en cours\xE2\x80\xA6") : String();
+    g_searchStatus = g_searchBusy ? String(wr::L("Searching\xE2\x80\xA6", "Recherche en cours\xE2\x80\xA6")) : String();
     renderSearch();
 }
 
@@ -1262,7 +1290,8 @@ static void renderResultsList(int pressed, const String& status) {
         for (size_t i = 0; i < g_albumResults.size(); ++i) hearts.push_back(albumFavIndex(i) >= 0 ? 1 : 0);
         if (!sub.length() && !g_searchResults.empty())
             sub = String((int)g_searchResults.size()) + (g_searchResults.size() > 1 ? " albums" : " album") +
-                  " \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile";
+                  wr::L(" \xC2\xB7 tap to play, the heart makes it a tile",
+                        " \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile");
     }
     std::vector<const ArtImage*> covers;
     for (auto& t : g_searchResults) covers.push_back(knownImage(t.art));
@@ -1293,14 +1322,18 @@ static void onSearchDone(const WiimEvent& ev) {
     g_albumResults = ev.albums;
     if (!ev.ok || ev.tracks.empty()) {
         if (!ev.ok) sound::error();
-        g_searchStatus = !ev.ok ? "Recherche impossible : " + ev.text
-                                : String(g_resultsSource == 2 ? "Aucun album" : "Aucun morceau") +
-                                      " trouv\xC3\xA9 pour \xC2\xAB " + ev.name + " \xC2\xBB";
+        g_searchStatus = !ev.ok ? String(wr::L("Search failed: ", "Recherche impossible : ")) + ev.text
+                                : String(g_resultsSource == 2 ? wr::L("No album found for \xE2\x80\x9C",
+                                                                      "Aucun album trouv\xC3\xA9 pour \xC2\xAB ")
+                                                              : wr::L("No track found for \xE2\x80\x9C",
+                                                                      "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB ")) +
+                                      ev.name + wr::L("\xE2\x80\x9D", " \xC2\xBB");
         if (g_resultsOpen) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
             g_searchResults.clear();
             g_ui.renderResults(g_resultsTitle, g_searchResults, 0,
-                               !ev.ok ? "Impossible : " + ev.text
-                                      : String("Aucun morceau favori sur ") + (g_resultsSource == 1 ? "Deezer" : "Qobuz"));
+                               !ev.ok ? String(wr::L("Failed: ", "Impossible : ")) + ev.text
+                                      : String(wr::L("No favorite track on ", "Aucun morceau favori sur ")) +
+                                            (g_resultsSource == 1 ? "Deezer" : "Qobuz"));
         }
     } else {
         g_searchResults = ev.tracks;
@@ -1311,7 +1344,8 @@ static void onSearchDone(const WiimEvent& ev) {
         if (g_searchOpen || g_resultsOpen) {  // toujours sur le clavier ou la liste : on montre les résultats
             g_searchOpen = false;
             g_resultsOpen = true;
-            renderResultsList(-1, ev.played ? String("Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer")
+            renderResultsList(-1, ev.played ? String(wr::L("First track started \xC2\xB7 tap another one to play it",
+                                                           "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer"))
                                             : String());
         }
         if (ev.played) g_worker.pollSoon();
@@ -1435,8 +1469,10 @@ void loop() {
                     logEvent("Recherche : lecture de %d (%s)", r + 1, g_searchResults[r].title.c_str());
                     g_worker.playSearchResult(r);
                     markPending(wr::kPlayPause, Await::Music, true);
-                    setMessage(("Lecture : " + g_searchResults[r].title +
-                                (g_resultsSource >= 1 ? " (chargement de l'album\xE2\x80\xA6)" : ""))
+                    setMessage((std::string(wr::L("Playing: ", "Lecture : ")) + g_searchResults[r].title +
+                                (g_resultsSource >= 1 ? wr::L(" (loading the album\xE2\x80\xA6)",
+                                                              " (chargement de l'album\xE2\x80\xA6)")
+                                                      : ""))
                                    .c_str(),
                                g_resultsSource >= 1 ? 9000 : 4000);
                     g_resultsOpen = false;
@@ -1487,7 +1523,8 @@ void loop() {
             Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
             if (c != Ui::MenuNone) sound::tap();
             if (c == Ui::MenuConfig) {
-                restartIntoPortal("Reconfiguration demand\xC3\xA9" "e.");  // redémarre
+                restartIntoPortal(wr::L("Setup requested.", "Reconfiguration demand\xC3\xA9" "e."));  // redémarre
+
             } else if (c == Ui::MenuUpdate) {
                 runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
                 g_menuOpen = false;

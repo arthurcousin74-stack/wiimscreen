@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 
+#include "i18n.h"
 #include "fonts/font_ui_24.h"
 #include "fonts/font_ui_28.h"
 #include "fonts/font_ui_40.h"
@@ -301,11 +302,11 @@ void Ui::info(const UiState& st) {
     int x = r.x;
     const int chipY = r.y;
     if (!st.online) {
-        chip(x, chipY, "Hors ligne", kRed, kText);
+        chip(x, chipY, wr::L("Offline", "Hors ligne"), kRed, kText);
     } else {
-        if (st.player.loading) chip(x, chipY, "Chargement\xE2\x80\xA6", accent_, kText);
+        if (st.player.loading) chip(x, chipY, wr::L("Loading\xE2\x80\xA6", "Chargement\xE2\x80\xA6"), accent_, kText);
         else if (st.player.playing && st.player.durationMs == 0 && !st.player.title.empty())
-            chip(x, chipY, "EN DIRECT", accent_, kText);
+            chip(x, chipY, wr::L("LIVE", "EN DIRECT"), accent_, kText);
         std::string src = wr::sourceName(st.player.mode);
         if (!src.empty()) chip(x, chipY, src, 0, kText2);
         std::string q = wr::formatQuality(st.meta.sampleRate, st.meta.bitDepth);
@@ -330,13 +331,13 @@ void Ui::info(const UiState& st) {
     useFont(C, kBig);
     if (empty) {
         C.setTextColor(kText2);
-        C.drawString(st.online ? "Rien en lecture" : "WiiM injoignable", r.x, y);
+        C.drawString(st.online ? wr::L("Nothing playing", "Rien en lecture") : wr::L("WiiM unreachable", "WiiM injoignable"), r.x, y);
         y += titleH;
         useFont(C, kSmall);
         if (presets_.empty()) {
-            C.drawString(fit("Lance la musique depuis ton t\xC3\xA9l\xC3\xA9phone.", r.w).c_str(), r.x, y + sc(6));
+            C.drawString(fit(wr::L("Start the music from your phone.", "Lance la musique depuis ton t\xC3\xA9l\xC3\xA9phone."), r.w).c_str(), r.x, y + sc(6));
         } else {
-            C.drawString(fit("Choisis un preset ci-dessous.", r.w).c_str(), r.x, y + sc(6));
+            C.drawString(fit(wr::L("Choose a preset below.", "Choisis un preset ci-dessous."), r.w).c_str(), r.x, y + sc(6));
         }
         return;
     }
@@ -368,7 +369,7 @@ void Ui::progressRow(const UiState& st, const wr::Rect& r, wr::Rect* hit) {
         // Flux sans durée : « EN DIRECT » est dans les puces ; ici seulement en vue ambiance
         if (!st.player.playing || hit) return;
         int x = r.x;
-        chip(x, cy - sc(14), "EN DIRECT", accent_, kText2);
+        chip(x, cy - sc(14), wr::L("LIVE", "EN DIRECT"), accent_, kText2);
         return;
     }
     useFont(C, kSmall);
@@ -475,7 +476,7 @@ void Ui::volumePill(const UiState& st, int pressed) {
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_right);
     C.setTextColor(st.online ? kText : kText2);
-    String t = !st.online ? String("\xE2\x80\x94") : st.player.muted ? String("Muet") : String(vol);
+    String t = !st.online ? String("\xE2\x80\x94") : st.player.muted ? String(wr::L("Muted", "Muet")) : String(vol);
     C.drawString(t.c_str(), layout_.transport[wr::kVolUp].x - sc(10), cy + 1);
 }
 
@@ -653,12 +654,14 @@ void Ui::emptyStrip() {
     useFont(C, kMid);
     C.setTextColor(kText);
     int y = r.y + sc(22);
-    C.drawString(wr::wrapText("Aucun favori pour l'instant", tw, 1, measure)[0].c_str(), tx, y);
+    C.drawString(wr::wrapText(wr::L("No favorites yet", "Aucun favori pour l'instant"), tw, 1, measure)[0].c_str(), tx, y);
     y += C.fontHeight() + sc(8);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    for (auto& l : wr::wrapText("Pendant qu'un album ou une playlist joue, touche le bouton favori (\xC3\xA0 gauche des commandes) "
-                                "pour l'ajouter ici.",
+    for (auto& l : wr::wrapText(wr::L("While an album or a playlist plays, tap the favorite button (left of the controls) "
+                                      "to add it here.",
+                                      "Pendant qu'un album ou une playlist joue, touche le bouton favori (\xC3\xA0 gauche des "
+                                      "commandes) pour l'ajouter ici."),
                                 tw, 3, measure)) {
         if (y + C.fontHeight() > r.bottom() - sc(10)) break;
         C.drawString(l.c_str(), tx, y);
@@ -725,7 +728,7 @@ void Ui::renderAmbient(const UiState& st) {
         bottom = visRect_.y - sc(24);
     }
 
-    std::string title = st.player.title.empty() ? (st.online ? "Rien en lecture" : "Hors ligne")
+    std::string title = st.player.title.empty() ? (st.online ? wr::L("Nothing playing", "Rien en lecture") : wr::L("Offline", "Hors ligne"))
                                                 : st.player.title;
     useFont(C, kBig);
     auto titleLines = wr::wrapText(title, tw, 3, measure);
@@ -971,13 +974,14 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     const int tx = X + fh, tw = W - fh - sc(24) - micW;
     if (mic == 1 || mic == 2) {
         C.setTextColor(mic == 1 ? kText : kText2);
-        const char* say = mic == 1 ? "Je t'\xC3\xA9" "coute\xE2\x80\xA6 touche le bouton rouge quand tu as fini"
-                                   : "Transcription\xE2\x80\xA6";
+        const char* say = mic == 1 ? wr::L("Listening\xE2\x80\xA6 tap the red button when you are done",
+                                         "Je t'\xC3\xA9" "coute\xE2\x80\xA6 touche le bouton rouge quand tu as fini")
+                                   : wr::L("Transcribing\xE2\x80\xA6", "Transcription\xE2\x80\xA6");
         useFont(C, kSmall);
         C.drawString(wr::wrapText(say, tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
     } else if (query.empty()) {
         C.setTextColor(kText2);
-        C.drawString(wr::wrapText("Artiste, morceau, album\xE2\x80\xA6", tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
+        C.drawString(wr::wrapText(wr::L("Artist, track, album\xE2\x80\xA6", "Artiste, morceau, album\xE2\x80\xA6"), tw, 1, measure)[0].c_str(), tx, fy + fh / 2 + 1);
     } else {
         std::string shown = query;  // le début coupé si le texte déborde : on voit la fin, là où l'on tape
         while (shown.size() > 1 && measure(shown) > tw - sc(10)) shown = shown.substr(1);
@@ -1010,9 +1014,12 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     C.setTextColor(busy ? accent_ : kText2);
     const String line = status.length()
                             ? status
-                            : String(source == 1   ? "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM"
-                                     : source == 2 ? "Albums Qobuz \xC2\xB7 le c\xC5\x93ur en fait une tuile"
-                                                   : "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM");
+                            : String(source == 1   ? wr::L("Deezer tracks \xC2\xB7 your WiiM plays the album",
+                                                   "Morceaux Deezer \xC2\xB7 l'album est jou\xC3\xA9 par ton WiiM")
+                                     : source == 2 ? wr::L("Qobuz albums \xC2\xB7 the heart makes it a tile",
+                                                           "Albums Qobuz \xC2\xB7 le c\xC5\x93ur en fait une tuile")
+                                                   : wr::L("Qobuz tracks, searched by your WiiM",
+                                                           "Morceaux Qobuz, cherch\xC3\xA9s par ton WiiM"));
     C.drawString(wr::wrapText(line.c_str(), lineW, 1, measure)[0].c_str(), X + sc(8), fy + fh + sc(10));
     searchArea_ = wr::Rect{A.x, A.y, A.w, fy + fh + sc(10) + C.fontHeight() + sc(14) - A.y};
 }
@@ -1053,17 +1060,18 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString("Modifier", resultsEdit_.x + bw / 2 + sc(14), resultsEdit_.y + bh / 2 + 1);
+    C.drawString(wr::L("Edit", "Modifier"), resultsEdit_.x + bw / 2 + sc(14), resultsEdit_.y + bh / 2 + 1);
     useFont(C, kMid);
     C.setTextDatum(textdatum_t::middle_left);
-    const std::string head = "\xC2\xAB " + query + " \xC2\xBB";
+    const std::string head = std::string(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + query + wr::L("\xE2\x80\x9D", " \xC2\xBB");
     C.drawString(wr::wrapText(head, W - bw - sc(20), 1, measure)[0].c_str(), X, A.y + m + bh / 2);
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText2);
     String sub = status.length() ? status
-                                 : String((int)items.size()) + (items.size() > 1 ? " morceaux" : " morceau") +
-                                       " \xC2\xB7 touche celui \xC3\xA0 \xC3\xA9" "couter";
+                                 : String((int)items.size()) +
+                                       (items.size() > 1 ? wr::L(" tracks", " morceaux") : wr::L(" track", " morceau")) +
+                                       wr::L(" \xC2\xB7 tap one to play it", " \xC2\xB7 touche celui \xC3\xA0 \xC3\xA9" "couter");
     C.drawString(wr::wrapText(sub.c_str(), W, 1, measure)[0].c_str(), X, A.y + m + bh + sc(8));
     // Lignes
     const int top = A.y + m + bh + sc(8) + C.fontHeight() + sc(14), navH = sc(56);
@@ -1128,13 +1136,13 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
             resultsPrev_ = wr::Rect{X, ny, nw, navH};
             C.fillRoundRect(X, ny, nw, navH, navH / 2, kCard);
             C.setTextColor(kText);
-            C.drawString("Pr\xC3\xA9" "c\xC3\xA9" "dents", X + nw / 2, ny + navH / 2 + 1);
+            C.drawString(wr::L("Previous", "Pr\xC3\xA9" "c\xC3\xA9" "dents"), X + nw / 2, ny + navH / 2 + 1);
         }
         if (page < pages - 1) {
             resultsNext_ = wr::Rect{X + W - nw, ny, nw, navH};
             C.fillRoundRect(X + W - nw, ny, nw, navH, navH / 2, kCard);
             C.setTextColor(kText);
-            C.drawString("Suivants", X + W - nw / 2, ny + navH / 2 + 1);
+            C.drawString(wr::L("Next", "Suivants"), X + W - nw / 2, ny + navH / 2 + 1);
         }
         C.setTextColor(kText2);
         C.drawString((String(page + 1) + " / " + String(pages)).c_str(), X + W / 2, ny + navH / 2 + 1);
@@ -1327,20 +1335,27 @@ void Ui::renderMenu(const char* version) {
     C.setTextDatum(textdatum_t::bottom_center);
     useFont(C, kBig);
     C.setTextColor(kText);
-    C.drawString("R\xC3\xA9glages", A.x + W / 2, y0 - sc(20));
+    C.drawString(wr::L("Settings", "R\xC3\xA9glages"), A.x + W / 2, y0 - sc(20));
     menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
     menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
     menuRects_[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
     menuRects_[MenuLog] = wr::Rect{x, y0 + 3 * (bh + gap), bw, bh};
-    menuButton(C, menuRects_[MenuConfig], "Configuration", "Wi-Fi, WiiM, presets, voix",
+    menuButton(C, menuRects_[MenuConfig], wr::L("Setup", "Configuration"),
+               wr::L("Wi-Fi, WiiM, presets, voice", "Wi-Fi, WiiM, presets, voix"),
                accent_, sc(16));
-    menuButton(C, menuRects_[MenuUpdate], "Mise \xC3\xA0 jour", "Installer un nouveau firmware par le Wi-Fi", kText2,
+    menuButton(C, menuRects_[MenuUpdate], wr::L("Update", "Mise \xC3\xA0 jour"),
+               wr::L("Install new firmware over Wi-Fi", "Installer un nouveau firmware par le Wi-Fi"), kText2,
                sc(16));
-    menuButton(C, menuRects_[MenuTouch], "Test tactile", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt",
+    menuButton(C, menuRects_[MenuTouch], wr::L("Touch test", "Test tactile"),
+               wr::L("See where the screen detects your finger", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt"),
                kText2, sc(16));
-    menuButton(C, menuRects_[MenuLog], "Journal", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic", kText2, sc(16));
+    menuButton(C, menuRects_[MenuLog], wr::L("Log", "Journal"),
+               wr::L("Recent events, for troubleshooting", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic"), kText2,
+               sc(16));
     menuRects_[MenuSleep] = wr::Rect{x, y0 + 4 * (bh + gap), bw, bh};
-    menuButton(C, menuRects_[MenuSleep], "Mise en veille", "\xC3\x89teindre ; le bouton d'alimentation rallume", kText2,
+    menuButton(C, menuRects_[MenuSleep], wr::L("Sleep", "Mise en veille"),
+               wr::L("Power off; the power button turns it back on", "\xC3\x89teindre ; le bouton d'alimentation rallume"),
+               kText2,
                sc(16));
     const int cw = sc(150), ch = sc(44);
     menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuSleep].bottom() + sc(14), cw, ch};
@@ -1349,7 +1364,7 @@ void Ui::renderMenu(const char* version) {
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString("Fermer", c.x + c.w / 2, c.y + c.h / 2 + 1);
+    C.drawString(wr::L("Close", "Fermer"), c.x + c.w / 2, c.y + c.h / 2 + 1);
     C.setTextDatum(textdatum_t::bottom_right);
     C.setTextColor(kText2);
     C.drawString((String("Version ") + version).c_str(), C.width() - sc(20), H - sc(14));
@@ -1369,7 +1384,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     useFont(C, kMid);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
-    C.drawString("Journal", X, Y);
+    C.drawString(wr::L("Log", "Journal"), X, Y);
     const int bw = sc(150), bh = sc(44), qw = sc(170);
     useFont(C, kSmall);
     C.setTextColor(kText2);
@@ -1380,12 +1395,12 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString("Fermer", logClose_.x + bw / 2, logClose_.y + bh / 2 + 1);
+    C.drawString(wr::L("Close", "Fermer"), logClose_.x + bw / 2, logClose_.y + bh / 2 + 1);
     // Diagnostic de la file de lecture du WiiM (service UPnP PlayQueue)
     logQueue_ = wr::Rect{logClose_.x - sc(12) - qw, Y, qw, bh};
     C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
     C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
-    C.drawString("File du WiiM", logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
+    C.drawString(wr::L("WiiM queue", "File du WiiM"), logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     useFont(C, kTiny);
@@ -1421,12 +1436,15 @@ void Ui::renderTouchTest(int x, int y, int count) {
     useFont(C, kMid);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText);
-    C.drawString("Test tactile", sc(24), sc(20));
+    C.drawString(wr::L("Touch test", "Test tactile"), sc(24), sc(20));
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString("Touche l'\xC3\xA9" "cran : un rond doit appara\xC3\xAEtre sous ton doigt.", sc(24), sc(76));
-    String info = "\xC3\x89" "cran " + String(W) + " x " + String(H) + "   Appuis : " + String(count);
-    if (x >= 0) info += "   Dernier : x " + String(x) + ", y " + String(y);
+    C.drawString(wr::L("Touch the screen: a circle should appear under your finger.",
+                       "Touche l'\xC3\xA9" "cran : un rond doit appara\xC3\xAEtre sous ton doigt."),
+                 sc(24), sc(76));
+    String info = String(wr::L("Screen ", "\xC3\x89" "cran ")) + String(W) + " x " + String(H) + wr::L("   Taps: ", "   Appuis : ") +
+                  String(count);
+    if (x >= 0) info += String(wr::L("   Last: x ", "   Dernier : x ")) + String(x) + ", y " + String(y);
     C.drawString(info.c_str(), sc(24), sc(110));
     if (x >= 0) {
         C.fillCircle(x, y, sc(34), accent_);
@@ -1439,7 +1457,7 @@ void Ui::renderTouchTest(int x, int y, int count) {
     C.fillRoundRect(touchClose_.x, touchClose_.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString("Fermer", touchClose_.x + bw / 2, touchClose_.y + bh / 2 + 1);
+    C.drawString(wr::L("Close", "Fermer"), touchClose_.x + bw / 2, touchClose_.y + bh / 2 + 1);
     present();
 }
 
@@ -1454,21 +1472,25 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     C.setTextDatum(textdatum_t::top_left);
     useFont(C, kBig);
     C.setTextColor(kText);
-    C.drawString(devices.empty() ? "Aucun WiiM trouv\xC3\xA9" : "Quel WiiM ?", m, m);
+    C.drawString(devices.empty() ? wr::L("No WiiM found", "Aucun WiiM trouv\xC3\xA9") : wr::L("Which WiiM?", "Quel WiiM ?"), m, m);
     int y = m + C.fontHeight() + sc(16);
     useFont(C, kSmall);
     C.setTextColor(kText2);
     pickRects_.clear();
     if (devices.empty()) {
-        for (auto& l : wr::wrapText("V\xC3\xA9rifie que le WiiM est allum\xC3\xA9 et branch\xC3\xA9 sur le m\xC3\xAA" "me "
-                                    "Wi-Fi que le Tab5, puis r\xC3\xA9" "essaie. Tu peux aussi saisir son adresse IP dans la "
-                                    "configuration.",
+        for (auto& l : wr::wrapText(wr::L("Check that the WiiM is on and connected to the same Wi-Fi as the Tab5, then retry. "
+                                          "You can also enter its IP address in the setup.",
+                                          "V\xC3\xA9rifie que le WiiM est allum\xC3\xA9 et branch\xC3\xA9 sur le m\xC3\xAA" "me "
+                                          "Wi-Fi que le Tab5, puis r\xC3\xA9" "essaie. Tu peux aussi saisir son adresse IP "
+                                          "dans la configuration."),
                                     W - 2 * m, 4, measure)) {
             C.drawString(l.c_str(), m, y);
             y += C.fontHeight() + sc(6);
         }
     } else {
-        C.drawString("Plusieurs lecteurs sont sur ton Wi-Fi : touche celui \xC3\xA0 commander.", m, y);
+        C.drawString(wr::L("Several players are on your Wi-Fi: tap the one to control.",
+                           "Plusieurs lecteurs sont sur ton Wi-Fi : touche celui \xC3\xA0 commander."),
+                     m, y);
         y += C.fontHeight() + sc(20);
         const int cols = W > H ? 2 : 1, gap = sc(16);
         const int cw = (W - 2 * m - (cols - 1) * gap) / cols, ch = sc(84);
@@ -1496,7 +1518,7 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     for (auto* b : {&pickRetry_, &pickConfig_}) {
         C.fillRoundRect(b->x, b->y, b->w, b->h, b->h / 2, b == &pickRetry_ && devices.empty() ? accent_ : kCard);
         C.setTextColor(b == &pickRetry_ && devices.empty() ? kBg : kText);
-        C.drawString(b == &pickRetry_ ? "R\xC3\xA9" "essayer" : "Configuration", b->x + b->w / 2, b->y + b->h / 2 + 1);
+        C.drawString(b == &pickRetry_ ? wr::L("Retry", "R\xC3\xA9" "essayer") : wr::L("Setup", "Configuration"), b->x + b->w / 2, b->y + b->h / 2 + 1);
     }
     present();
 }
@@ -1533,11 +1555,13 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     C.setTextDatum(textdatum_t::top_left);
     useFont(C, kBig);
     C.setTextColor(kText);
-    C.drawString("Mise \xC3\xA0 jour", m, m);
+    C.drawString(wr::L("Update", "Mise \xC3\xA0 jour"), m, m);
     int y = m + C.fontHeight() + sc(24);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString("1. Sur le m\xC3\xAAme Wi-Fi, scanne le QR code ou ouvre :", m, y);
+    C.drawString(wr::L("1. On the same Wi-Fi, scan the QR code or open:",
+                       "1. Sur le m\xC3\xAAme Wi-Fi, scanne le QR code ou ouvre :"),
+                 m, y);
     y += C.fontHeight() + sc(8);
     useFont(C, kBig);
     C.setTextColor(accent_);
@@ -1545,7 +1569,8 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     y += C.fontHeight() + sc(18);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    C.drawString("2. Saisis ce code, puis choisis le fichier .bin :", m, y);
+    C.drawString(wr::L("2. Enter this code, then choose the .bin file:", "2. Saisis ce code, puis choisis le fichier .bin :"), m,
+                 y);
     y += C.fontHeight() + sc(8);
     // Code en gros, chiffres espacés
     useFont(C, kBig);
@@ -1577,13 +1602,13 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     // Version et bouton Annuler
     C.setTextColor(kText2);
     C.setTextDatum(textdatum_t::bottom_left);
-    C.drawString((String("Version install\xC3\xA9" "e : ") + version).c_str(), m, H - sc(24));
+    C.drawString((String(wr::L("Installed version: ", "Version install\xC3\xA9" "e : ")) + version).c_str(), m, H - sc(24));
     const int bw = sc(150), bh = sc(44);
     cancelRect_ = wr::Rect{W - m - bw, H - sc(24) - bh, bw, bh};
     C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString("Annuler", cancelRect_.x + bw / 2, cancelRect_.y + bh / 2 + 1);
+    C.drawString(wr::L("Cancel", "Annuler"), cancelRect_.x + bw / 2, cancelRect_.y + bh / 2 + 1);
     present();
 }
 
@@ -1641,7 +1666,7 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     C.setTextDatum(textdatum_t::top_left);
     useFont(C, kBig);
     C.setTextColor(kText);
-    C.drawString("Configuration", m, y);
+    C.drawString(wr::L("Setup", "Configuration"), m, y);
     y += C.fontHeight() + sc(12);
 
     // Paragraphe avec retrait (sous le numéro d'étape)
@@ -1669,15 +1694,19 @@ void Ui::showPortal(const String& apName, const String& apPass, const String& ur
     if (reason.length()) para(reason, kSmall, kText2, m);
     y += sc(14);
     step(1);
-    para("Scanne le QR code avec ton téléphone, ou rejoins le Wi-Fi :", kSmall, kText, m + indent);
+    para(wr::L("Scan the QR code with your phone, or join the Wi-Fi:",
+               "Scanne le QR code avec ton téléphone, ou rejoins le Wi-Fi :"),
+         kSmall, kText, m + indent);
     para(apName, kMid, kText, m + indent);
-    para("mot de passe : " + apPass, kMid, kText, m + indent);
+    para(String(wr::L("password: ", "mot de passe : ")) + apPass, kMid, kText, m + indent);
     y += sc(14);
     step(2);
-    para("Si la page ne s'ouvre pas, va sur " + url, kSmall, kText, m + indent);
+    para(String(wr::L("If the page does not open, go to ", "Si la page ne s'ouvre pas, va sur ")) + url, kSmall, kText, m + indent);
     y += sc(14);
     step(3);
-    para("Choisis ton Wi-Fi et tape son mot de passe : le Tab5 trouve ton WiiM tout seul.", kSmall, kText,
+    para(wr::L("Choose your Wi-Fi and type its password: the Tab5 finds your WiiM by itself.",
+               "Choisis ton Wi-Fi et tape son mot de passe : le Tab5 trouve ton WiiM tout seul."),
+         kSmall, kText,
          m + indent);
     present();
 }

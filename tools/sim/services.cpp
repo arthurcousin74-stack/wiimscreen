@@ -4,6 +4,7 @@
 #include <mutex>
 
 #include "M5Unified.h"
+#include "i18n.h"
 #include "ota.h"
 #include "portal.h"
 #include "sim.h"
@@ -27,7 +28,8 @@ void resume() {}
 void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     (void)s;
     ui.showPortal("WiiM-Remote-3F2A", "simulateur", "http://192.168.4.1",
-                  reason + " Simulateur : touche l'\xC3\xA9" "cran pour revenir.");
+                  reason + wr::L(" Simulator: tap the screen to go back.",
+                                 " Simulateur : touche l'\xC3\xA9" "cran pour revenir."));
     const uint32_t shown = millis();
     for (;;) {
         M5.update();
@@ -38,7 +40,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
 
 void runUpdateMode(Ui& ui) {
     ui.showUpdate("http://192.168.1.42", "481203", FW_VERSION, -1,
-                  "Simulateur : aucune mise \xC3\xA0 jour possible ici.");
+                  wr::L("Simulator: no update possible here.", "Simulateur : aucune mise \xC3\xA0 jour possible ici."));
     for (;;) {
         M5.update();
         auto t = M5.Touch.getDetail();

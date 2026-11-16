@@ -14,6 +14,7 @@
 #include "M5Unified.h"
 #include "art.h"
 #include "ui.h"
+#include "i18n.h"
 
 PreviewM5 M5;
 
@@ -79,6 +80,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     const std::string in = argv[1], out = argv[2];
+    // Langue de l'interface : PREVIEW_LANG=fr pour les écrans en français (anglais par défaut)
+    if (const char* lg = getenv("PREVIEW_LANG")) wr::setLang(wr::langFromCode(lg));
     ArtImage art;
     if (!loadFile((in + "/cover.jpg").c_str(), art)) {
         fprintf(stderr, "image illisible : %s/cover.jpg\n", in.c_str());
@@ -180,7 +183,7 @@ int main(int argc, char** argv) {
     radio.player.artist = "Françoise Hardy";
     radio.player.album = "";
     radio.meta = wr::TrackMeta();
-    radio.message = "Certificat du WiiM enregistré";
+    radio.message = wr::L("WiiM certificate saved", "Certificat du WiiM enregistré");
     radio.battery = -1;
     ui.setArt(nullptr);
     ui.setActivePreset(0);
@@ -234,7 +237,7 @@ int main(int argc, char** argv) {
     // Hors ligne
     UiState off = st;
     off.online = false;
-    off.message = "WiiM injoignable : vérifie qu'il est allumé et son IP";
+    off.message = wr::L("WiiM unreachable: check that it is on and its IP", "WiiM injoignable : vérifie qu'il est allumé et son IP");
     ui.setArt(&art);
     ui.render(off);
     save(out, "7-hors-ligne.ppm");
@@ -315,15 +318,15 @@ int main(int argc, char** argv) {
         save(out, "24-recherche.ppm");
         ui.renderSearch("", "", false, -1, 0, true, 1, 0.6f);  // dictée en cours
         save(out, "29-dictee.ppm");
-        ui.renderResults("aretha franklin", found, 0, "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer");
+        ui.renderResults("aretha franklin", found, 0, wr::L("First track started \xC2\xB7 tap another one to play it", "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer"));
         save(out, "25-resultats.ppm");
-        ui.renderResults("Favoris Qobuz", {}, 0, "Chargement de tes favoris Qobuz\xE2\x80\xA6");
+        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), {}, 0, wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
         save(out, "31-favoris-qobuz-chargement.ppm");
-        ui.renderResults("Favoris Qobuz", found, 0, "");
+        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), found, 0, "");
         save(out, "32-favoris-qobuz.ppm");
         ui.renderSearch("miles", "", false, -1, 2, false);  // Qobuz | Albums (pas de Deezer)
         save(out, "35-albums.ppm");
-        ui.renderResults("miles", found, 0, "7 albums \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile",
+        ui.renderResults("miles", found, 0, wr::L("7 albums \xC2\xB7 tap to play, the heart makes it a tile", "7 albums \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile"),
                          -1, {1, 0, 1, 0, 0, 0, 0});
         save(out, "36-albums-resultats.ppm");
     }
@@ -348,10 +351,10 @@ int main(int argc, char** argv) {
     }
     ui.renderTouchTest(820, 470, 7);
     save(out, "18-test-tactile.ppm");
-    ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, "R\xC3\xA9" "ception du firmware\xE2\x80\xA6");
+    ui.showUpdate("http://192.168.1.42", "481203", "57-219c0bc", 63, wr::L("Receiving the firmware\xE2\x80\xA6", "R\xC3\xA9" "ception du firmware\xE2\x80\xA6"));
     save(out, "14-mise-a-jour.ppm");
 
-    ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", "Reconfiguration demand\xC3\xA9" "e. Touche l'\xC3\xA9" "cran du Tab5 pour annuler.");
+    ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", wr::L("Setup requested. Touch the Tab5 screen to cancel.", "Reconfiguration demand\xC3\xA9" "e. Touche l'\xC3\xA9" "cran du Tab5 pour annuler."));
     save(out, "8-configuration.ppm");
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée
     // (sans conséquence sur l'appareil, où l'interface n'est jamais détruite)

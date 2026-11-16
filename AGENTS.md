@@ -32,6 +32,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 
 | Path | Role |
 |---|---|
+| `lib/core/src/i18n.*` | Interface language: `wr::L("English", "Français")`, `setLang`, `langFromCode` |
 | `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, URL encoding, WAV header |
@@ -58,8 +59,13 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 
 - **Pure logic goes in `lib/core`** (no Arduino headers) with a test in `test/test_core/test_main.cpp`.
   `src/` stays thin glue around hardware and network.
-- **Code comments and UI strings are in French** (the original author's language). Keep it consistent within a
-  file; English is fine for new files. Non-ASCII UI text is written as UTF-8 escapes in C strings when needed.
+- **UI text is in English (default) and French**: write every user-visible string as `wr::L("English", "Français")`
+  (`lib/core/src/i18n.h`), both in place, same printf specifiers. `wr::L()` returns `const char*`: wrap in
+  `String(...)` before `+`; never evaluate it at static-initialisation time. The language is `Settings::lang`
+  ("en"/"fr", setup page), applied at boot with `wr::setLang`; the keyboard is QWERTY in English, AZERTY in French.
+  **The Journal (`logEvent`) stays in French**: the hardware checklist quotes its lines.
+- **Code comments are in French** (the original author's language). Keep it consistent within a file; English is
+  fine for new files. Non-ASCII text is written as UTF-8 escapes in C strings when needed.
 - **README.md is written in ASD-STE100 Simplified Technical English** (short sentences, active voice, one
   instruction per numbered step). Keep that style when you edit it.
 - Colors are RGB888 `uint32_t` (an `uint16_t` would be read as RGB565 by M5GFX).

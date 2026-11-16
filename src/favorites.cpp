@@ -1,4 +1,6 @@
 #include "favorites.h"
+#include "i18n.h"
+
 
 #include <Arduino.h>
 #include <LittleFS.h>
@@ -87,12 +89,12 @@ uint32_t revision() {
 bool add(wr::Favorite& f, const std::string& queueContext, std::string& error) {
     Guard g;
     if (!g_ok) {
-        error = "m\xC3\xA9moire indisponible";
+        error = wr::L("storage unavailable", "m\xC3\xA9moire indisponible");
         return false;
     }
     auto same = std::find_if(g_list.begin(), g_list.end(), [&](const wr::Favorite& x) { return x.key == f.key; });
     if (same == g_list.end() && g_list.size() >= kMax) {
-        error = "24 favoris au plus";
+        error = wr::L("24 favorites at most", "24 favoris au plus");
         return false;
     }
     char idBuf[12];
@@ -103,13 +105,13 @@ bool add(wr::Favorite& f, const std::string& queueContext, std::string& error) {
     }
     f.id = same != g_list.end() ? same->id : idBuf;
     if (!writeFile(path(f.id).c_str(), queueContext)) {
-        error = "\xC3\xA9" "criture impossible (m\xC3\xA9moire pleine ?)";
+        error = wr::L("cannot write (storage full?)", "\xC3\xA9" "criture impossible (m\xC3\xA9moire pleine ?)");
         return false;
     }
     if (same != g_list.end()) *same = f;
     else g_list.push_back(f);
     if (!saveIndex()) {
-        error = "\xC3\xA9" "criture de l'index impossible";
+        error = wr::L("cannot write the index", "\xC3\xA9" "criture de l'index impossible");
         return false;
     }
     ++g_rev;

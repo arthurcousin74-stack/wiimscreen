@@ -1,4 +1,5 @@
 #include "core.h"
+#include "i18n.h"
 
 #include <cstring>
 
@@ -85,7 +86,7 @@ bool parsePresets(const std::string& text, std::vector<Preset>& out, std::string
         }
         size_t eq = line.find('=');
         if (eq == std::string::npos) {
-            error = "ligne " + std::to_string(lineNo) + " : format attendu numéro=nom";
+            error = L("line ", "ligne ") + std::to_string(lineNo) + L(": expected format number=name", " : format attendu numéro=nom");
             return false;
         }
         std::string num = trim(line.substr(0, eq));
@@ -93,22 +94,22 @@ bool parsePresets(const std::string& text, std::vector<Preset>& out, std::string
         char* endp = nullptr;
         long slot = std::strtol(num.c_str(), &endp, 10);
         if (num.empty() || *endp != '\0' || slot < 1 || slot > 20) {
-            error = "ligne " + std::to_string(lineNo) + " : numéro de preset entre 1 et 20";
+            error = L("line ", "ligne ") + std::to_string(lineNo) + L(": preset number between 1 and 20", " : numéro de preset entre 1 et 20");
             return false;
         }
         if (label.empty() || label.size() > 60) {
-            error = "ligne " + std::to_string(lineNo) + " : nom vide ou trop long";
+            error = L("line ", "ligne ") + std::to_string(lineNo) + L(": name empty or too long", " : nom vide ou trop long");
             return false;
         }
         if (static_cast<int>(out.size()) >= kMaxPresets) {
-            error = "12 presets au maximum";
+            error = L("12 presets at most", "12 presets au maximum");
             return false;
         }
         out.push_back(Preset{static_cast<int>(slot), label});
         if (end == text.size()) break;
     }
     if (out.empty()) {
-        error = "ajoute au moins un preset";
+        error = L("add at least one preset", "ajoute au moins un preset");
         return false;
     }
     return true;
@@ -204,13 +205,13 @@ std::string sourceName(int mode) {
         case 1: return "AirPlay";
         case 2: return "DLNA";
         case 11: return "USB";
-        case 16: return "Carte SD";
+        case 16: return L("SD card", "Carte SD");
         case 31: return "Spotify";
         case 32: return "TIDAL";
-        case 40: return "Entrée ligne";
+        case 40: return L("Line in", "Entrée ligne");
         case 41: return "Bluetooth";
-        case 42: return "Stockage externe";
-        case 43: return "Optique";
+        case 42: return L("External storage", "Stockage externe");
+        case 43: return L("Optical", "Optique");
         case 99: return "Multiroom";
         default: return "";
     }
@@ -694,15 +695,17 @@ std::vector<Key> keyboardLayout(const Rect& area) {
         k.kind = kind;
         keys.push_back(k);
     };
-    const char* rows[] = {"1234567890", "azertyuiop", "qsdfghjklm"};
+    // QWERTY in English, AZERTY in French (same 10 + 10 + 10 + 8 keys)
+    const bool fr = lang() == Lang::Fr;
+    const char* rows[] = {"1234567890", fr ? "azertyuiop" : "qwertyuiop", fr ? "qsdfghjklm" : "asdfghjkl'"};
     for (int r = 0; r < 3; ++r)
         for (int c = 0; rows[r][c]; ++c) add(r, c, 1, std::string(1, rows[r][c]), std::string(1, rows[r][c]), Key::Char);
-    const char* last = "wxcvbn'-";
+    const char* last = fr ? "wxcvbn'-" : "zxcvbnm-";
     for (int c = 0; last[c]; ++c) add(3, c, 1, std::string(1, last[c]), std::string(1, last[c]), Key::Char);
     add(3, 8, 2, "\xE2\x8C\xAB", "", Key::Back);  // ⌫
-    add(4, 0, 2, "Effacer", "", Key::Clear);
-    add(4, 2, 5, "espace", " ", Key::Space);
-    add(4, 7, 3, "Chercher", "", Key::Enter);
+    add(4, 0, 2, L("Clear", "Effacer"), "", Key::Clear);
+    add(4, 2, 5, L("space", "espace"), " ", Key::Space);
+    add(4, 7, 3, L("Search", "Chercher"), "", Key::Enter);
     return keys;
 }
 

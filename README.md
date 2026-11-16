@@ -36,7 +36,8 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 >   return of the previous music after a Qobuz search, the voice search, the visualizer and the selection between
 >   several WiiM players.
 > - No other board is tested.
-> - The screen text and the voice search are in **French** at this time. Translations are welcome.
+> - The screen text, the setup page and the update page are in **English** (default) or **French**. To change the
+>   language, open the setup page and select **Language**. The Journal (diagnostic log) stays in French.
 >
 > If you find a problem, please [open an issue](../../issues). Tell us what works and what does not work.
 

@@ -3,7 +3,7 @@
 // Feuille de style commune aux pages web du Tab5 (configuration, mise à jour) :
 // mêmes couleurs que l'écran (fond sombre, accent ambre). Tout est intégré : pendant
 // la configuration, le téléphone est sur le Wi-Fi du Tab5, sans accès à Internet.
-static const char kWebHead[] PROGMEM = R"CSS(<!doctype html><html lang=fr><head><meta charset=utf-8>
+static const char kWebHead[] PROGMEM = R"CSS(<!doctype html><html lang=%LANG%><head><meta charset=utf-8>
 <meta name=viewport content='width=device-width,initial-scale=1,viewport-fit=cover'>
 <meta name=color-scheme content=dark><style>
 :root{--bg:#0e0f12;--card:#1b1d23;--line:#2c2f37;--text:#f4f5f7;--muted:#a6a9b2;--accent:#e8a33d;--ok:#3ecf8e;--err:#ff6b6b}

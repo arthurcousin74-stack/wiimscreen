@@ -1,9 +1,10 @@
 # Tour of the main screens (1280×720). Run: .pio/build/sim/program --headless --reset --script tools/sim/scripts/tour.txt
 # Then: python tools/preview/topng.py .pio/sim-out/*.ppm
+# Keyboard: QWERTY (English, the default language). "miles" = m(861,541) i(975,330) l(1089,435) e(405,330) s(291,435)
 wait 2000
 tap 50 360
 wait 400
-tap 1203 435
+tap 861 541
 wait 150
 tap 975 330
 wait 150
@@ -38,7 +39,7 @@ tap 998 143
 wait 150
 tap 234 647
 wait 150
-tap 1203 435
+tap 861 541
 wait 150
 tap 975 330
 wait 150
