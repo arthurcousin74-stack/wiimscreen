@@ -1,11 +1,40 @@
 # Changelog
 
-Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show their version in the
-*Réglages* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
+Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show their version at the bottom of
+the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
-## [Unreleased] — first public release candidate (v0.1.0)
+## [0.1.0-beta] — 2026-11-16 — first public release
 
-Hardware testing in progress.
+Beta: only the M5Stack Tab5 is tested. Items marked *(simulator)* were verified with the real-WiiM simulator
+(`simreal`) on a real WiiM, not yet on a Tab5.
+
+### Added
+- **English interface** (default) with French as an option: setup page › *Language / Langue*. QWERTY keyboard in
+  English, AZERTY in French; voice search follows the language. The Journal stays in French.
+- **Qobuz album search** (search screen › *Albums*): touch an album to play it, touch its heart to add it as a tile
+  without playing it. *(simulator)*
+- **Album covers in the result lists**, loaded per page without flicker. *(simulator)*
+- **Deezer Flow tile**: added automatically the first time Flow plays on the WiiM; replays Flow with new tracks;
+  a removed tile does not come back by itself. *(simulator)*
+- The heart button recognizes the queue that plays (not only the album name), so Flow and albums match exactly.
+- `tools/check_ca_bundle.py`: checks that the Tab5 can verify the HTTPS servers it uses.
+
+### Fixed
+- **Voice search: "OpenAI unreachable"** on the Tab5. api.openai.com sends a root cross-signed by GlobalSign Root
+  CA (R1), which ESP-IDF's bundle lacked; R1 is added (`certs/extra_roots.pem`). TuneIn covers had the same problem.
+- Favoris Qobuz list while music plays: the previous music stopped instead of coming back; with shuffle on, the
+  wrong track came back; the position was lost. *(simulator)*
+- A track chosen in the Favoris Qobuz list played another track. *(simulator)*
+- A new Tab5 had no Favoris Qobuz tile (the Qobuz queue model was never found on the WiiM). *(simulator)*
+- Deezer covers stayed grey in lists (progressive JPEGs): a baseline variant is downloaded. *(simulator)*
+- Settings menu: titles drawn over the top edge of their rows; long subtitles off screen in portrait.
+- Relay for the simulator: TLS 1.3 connections could hang (the self-test failed about one time in two).
+
+### Changed
+- Qobuz refuses the WiiM's token for favorites (401): no favorite-album tiles from Qobuz; use the album search.
+- README redesigned; technical parts moved to docs/DEVELOPERS.md; screenshots in English.
+
+## Before 0.1.0-beta
 
 ### Added
 - PC simulator (`pio run -e sim`, tools/sim/README.md): the real app with a fake WiiM in a window (mouse = touch),
