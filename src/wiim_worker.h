@@ -98,6 +98,8 @@ private:
     };
     bool findPlayQueue(std::string& control, bool verbose);
     void runSaveFavorite(const FavRequest& r);
+    void liveFavorite(const wr::QueueInfo& q, std::string& ctx, wr::Favorite& f);
+    void autoFlowTile(const wr::QueueInfo& q, const std::string& current);
     struct AlbumFavRequest {
         bool wanted = false;
         String id, title, artist, image;

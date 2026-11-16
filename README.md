@@ -64,8 +64,9 @@ boards. Refer to [Other ESP32 boards](#other-esp32-boards).
 - **Qobuz album search**: on the search screen, select **Albums**. The device shows the albums (album art, title,
   artist, number of tracks). Touch an album to play it. Touch the heart of an album to add it as a tile, without playing it.
   Touch the heart again to remove the tile.
-- **Deezer Flow as a tile**: while Flow plays (start it one time from the WiiM Home app), touch the heart button.
-  A **Flow** tile shows with the Flow picture. One touch starts Flow again, with new tracks each time.
+- **Deezer Flow as a tile**: start Flow one time from the WiiM Home app. The device then adds a **Flow** tile
+  with the Flow picture automatically. One touch starts Flow again, with new tracks each time. If you remove the
+  tile, the device does not add it again; to get it back, touch the heart button while Flow plays.
 - **Deezer search**: on the search screen, select **Deezer**. The device searches the public Deezer catalog (no
   key). When you touch a result, the WiiM plays the album of this track, from this track. Before the first
   search, play one Deezer album from the WiiM Home app.

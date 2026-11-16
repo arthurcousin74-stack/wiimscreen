@@ -228,8 +228,11 @@ void WiimWorker::pollOnce() {
                 std::string control, ctx;
                 queueKey_.clear();
                 if (!st.title.empty() && findPlayQueue(control, false) && browseQueue(control, "CurrentQueue", ctx) == 200 &&
-                    !ctx.empty())
-                    queueKey_ = wr::queueKey(wr::parseQueueContext(ctx));
+                    !ctx.empty()) {
+                    const wr::QueueInfo q = wr::parseQueueContext(ctx);
+                    queueKey_ = wr::queueKey(q);
+                    if (wr::isLiveQueue(q) && q.listName == "Flow") autoFlowTile(q, ctx);
+                }
             }
         }
         r.queueKey = queueKey_;
@@ -592,20 +595,42 @@ void WiimWorker::runSaveFavorite(const FavRequest& r) {
     f.artist = r.artist.c_str();
     f.source = q.sourceName;
     f.artUrl = r.artUrl.c_str();
-    if (wr::isLiveQueue(q)) {
-        // Flow Deezer, mix : nom et image de la liste (pas l'album du morceau du moment), gardée sans ses pistes
-        // pour que le WiiM en donne de nouvelles à chaque lecture
-        const bool ours = q.listName.empty() || q.listName.rfind("wiimscreen", 0) == 0;
-        f.title = ours ? wr::L("Deezer mix", "Mix Deezer") : q.listName;
-        f.artist.clear();
-        if (!q.picUrl.empty()) f.artUrl = q.picUrl;
-        best = wr::queueFromTemplate(best, q.listName, q.searchUrl);
-    }
+    if (wr::isLiveQueue(q)) liveFavorite(q, best, f);
     std::string err;
     ev.ok = fav::add(f, best, err);
     ev.text = ev.ok ? f.title.c_str() : err.c_str();
     logEvent("Favori \xC2\xAB %s \xC2\xBB (%s, %d piste(s), %u octets) : %s", f.title.c_str(), q.sourceName.c_str(),
              q.declaredTracks >= 0 ? q.declaredTracks : q.tracks, (unsigned)best.size(), ev.ok ? "OK" : err.c_str());
+    push(std::move(ev));
+}
+
+// Flow Deezer, mix : nom et image de la liste (pas l'album du morceau du moment), gardée sans ses pistes pour que
+// le WiiM en donne de nouvelles à chaque lecture
+void WiimWorker::liveFavorite(const wr::QueueInfo& q, std::string& ctx, wr::Favorite& f) {
+    const bool ours = q.listName.empty() || q.listName.rfind("wiimscreen", 0) == 0;
+    f.key = wr::queueKey(q);
+    f.title = ours ? wr::L("Deezer mix", "Mix Deezer") : q.listName;
+    f.artist.clear();
+    f.source = q.sourceName;
+    if (!q.picUrl.empty()) f.artUrl = q.picUrl;
+    ctx = wr::queueFromTemplate(ctx, q.listName, q.searchUrl);
+}
+
+// Flow vu sur le WiiM (lancé depuis WiiM Home) : tuile Flow créée toute seule, une fois (retirée : pas remise)
+void WiimWorker::autoFlowTile(const wr::QueueInfo& q, const std::string& current) {
+    const std::string key = wr::queueKey(q);
+    for (auto& f : fav::list())
+        if (f.key == key) return;  // déjà une tuile (cœur ou ajout automatique)
+    if (!fav::firstTime("flow " + key)) return;
+    std::string ctx = current, err;
+    wr::Favorite f;
+    liveFavorite(q, ctx, f);
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavSaved;
+    ev.ok = fav::add(f, ctx, err);
+    ev.text = ev.ok ? f.title.c_str() : err.c_str();
+    logEvent("Flow vu sur le WiiM : tuile \xC2\xAB %s \xC2\xBB ajout\xC3\xA9" "e automatiquement : %s", f.title.c_str(),
+             ev.ok ? "OK" : err.c_str());
     push(std::move(ev));
 }
 

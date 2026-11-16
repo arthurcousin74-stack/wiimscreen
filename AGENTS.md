@@ -81,7 +81,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Arduino-ESP32 3.x**: `WiFiClient::setTimeout()` is in **milliseconds** (it was seconds in 2.x).
   `setCACertBundle()` needs the bundle size.
 - **CA bundle format** changed in ESP-IDF 5.x (offset table + little-endian lengths): regenerate with
-  `tools/make_ca_bundle.py`, never with an ESP-IDF 4.4 script.
+  `tools/make_ca_bundle.py certs/cacrt_all.pem certs/extra_roots.pem certs/x509_crt_bundle.bin`, never with an
+  ESP-IDF 4.4 script. ESP-IDF looks up the issuer of the **top** certificate the server sends: a cross-signed
+  root whose issuer is missing fails on the Tab5 although browsers accept it (api.openai.com and TuneIn need
+  GlobalSign Root CA R1, kept in `certs/extra_roots.pem`, expires 2028-01-28). Check the servers with
+  `tools/check_ca_bundle.py certs/cacrt_all.pem certs/extra_roots.pem` after any bundle change.
 - **Tab5 Wi-Fi** goes through an ESP32-C6 over SDIO: call `WiFi.setPins(12, 13, 11, 10, 9, 8, 15)` before any
   Wi-Fi call. WPS, DPP and Bluetooth are not available through this path in the current toolchain.
 - **Microphone and speaker share I2S 0** on the Tab5: `sound::suspend()` before `M5.Mic.begin()`,
@@ -128,7 +132,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   from the album search (♥ saves a queue `album/get?album_id=…`, key `wr::qobuzAlbumKey`, nothing plays).
 - **♥ state**: the worker reads `CurrentQueue` once per track change and puts its `wr::queueKey` in
   `WiimReport::queueKey`; `currentFavorite()` matches favorites by that key first, then by album (Flow has no album).
-- **Live queues** (Deezer Flow, mixes: `wr::isLiveQueue`) are saved and replayed **without their tracks**.
+- **Live queues** (Deezer Flow, mixes: `wr::isLiveQueue`) are saved and replayed **without their tracks**. A Flow
+  seen on the WiiM becomes a tile by itself once (`WiimWorker::autoFlowTile`, marker `fav::firstTime`).
 - Favorite ids must be unique (`fav::add` retries); the simulator's `esp_random()` is seeded per run.
 - **Progressive JPEGs are not drawn** (TJpgDec): `wr::baselineCoverUrl()` asks Deezer's CDN for a baseline JPEG
   (`…-80-0-1.jpg`); `art.cpp` downloads that variant and keeps the original URL as the image key.

@@ -24,7 +24,7 @@ The Journal masks tokens and passwords, but check anyway.
 | # | Do | Expected | Journal |
 |---|---|---|---|
 | 1.1 | Play a Deezer album from WiiM Home. Search ⌕ › **Deezer** › an artist › touch a result (the WiiM loads the album: several seconds). At once touch 🏠, then the volume. | The volume reacts within about 1 s, not after the album has loaded. | `WiiM <- setPlayerCmd:vol:… (… ms)` before the `Deezer ▶ …` line. |
-| 1.2 | Only with an OpenAI key: search ⌕ › microphone › say an artist › red button. While « Transcription… » shows, touch keys. | The screen stays responsive; the text fills the field; the search starts. | `Transcription : …`, then `Recherche Qobuz : …`. |
+| 1.2 | Only with an OpenAI key (firmware with `certs/extra_roots.pem`: before it, « OpenAI unreachable » every time): search ⌕ › microphone › say an artist › red button. While « Transcription… » shows, touch keys. | The screen stays responsive; the text fills the field; the search starts. | `Transcription : …`, then `Recherche Qobuz : …`. |
 | 1.3 | Leave the Tab5 on for 30 minutes. | A new `Mémoire : …` line every 10 minutes. | Note the numbers. |
 | 1.4 | ⚙ › **Configuration** (setup mode). On the phone, open the page › **Avancé**. | A box **Tout effacer…** is visible. Do not tick it yet (see test 9.3). | — |
 
@@ -55,7 +55,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 3.4 | Touch **Favoris Deezer**. | The list of your favorite tracks; no music change before you choose. | `Favoris Deezer : 200, N morceau(x)` |
 | 3.5 | Touch a track, then a Deezer album tile. | The album of the track plays at this track; the album tile plays the album. | `Deezer ▶ …`, `Album Deezer ▶ …` |
 
-| 3.6 | In WiiM Home, start Deezer **Flow**. On the Tab5, touch ♥. Play something else, then touch the **Flow** tile. | The heart fills; a **Flow** tile with the Flow picture. The tile starts Flow again (a new track); the heart is filled while Flow plays. | `Favori « Flow » (Deezer2, …) : OK`, `Favori ▶ « Flow » : CreateQueue 200, 1 piste(s), PlayQueueWithIndex 200` |
+| 3.6 | In WiiM Home, start Deezer **Flow**. Wait for the next track on the Tab5 (or restart it). Play something else, then touch the **Flow** tile. | A **Flow** tile with the Flow picture appears by itself; the heart is filled while Flow plays. The tile starts Flow again (a new track). Remove it with ♥: it does not come back by itself. | `Flow vu sur le WiiM : tuile « Flow » ajoutée automatiquement : OK`, `Favori ▶ « Flow » : CreateQueue 200, 1 piste(s), PlayQueueWithIndex 200` |
 
 ## 4. Favorites saved on the Tab5
 

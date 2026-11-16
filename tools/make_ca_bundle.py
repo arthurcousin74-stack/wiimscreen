@@ -6,7 +6,10 @@ Deezer, TuneIn…), dont les adresses varient selon le service.
 
 Usage :
     curl -o certs/cacrt_all.pem https://raw.githubusercontent.com/espressif/esp-idf/master/components/mbedtls/esp_crt_bundle/cacrt_all.pem
-    python tools/make_ca_bundle.py certs/cacrt_all.pem certs/x509_crt_bundle.bin
+    python tools/make_ca_bundle.py certs/cacrt_all.pem certs/extra_roots.pem certs/x509_crt_bundle.bin
+
+Plusieurs fichiers PEM d'entrée : le dernier argument est la sortie. certs/extra_roots.pem contient les
+racines ajoutées (avec la raison) ; tools/check_ca_bundle.py vérifie les serveurs utilisés.
 
 Format (petit-boutiste) : table des positions de chaque certificat (u32,
 une par certificat, le nombre se déduit de la première), puis pour chacun,
@@ -17,12 +20,16 @@ import struct
 import sys
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 
 
-def main(src: str, dst: str) -> None:
-    with open(src, "rb") as f:
-        certs = x509.load_pem_x509_certificates(f.read())
+def main(srcs: list, dst: str) -> None:
+    certs = []
+    for src in srcs:
+        with open(src, "rb") as f:
+            certs += x509.load_pem_x509_certificates(f.read())
+    unique = {c.fingerprint(hashes.SHA256()): c for c in certs}  # même certificat dans deux fichiers : une entrée
+    certs = list(unique.values())
     if not certs:
         sys.exit("aucun certificat trouvé")
     entries = []
@@ -45,6 +52,6 @@ def main(src: str, dst: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1:-1], sys.argv[-1])

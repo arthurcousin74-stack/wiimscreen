@@ -75,7 +75,8 @@ bool transcribe(const int16_t* pcm, size_t samples, uint32_t sampleRate, const S
             error = String(wr::L("OpenAI refused the request (", "OpenAI refuse la requête (")) + String(code) +
                     wr::L("): check the transcription model", ") : vérifie le modèle de transcription");
         } else if (code < 0) {
-            error = wr::L("OpenAI unreachable", "OpenAI injoignable");
+            // Code HTTPClient (-1 : connexion ou TLS refusés, -11 : délai…) : utile pour le diagnostic
+            error = String(wr::L("OpenAI unreachable (", "OpenAI injoignable (")) + String(code) + ")";
         } else {
             error = String(wr::L("OpenAI error ", "Erreur OpenAI ")) + String(code);
         }

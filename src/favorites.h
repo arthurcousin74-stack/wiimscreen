@@ -31,6 +31,9 @@ bool saveSourceModel(const std::string& source, const std::string& queueContext)
 bool sourceModel(const std::string& source, std::string& out);
 bool hasDeezerModel();
 bool hasQobuzModel();
+// Vrai la première fois seulement pour cette étiquette (petit fichier marqueur), faux ensuite : une action
+// automatique (tuile Flow) n'est faite qu'une fois, et ne revient pas si l'on retire la tuile.
+bool firstTime(const std::string& tag);
 // Copie de secours des réglages (/settings.bak) : LittleFS est loin après le firmware, un flash USB complet
 // (image fusionnée à 0x0, qui réécrit la NVS) ne l'efface pas. Mêmes données que la NVS, non chiffrées.
 bool saveSettingsBackup(const std::string& text);

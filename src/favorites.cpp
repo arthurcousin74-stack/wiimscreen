@@ -168,6 +168,17 @@ bool settingsBackup(std::string& out) {
     return g_ok && readFile("/settings.bak", out) && !out.empty();
 }
 
+bool firstTime(const std::string& tag) {
+    Guard g;
+    if (!g_ok) return false;
+    uint32_t h = 2166136261u;  // FNV-1a : nom de fichier court et sûr
+    for (unsigned char c : tag) h = (h ^ c) * 16777619u;
+    char p[32];
+    snprintf(p, sizeof p, "/fav/once_%08lx", (unsigned long)h);
+    if (LittleFS.exists(p)) return false;
+    return writeFile(p, tag);
+}
+
 bool hasQobuzModel() {
     Guard g;
     return g_ok && LittleFS.exists("/fav/qobuz_template.xml");
