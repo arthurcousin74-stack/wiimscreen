@@ -1388,10 +1388,29 @@ void WiimWorker::runPlayFavorite(const String& id) {
     } else {
         wr::QueueInfo q = wr::parseQueueContext(ctx);
         const uint32_t t0 = millis();
-        int c = 0;
-        const int p = sendQueue(control, ctx, q.listName, c);
-        logEvent("Favori \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB : CreateQueue %d, PlayQueueWithIndex %d (%lu ms)", q.listName.c_str(), c,
-                 p, (unsigned long)(millis() - t0));
+        int c = 0, p = -1, loaded = q.tracks;
+        if (q.tracks > 0 || q.searchUrl.empty()) {
+            p = sendQueue(control, ctx, q.listName, c);  // pistes dans la copie : lecture tout de suite
+        } else {
+            // Album sans pistes (cœur de la recherche d'albums) : le WiiM les lit depuis SearchUrl. On attend
+            // qu'il en ait avant PlayQueueWithIndex ; les appuis (volume…) restent traités pendant l'attente.
+            std::string resp, back;
+            c = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
+            while (c == 200 && loaded == 0 && millis() - t0 < 10000) {
+                pause(500, true);
+                if (browseQueue(control, q.listName, back) == 200 && !back.empty())
+                    loaded = wr::parseQueueContext(back).tracks;
+            }
+            if (c == 200)
+                p = upnpRequest(control, "PlayQueueWithIndex",
+                                wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", q.listName}, {"Index", "1"}}),
+                                resp);
+        }
+        std::string name = q.listName;  // nom affiché : titre de la tuile, sinon nom de la file
+        for (auto& f : fav::list())
+            if (f.id == id.c_str() && !f.title.empty()) name = f.title;
+        logEvent("Favori \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB : CreateQueue %d, %d piste(s), PlayQueueWithIndex %d (%lu ms)",
+                 name.c_str(), c, loaded, p, (unsigned long)(millis() - t0));
         ev.ok = c == 200 && p == 200;
         if (!ev.ok) ev.text = "le WiiM a refus\xC3\xA9 la file";
     }

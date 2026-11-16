@@ -32,6 +32,28 @@ shot tour-08-page2
 tap 208 640
 wait 1200
 shot tour-09-favoris-qobuz
+tap 50 360
+wait 400
+tap 998 143
+wait 150
+tap 234 647
+wait 150
+tap 1203 435
+wait 150
+tap 975 330
+wait 150
+tap 1089 435
+wait 150
+tap 405 330
+wait 150
+tap 291 435
+wait 150
+tap 1089 647
+wait 1500
+shot tour-11-albums
+tap 1219 191
+wait 1000
+shot tour-12-album-coeur
 tap 50 64
 wait 500
 tap 50 656
