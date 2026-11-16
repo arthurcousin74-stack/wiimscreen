@@ -985,7 +985,8 @@ bool WiimWorker::qobuzModel(const std::string& control, std::string& templ) {
     }
     for (auto& f : fav::list())
         if (f.source == "Qobuz" && fav::context(f.id, templ)) return true;
-    // Aucune file Qobuz connue : modèle construit avec le nom du compte Qobuz lié au WiiM (GetUserInfo)
+    // Aucune file Qobuz connue : modèle construit avec le nom du compte Qobuz lié au WiiM (GetUserInfo ;
+    // vérifié sur un WiiM, 2026-11-16 : la file des morceaux favoris construite ainsi se remplit et joue)
     if (qobuzAccess(control, false) && !qobuz_.user.empty()) {
         templ = wr::qobuzQueueModel(qobuz_.user);
         fav::saveQobuzTemplate(templ);

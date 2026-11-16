@@ -30,7 +30,7 @@ The Journal masks tokens and passwords, but check anyway.
 | # | Do | Expected | Journal |
 |---|---|---|---|
 | 2.1 | Look at the Journal after the start. | `Qobuz : accès par le WiiM obtenu (GetUserInfo 200)`. If it says `indisponible`, note the code: many tests below then use the slower fallback. | `Qobuz : accès …` |
-| 2.2 | Same Journal. | `Qobuz : albums favoris 200, N`. N = number of favorite **albums** in your Qobuz account. On the WiiM tested with the simulator (2026-11-16), Qobuz refuses this: `albums favoris 401, 0 (Qobuz refuse l'accès du WiiM aux favoris…)`. Note which one you get. | `Qobuz : albums favoris …` |
+| 2.2 | Same Journal. | `Qobuz : albums favoris 200, N`. N = number of favorite **albums** in your Qobuz account. On the WiiM tested with the simulator (2026-11-16), Qobuz refuses this (no other way found, see WIIM_API_NOTES): `albums favoris 401, 0 (Qobuz refuse l'accès du WiiM aux favoris…)`. Note which one you get. | `Qobuz : albums favoris …` |
 | 2.3 | 🏠 › swipe the tiles. | If N > 0: album tiles with covers after the presets. With 401: no album tiles, but the **Favoris Qobuz** tile shows (also on a new Tab5: the model is copied from the WiiM's queues). | `Qobuz : modèle de file enregistré` |
 | 2.4 | Touch one Qobuz album tile. | A ring turns on ⏯, then the album plays from track 1. | `Album Qobuz ▶ … CreateQueue 200, Play 200` |
 | 2.5 | Touch the **Favoris Qobuz** tile. | « Chargement de tes favoris Qobuz… », then the list of favorite tracks. **No music change** before you choose. | `Favoris Qobuz : N morceau(x), liste sans lecture` (or `(file)` for the fallback) |

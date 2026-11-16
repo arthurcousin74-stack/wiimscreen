@@ -235,6 +235,16 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   `getUserFavorites?type=tracks` itself, with mute and restore). The worker stops asking after the first 401.
   The Result also holds `userName` (the `Login_username` of Qobuz queues), `userId`, `appSecret`, `expires_in`.
 - PlayQueue `GetUserFavorites(AccountSource, MediaType, Filter)`: 500 `UserRegister failed` for every value tried.
+- The token comes from WiiM's own login (the Result's `redirectUrl` is on `auth.wiimhome.com`): `user/login` with
+  `user_id` + `user_auth_token` → 401 « Invalid username/email and password combination »; `favorite/getUserFavoriteIds`
+  and `playlist/getUserPlaylists` → 401 too.
+- **Favorite albums through a queue:** a Qobuz queue with `SearchUrl` `favorite/getUserFavorites?type=albums…` is
+  accepted (`CreateQueue` 200) but stays empty and nothing plays (14 s). With `type=tracks` the WiiM fills it
+  (1 track after ~1 s) and starts playing. The WiiM only expands track lists.
+- `GetUserAccountHistory(AccountSource, Number)`: 500 `GetUserInfo failed` (Qobuz, Deezer2), `Action Failed` (empty).
+- A Qobuz queue model built only from `GetUserInfo` `userName` (`wr::qobuzQueueModel`: SourceName Qobuz,
+  Login_username, Quality 0) works: the favorite-tracks queue built from it loaded and played.
+- **Result: no way found to read Qobuz favorite albums on this WiiM.** Album tiles come from ♥ favorites instead.
 - `GetUserInfo(Deezer2)` → 200 with the WiiM's **airable** access (`baseUrl`, `collection.url`, `search.url`,
   `secret`, `userId`, `userName`), **no Deezer token**; `Deezer` and `deezer` → 500. Deezer favorites therefore need
   the profile number.
