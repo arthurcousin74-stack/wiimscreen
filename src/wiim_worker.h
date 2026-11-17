@@ -31,6 +31,15 @@ struct WiimReport {
     std::string queueKey;     // clé (wr::queueKey) de la file qui joue, vide si inconnue : le ♥ reconnaît un favori
 };
 
+// Liste demandée à la tâche WiiM (recherche ou favoris)
+enum class SearchKind {
+    QobuzTracks,      // morceaux Qobuz : cherchés par le WiiM (file), ou par le Tab5 avec l'option d'accès direct
+    Deezer,           // morceaux Deezer : cherchés par le Tab5 (api.deezer.com), joués par le WiiM (album, airable)
+    QobuzFavorites,   // morceaux favoris du compte Qobuz
+    DeezerFavorites,  // morceaux favoris Deezer (profil indiqué dans les réglages)
+    QobuzAlbums,      // albums Qobuz (accès direct ; `albums` de SearchDone)
+};
+
 struct WiimEvent {
     enum Kind { CommandDone, Presets, Pinned, PinMismatch, Moved, Identity, FavSaved, FavPlayed, SearchDone, QobuzFavorites, DeezerFavorites };
     Kind kind = CommandDone;
@@ -62,11 +71,8 @@ public:
     void saveFavorite(const String& title, const String& artist, const String& album, const String& artUrl);
     void playFavorite(const String& id);
     // Recherche (évènement SearchDone avec les morceaux trouvés), puis lecture d'un résultat (0 pour le
-    // premier). source 0 : Qobuz, cherché par le WiiM ; 1 : Deezer, cherché par le Tab5 (api.deezer.com),
-    // joué par le WiiM (album du morceau, par sa passerelle airable) ; 2 : morceaux favoris du compte Qobuz
-    // (liste, rien ne joue avant le choix) ; 3 : morceaux favoris Deezer (profil configuré) ; 4 : albums Qobuz
-    // (cherchés par le Tab5 avec l'accès du WiiM ; `albums` de SearchDone). Non bloquant.
-    void search(const String& query, int source);
+    // premier). Rien ne joue avant le choix. Non bloquant.
+    void search(const String& query, SearchKind kind);
     // Album Qobuz enregistré comme favori (tuile) sans le jouer : file de l'album, le WiiM lira les pistes.
     // Évènement FavSaved. Non bloquant.
     void saveAlbumFavorite(const String& id, const String& title, const String& artist, const String& image);
@@ -107,7 +113,7 @@ private:
     AlbumFavRequest albumSave_;
     void runSaveAlbumFavorite(const AlbumFavRequest& r);
     void runQobuzAlbumSearch(const String& query);
-    std::vector<wr::QobuzAlbum> qobuzAlbums_;  // searchSource_ 4 : albums trouvés
+    std::vector<wr::QobuzAlbum> qobuzAlbums_;  // ResultsFrom::QobuzAlbums : albums trouvés
     void runPlayFavorite(const String& id);
     void runQobuzFavoriteList(const String& title);
     bool playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
@@ -118,7 +124,7 @@ private:
     void runPlayQobuzAlbum(const std::string& albumId);
     void runDeezerFavorites();
     void runDeezerFavoriteList(const String& title);
-    std::string deezerUserPath(const std::string& control);  // « user/<n> » (profil configuré) ou vide
+    std::string deezerUserPath() const;  // « user/<n> » (profil configuré) ou vide
     void runPlayDeezerAlbum(const std::string& albumId);
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
@@ -153,16 +159,18 @@ private:
     String search_;
     int searchPlay_ = 0;
     int searchCount_ = 0;
-    int searchSourceReq_ = 0;  // source de la recherche demandée
-    int searchSource_ = 0;     // source des derniers résultats
+    SearchKind searchReq_ = SearchKind::QobuzTracks;  // recherche demandée
+    // D'où viennent les derniers résultats, donc comment jouer l'un d'eux
+    enum class ResultsFrom { WiimQueue, Deezer, QobuzDirect, QobuzAlbums };
+    ResultsFrom resultsFrom_ = ResultsFrom::WiimQueue;
     std::vector<wr::DeezerTrack> deezerResults_;
-    std::vector<wr::QobuzTrack> qobuzResults_;  // searchSource_ 2 : recherche Qobuz directe
+    std::vector<wr::QobuzTrack> qobuzResults_;  // ResultsFrom::QobuzDirect : recherche Qobuz directe
     wr::QobuzAccess qobuz_;                      // identifiant d'application et jeton (mémoire seulement)
     bool haveQobuz_ = false;
     bool qobuzFavsWanted_ = false;
-    bool qobuzFavDenied_ = false;
+    bool qobuzFavDenied_ = false;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
     std::string queueTitle_, queueKey_;  // file en cours relue à chaque changement de morceau (et toutes les 60 s)
-    uint32_t queueReadAt_ = 0;  // Qobuz refuse l'accès du WiiM aux favoris (401) : liste par une file du WiiM
+    uint32_t queueReadAt_ = 0;
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string searchUrl_;    // son adresse (SearchUrl), pour la recréer au moment du choix
     std::vector<std::string> searchTitles_;  // titres des résultats affichés, dans l'ordre

@@ -37,11 +37,15 @@ void fft(std::vector<std::complex<float>>& a) {
 }  // namespace
 
 void spectrumBands(const int16_t* x, size_t n, int sampleRate, int bands, float* outDb) {
-    std::vector<std::complex<float>> a(n);
-    for (size_t i = 0; i < n; ++i) {
-        float w = 0.5f - 0.5f * std::cos(2 * kPi * i / (n - 1));  // Hann
-        a[i] = std::complex<float>(w * x[i] / 32768.0f, 0);
+    // Fenêtre de Hann et tampon gardés d'un appel à l'autre (~30 blocs/s) : un seul appelant, la boucle de l'écran
+    static std::vector<float> window;
+    static std::vector<std::complex<float>> a;
+    if (window.size() != n) {
+        window.resize(n);
+        for (size_t i = 0; i < n; ++i) window[i] = 0.5f - 0.5f * std::cos(2 * kPi * i / (n - 1));
     }
+    a.resize(n);
+    for (size_t i = 0; i < n; ++i) a[i] = std::complex<float>(window[i] * x[i] / 32768.0f, 0);
     fft(a);
     // Amplitude d'une sinusoïde à pleine échelle avec une fenêtre de Hann : n/4
     const float norm = 4.0f / n;

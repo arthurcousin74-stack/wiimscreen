@@ -24,7 +24,7 @@ struct Guard {
 
 bool g_ok = false;
 std::vector<wr::Favorite> g_list;
-uint32_t g_rev = 0;
+
 constexpr const char* kIndex = "/fav/index.txt";
 
 bool readFile(const char* path, std::string& out) {
@@ -64,7 +64,6 @@ bool begin() {
     std::string text;
     if (readFile(kIndex, text)) g_list = wr::favoritesFromText(text);
     g_ok = true;
-    ++g_rev;
     return true;
 }
 
@@ -72,18 +71,12 @@ bool eraseAll() {
     Guard g;
     g_list.clear();
     g_ok = false;
-    ++g_rev;
     return LittleFS.format();
 }
 
 std::vector<wr::Favorite> list() {
     Guard g;
     return g_list;
-}
-
-uint32_t revision() {
-    Guard g;
-    return g_rev;
 }
 
 bool add(wr::Favorite& f, const std::string& queueContext, std::string& error) {
@@ -114,7 +107,6 @@ bool add(wr::Favorite& f, const std::string& queueContext, std::string& error) {
         error = wr::L("cannot write the index", "\xC3\xA9" "criture de l'index impossible");
         return false;
     }
-    ++g_rev;
     return true;
 }
 
@@ -125,7 +117,6 @@ bool remove(const std::string& id) {
     g_list.erase(it);
     LittleFS.remove(path(id).c_str());
     saveIndex();
-    ++g_rev;
     return true;
 }
 

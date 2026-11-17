@@ -137,22 +137,6 @@ std::string deezerUserId(const std::string& text) {
     return id.size() >= 1 && id.size() <= 15 ? id : "";
 }
 
-std::string urlEncode(const std::string& s, bool keepSlashColon) {
-    static const char* hex = "0123456789ABCDEF";
-    std::string o;
-    for (unsigned char c : s) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' ||
-            (keepSlashColon && (c == '/' || c == ':'))) {
-            o += static_cast<char>(c);
-        } else {
-            o += '%';
-            o += hex[c >> 4];
-            o += hex[c & 15];
-        }
-    }
-    return o;
-}
-
 void wavHeader(uint8_t h[44], uint32_t dataBytes, uint32_t sampleRate) {
     auto le32 = [&](int at, uint32_t v) {
         for (int k = 0; k < 4; ++k) h[at + k] = static_cast<uint8_t>(v >> (8 * k));

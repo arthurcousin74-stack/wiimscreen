@@ -191,7 +191,7 @@ private:
     // Zone tactile de la progression, mise à jour à chaque rendu de la vue commandes
     wr::Rect progHit_;
     uint32_t progDuration_ = 0;
-    // Commande vocale
+    // Dictée de la recherche (micro dans le champ) ; onglet Albums (accès Qobuz direct)
     bool voiceOn_ = false;
     bool albumsOn_ = false;
     wr::Rect cancelRect_;

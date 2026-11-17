@@ -11,6 +11,7 @@ namespace wr {
 // Spectre d'un bloc audio mono (n puissance de 2) en `bands` bandes espacées
 // logarithmiquement de 60 Hz à min(8 kHz, Nyquist). Sortie en dB pleine échelle
 // (0 dB : sinusoïde à pleine échelle), fenêtre de Hann.
+// Not reentrant (keeps its window and buffer between calls): call it from one task only.
 void spectrumBands(const int16_t* samples, size_t n, int sampleRate, int bands, float* outDb);
 
 // Lissage pour l'affichage : montée rapide, descente douce, repères de crête,

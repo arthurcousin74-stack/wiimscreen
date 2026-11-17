@@ -166,7 +166,6 @@ struct Layout {
     Rect info;      // puces (source, qualité), titre, artiste, album
     Rect progress;  // temps écoulé, barre, durée
     Rect transport[kTransportCount];  // cercles : vol−, précédent, lecture, suivant, vol+
-    Rect mic;       // bouton micro (commande vocale), au bout de la rangée des commandes
     Rect fav;       // bouton ♥ (favori), à l'autre bout de la rangée
     Rect volume;    // pilule de volume (contient vol−, haut-parleur, curseur, valeur, vol+)
     Rect mute;      // icône du haut-parleur (coupe le son)
@@ -190,7 +189,8 @@ std::vector<std::pair<std::string, std::string>> decodeFields(const std::string&
 // Les dimensions suivent la taille de l'écran (référence : 540 px sur le petit côté).
 Layout computeLayout(int width, int height, int presetCount);
 
-// Clavier à l'écran (recherche) : AZERTY, 5 rangées sur une grille de 10 colonnes.
+// Clavier à l'écran (recherche) : AZERTY en français, QWERTY en anglais (wr::lang()), 5 rangées sur une grille
+// de 10 colonnes.
 struct Key {
     enum Kind { Char, Space, Back, Clear, Enter };
     Rect r;

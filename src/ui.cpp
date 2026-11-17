@@ -685,7 +685,7 @@ bool Ui::updateTransport(const UiState& st, int pressed) {
     const wr::Rect& play = layout_.transport[wr::kPlayPause];
     const int pad = sc(10);
     const int x0 = std::min(layout_.fav.x, layout_.transport[wr::kPrev].x) - pad;
-    const int x1 = std::max(layout_.mic.right(), layout_.transport[wr::kNext].right()) + pad;
+    const int x1 = layout_.transport[wr::kNext].right() + pad;
     const wr::Rect r{x0, play.y - pad, x1 - x0, play.h + 2 * pad};
     auto& C = canvas_;
     C.setClipRect(r.x, r.y, r.w, r.h);

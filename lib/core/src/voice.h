@@ -25,9 +25,6 @@ std::vector<DeezerTrack> parseDeezerTracks(const std::string& json);  // aussi u
 // Deezer profile number from what the user typed: the number itself, or a profile address
 // (https://www.deezer.com/fr/profile/123456). Empty if none found.
 std::string deezerUserId(const std::string& text);
-// Encodage d'URL (RFC 3986) ; keepSlashColon garde « : » et « / » tels quels
-std::string urlEncode(const std::string& s, bool keepSlashColon = false);
-
 // En-tête WAV (44 octets) pour du PCM 16 bits mono
 void wavHeader(uint8_t out[44], uint32_t dataBytes, uint32_t sampleRate);
 

@@ -172,12 +172,6 @@ std::vector<QobuzAlbum> parseDeezerAlbums(const std::string& json) {
     return out;
 }
 
-std::string parseAccessToken(const std::string& json) {
-    std::string t = jsonText(jsonTop(json, "accessToken"));
-    if (t.empty()) t = jsonText(jsonTop(json, "access_token"));
-    return headerSafe(t) ? t : "";
-}
-
 std::vector<std::string> jsonValuesOf(const std::string& json, const std::string& key) {
     std::vector<std::string> out;
     const std::string k = "\"" + key + "\"";

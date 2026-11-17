@@ -341,7 +341,7 @@ static void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.mic, L.fav, L.volume, L.navHome, L.navSettings, L.navSearch};
+                                L.transport[kNext], L.fav, L.volume, L.navHome, L.navSettings, L.navSearch};
     blocks.push_back(L.strip);  // toujours là, même sans preset
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -354,7 +354,7 @@ static void checkLayout(int W, int H, int n) {
         TEST_ASSERT_TRUE(r.x >= L.rail.x && r.right() <= L.rail.right() && r.y >= L.rail.y && r.bottom() <= L.rail.bottom());
         TEST_ASSERT_TRUE(r.h >= 44 * std::min(W, H) / 540);
     }
-    for (const Rect& r : {L.art, L.info, L.progress, L.volume, L.strip, L.transport[kPrev], L.mic})
+    for (const Rect& r : {L.art, L.info, L.progress, L.volume, L.strip, L.transport[kPrev]})
         TEST_ASSERT_FALSE(r.intersects(L.rail));
     // Éléments de la pilule de volume : dedans, dans l'ordre, sans chevauchement
     for (const Rect& r : {L.transport[kVolDown], L.mute, L.volBar, L.transport[kVolUp]}) {
@@ -503,8 +503,6 @@ static void test_deezer_user() {
 }
 
 static void test_voice_audio() {
-    TEST_ASSERT_EQUAL_STRING("france%20culture", urlEncode("france culture").c_str());
-    TEST_ASSERT_EQUAL_STRING("http://a.b/c%3Fd%3D1%26e", urlEncode("http://a.b/c?d=1&e", true).c_str());
 
     uint8_t h[44];
     wavHeader(h, 32000, 16000);
@@ -841,8 +839,6 @@ static void test_qobuz_json() {
     TEST_ASSERT_EQUAL_STRING("Daft Punk", dz[0].artist.c_str());
     TEST_ASSERT_EQUAL_STRING("https://e-cdns/c.jpg", dz[0].image.c_str());
     TEST_ASSERT_EQUAL(14, dz[0].tracks);
-    TEST_ASSERT_EQUAL_STRING("frXyz12", parseAccessToken("{\"access_token\":\"frXyz12\",\"expires\":0}").c_str());
-    TEST_ASSERT_EQUAL_STRING("", parseAccessToken("{\"accessToken\":\"a b\"}").c_str());
     auto names = jsonValuesOf("[{\"source\":\"Qobuz\",\"showName\":\"Qobuz\"},{\"showName\":\"Deezer\"}]", "showName");
     TEST_ASSERT_EQUAL(2, (int)names.size());
     TEST_ASSERT_EQUAL_STRING("Deezer", names[1].c_str());

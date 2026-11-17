@@ -143,7 +143,7 @@ std::mutex g_m;
 std::vector<wr::Favorite> g_list;
 std::map<std::string, std::string> g_ctx;
 std::string g_backup;
-uint32_t g_rev = 1;
+
 int g_next = 1;
 }  // namespace
 
@@ -159,7 +159,6 @@ bool add(wr::Favorite& f, const std::string& ctx, std::string& error) {
             f.id = x.id;
             x = f;
             g_ctx[f.id] = ctx;
-            ++g_rev;
             return true;
         }
     if (g_list.size() >= kMax) {
@@ -169,7 +168,6 @@ bool add(wr::Favorite& f, const std::string& ctx, std::string& error) {
     f.id = "f" + std::to_string(g_next++);
     g_list.push_back(f);
     g_ctx[f.id] = ctx;
-    ++g_rev;
     return true;
 }
 bool remove(const std::string& id) {
@@ -178,7 +176,6 @@ bool remove(const std::string& id) {
         if (it->id == id) {
             g_list.erase(it);
             g_ctx.erase(id);
-            ++g_rev;
             return true;
         }
     return false;
@@ -190,7 +187,6 @@ bool context(const std::string& id, std::string& out) {
     out = it->second;
     return true;
 }
-uint32_t revision() { return g_rev; }
 bool saveQobuzTemplate(const std::string&) { return true; }
 bool qobuzTemplate(std::string& out) { return !(out = "sim").empty(); }
 bool saveSourceModel(const std::string&, const std::string&) { return true; }
@@ -202,7 +198,6 @@ bool settingsBackup(std::string& out) { return !(out = g_backup).empty(); }
 bool eraseAll() {
     std::lock_guard<std::mutex> l(g_m);
     g_list.clear(), g_ctx.clear(), g_backup.clear();
-    ++g_rev;
     return true;
 }
 }  // namespace fav

@@ -187,10 +187,10 @@ void WiimWorker::saveFavorite(const String& title, const String& artist, const S
 void WiimWorker::saveAlbumFavorite(const String& id, const String& title, const String& artist, const String& image) {
     SIM_REQUEST(albumSave_, (AlbumFavRequest{true, id, title, artist, image}));
 }
-void WiimWorker::search(const String& query, int source) {
+void WiimWorker::search(const String& query, SearchKind kind) {
     xSemaphoreTake(lock_, portMAX_DELAY);
     search_ = query;
-    searchSourceReq_ = source;
+    searchReq_ = kind;
     xSemaphoreGive(lock_);
     xTaskNotifyGive(task_);
 }
@@ -299,7 +299,8 @@ void WiimWorker::run() {
         favSave_.wanted = false;
         const String play = favPlay_, search = search_;
         favPlay_ = search_ = "";
-        const int source = searchSourceReq_, searchPlay = searchPlay_;
+        const SearchKind source = searchReq_;
+        const int searchPlay = searchPlay_;
         searchPlay_ = 0;
         const AlbumFavRequest albumSave = albumSave_;
         albumSave_.wanted = false;
@@ -321,10 +322,10 @@ void WiimWorker::run() {
         if (qfavs) runQobuzFavorites(), runDeezerFavorites();
         if (play.length()) runPlayFavorite(play);
         if (search.length()) {
-            if (source == 1) runDeezerSearch(search);
-            else if (source == 2) runQobuzFavoriteList(search);
-            else if (source == 3) runDeezerFavoriteList(search);
-            else if (source == 4) runQobuzAlbumSearch(search);
+            if (source == SearchKind::Deezer) runDeezerSearch(search);
+            else if (source == SearchKind::QobuzFavorites) runQobuzFavoriteList(search);
+            else if (source == SearchKind::DeezerFavorites) runDeezerFavoriteList(search);
+            else if (source == SearchKind::QobuzAlbums) runQobuzAlbumSearch(search);
             else runSearch(search);
         }
         if (searchPlay > 0) runPlaySearchResult(searchPlay);
