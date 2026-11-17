@@ -27,6 +27,7 @@
 
 #include "art.h"
 #include "core.h"
+#include "decisions.h"
 #include "i18n.h"
 #include "discovery.h"
 #include "dsp.h"
@@ -166,7 +167,7 @@ static void setBrightness(int b) {
 // État affiché : la position avance entre deux relevés pendant la lecture
 // Commande en attente de confirmation : anneau tournant sur le bouton (sinon l'appui semble ignoré
 // pendant que le WiiM réagit). Levée quand le relevé montre le changement, sur erreur, ou après 10 s.
-enum class Await { None, Track, Playing, Music };
+using Await = wr::Awaited;  // ce que l'on attend (lib/core/src/decisions.h)
 static int g_pendingT = -1;          // bouton concerné (wr::kPrev, kNext, kPlayPause)
 static Await g_await = Await::None;  // ce que l'on attend du WiiM
 static uint32_t g_pendingSince = 0, g_pendingSeq = 0;
@@ -631,14 +632,7 @@ static void serviceWiim() {
         applyReport(r);
         // Confirmation de la commande en attente
         if (g_pendingT >= 0 && r.online && r.cmdSeq >= g_pendingSeq) {
-            const auto& pl = r.player;
-            bool done = false;
-            // Titre vide (getMetaInfo manqué ce coup-ci) : pas un changement de morceau
-            if (g_await == Await::Track)
-                done = (!pl.title.empty() && pl.title != g_pendingTitle) || (g_pendingPos > 5000 && pl.positionMs < 3000);
-            else if (g_await == Await::Playing) done = pl.playing == g_pendingPlaying;
-            else if (g_await == Await::Music) done = pl.playing && !pl.loading && !pl.title.empty() && pl.title != g_pendingTitle;
-            if (done) {
+            if (wr::pendingConfirmed(g_await, r.player, g_pendingTitle, g_pendingPos, g_pendingPlaying)) {
                 g_pendingT = -1;
                 show();
             }
@@ -966,12 +960,7 @@ static void serviceTranscription() {
         renderSearch();
         return;
     }
-    std::string text = g_stt.text;
-    // Ponctuation et guillemets ajoutés par la transcription retirés
-    while (!text.empty() && strchr(" .,;:!?\"'", text.back())) text.pop_back();
-    size_t a = 0;
-    while (a < text.size() && strchr(" \"'", text[a])) ++a;
-    text = text.substr(a, 60);
+    const std::string text = wr::cleanTranscript(g_stt.text, 60);  // guillemets et ponctuation ajoutés retirés
     logEvent("Dict\xC3\xA9" "e : \xC2\xAB %s \xC2\xBB", text.c_str());
     g_searchQuery = text;
     g_searchStatus = "";

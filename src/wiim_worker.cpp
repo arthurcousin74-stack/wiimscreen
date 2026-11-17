@@ -8,6 +8,7 @@
 
 #include "ca_bundle.h"
 #include "discovery.h"
+#include "decisions.h"
 #include "favorites.h"
 #include "i18n.h"
 #include "qobuz.h"
@@ -658,13 +659,32 @@ void WiimWorker::autoFlowTile(const wr::QueueInfo& q, const std::string& current
     push(std::move(ev));
 }
 
+// Crée une file. Sur un WiiM Pro, CreateQueue n'a qu'un argument (QueueContext) et lance toujours la file
+// (vérifié 2026-11-12 : aucun « QueuePolicy »).
+static int createQueue(const std::string& control, const std::string& ctx) {
+    std::string resp;
+    return upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
+}
+
+// Lance la file `name` à sa piste `index` (à partir de 1, dans l'ordre relu de la file) ; code HTTP
+static int playQueueAt(const std::string& control, const std::string& name, int index) {
+    std::string resp;
+    return upnpRequest(control, "PlayQueueWithIndex",
+                       wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", name}, {"Index", std::to_string(index)}}),
+                       resp);
+}
+
+static int deleteQueue(const std::string& control, const std::string& name) {
+    std::string resp;
+    return upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+}
+
 // Envoie une file au WiiM puis la lance ; renvoie le code HTTP de PlayQueueWithIndex (-1 si non tenté)
 static int sendQueue(const std::string& control, const std::string& ctx, const std::string& listName, int& create) {
     std::string resp;
-    create = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
+    create = createQueue(control, ctx);
     if (create != 200) return -1;
-    return upnpRequest(control, "PlayQueueWithIndex",
-                       wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", listName}, {"Index", "1"}}), resp);
+    return playQueueAt(control, listName, 1);
 }
 
 static bool readQueueStable(WiimWorker* w, const std::string& control, const std::string& name, int seconds,
@@ -679,12 +699,6 @@ static std::vector<wr::DeezerTrack> deezerSearch(const std::string& query, int l
     return code == 200 && error.empty() ? wr::parseDeezerTracks(body) : std::vector<wr::DeezerTrack>();
 }
 
-// Crée une file. Sur un WiiM Pro, CreateQueue n'a qu'un argument (QueueContext) et lance toujours la file
-// (vérifié 2026-11-12 : aucun « QueuePolicy »).
-static int createQueue(const std::string& control, const std::string& ctx) {
-    std::string resp;
-    return upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
-}
 
 // ---------------------------------------------------------------------------
 // Recherche Qobuz sans clé : le WiiM lit lui-même les résultats d'une file dont l'adresse est une
@@ -696,20 +710,14 @@ static const char* kSearchQueue = "wiimscreen-recherche";
 // leur nombre ne bouge plus (deux lectures égales), dans la limite de `seconds`
 static bool readQueueStable(WiimWorker* w, const std::string& control, const std::string& name, int seconds,
                             wr::QueueInfo& out, bool poll) {
-    int last = -1, stable = 0;
-    const uint32_t until = millis() + seconds * 1000UL;
+    wr::QueueStability stability;  // règle : lib/core/src/decisions.h
+    const uint32_t start = millis(), until = start + seconds * 1000UL;
     while ((int32_t)(millis() - until) < 0) {
         w->pause(700, poll);
         std::string back;
         if (browseQueue(control, name, back) != 200 || back.empty()) continue;
         wr::QueueInfo q = wr::parseQueueContext(back);
-        // Stable : même nombre 4 fois de suite (~3 s) et au moins 3 s d'attente (favoris : chargés lentement)
-        if (q.tracks > 0 && q.tracks == last) {
-            if (++stable >= 4 && (int32_t)(millis() - (until - seconds * 1000UL)) >= 3000) break;
-        } else {
-            stable = 0;
-        }
-        last = q.tracks;
+        if (stability.feed(q.tracks, millis() - start)) break;
         out = q;
     }
     return out.tracks > 0;
@@ -788,27 +796,21 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
                              const std::string& title, const char* label) {
     std::string resp;
     const std::string name = std::string("wiimscreen-album-") + std::to_string(++searchCount_ % 2);
-    upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    deleteQueue(control, name);
     const int create = createQueue(control, wr::queueFromTemplate(templ, name, url));
     int index = 0;
     const uint32_t t0 = millis();
     if (create == 200) {
-        const std::string want = wr::normalizeText(title);
         while (index == 0 && millis() - t0 < 12000) {
             pause(700, true);  // les appuis et le relevé continuent pendant le chargement
             std::string back;
             if (browseQueue(control, name, back) != 200 || back.empty()) continue;
             const wr::QueueInfo q = wr::parseQueueContext(back);
-            if (want.empty() && q.tracks > 0) index = 1;
-            for (size_t k = 0; k < q.items.size() && index == 0; ++k)
-                if (wr::normalizeText(q.items[k].title) == want) index = (int)k + 1;
+            index = title.empty() ? (q.tracks > 0 ? 1 : 0) : wr::queueIndexOf(q, title, true);
             if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
         }
     }
-    const int play = index > 0 ? upnpRequest(control, "PlayQueueWithIndex",
-                                             wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
-                                                          {{"QueueName", name}, {"Index", std::to_string(index)}}),
-                                             resp)
+    const int play = index > 0 ? playQueueAt(control, name, index)
                                : -1;
     logEvent("%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d) : CreateQueue %d, Play %d (%lu ms)", label, title.c_str(), index,
              create, play, (unsigned long)(millis() - t0));
@@ -1109,13 +1111,11 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
     std::string ctx;
     if (!p.title.empty() && browseQueue(control, "CurrentQueue", ctx) == 200 && !ctx.empty()) {
         const wr::QueueInfo q = wr::parseQueueContext(ctx);
-        for (size_t k = 0; k < q.items.size(); ++k)
-            if (q.items[k].title == p.title) {
-                p.ctx = ctx;
-                p.listName = q.listName;
-                p.index = (int)k + 1;
-                break;
-            }
+        p.index = wr::queueIndexOf(q, p.title, false);
+        if (p.index > 0) {
+            p.ctx = ctx;
+            p.listName = q.listName;
+        }
     }
     logEvent("Avant la recherche : %s \xC2\xAB %s \xC2\xBB%s", p.playing ? "lecture" : "arr\xC3\xAAt", p.title.c_str(),
              p.index ? " (file connue)" : "");
@@ -1128,12 +1128,15 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
     wr::TrackMeta m;
     if (client_.status(st) != WiimError::None) return;
     if (client_.metaInfo(m) == WiimError::None) st.title = m.title;
-    // Même titre mais reparti du début (la file de recherche contenait le morceau qui jouait) : changé aussi
-    const bool restarted = before.posMs > 8000 && st.positionMs + 4000 < before.posMs;
-    const bool changed = st.playing && (!before.playing || st.title != before.title || restarted);
-    if (!changed) {
-        // Rien ne jouait et le WiiM est resté en pause sur la file de recherche : arrêt, comme avant la recherche
-        if (!before.playing && !st.playing && !st.title.empty() && st.title != before.title) {
+    // Décision (lib/core/src/decisions.h) : rien, arrêt de la file de recherche, remise, pause ou arrêt
+    wr::PlaybackBefore was;
+    was.playing = before.playing;
+    was.title = before.title;
+    was.posMs = before.posMs;
+    was.inQueue = before.index > 0;
+    const wr::RestoreAction action = wr::restoreAction(was, st);
+    if (action == wr::RestoreAction::Nothing || action == wr::RestoreAction::StopSearchQueue) {
+        if (action == wr::RestoreAction::StopSearchQueue) {
             const WiimError e = client_.command("setPlayerCmd:stop");
             logEvent("Apr\xC3\xA8s la recherche : file de recherche arr\xC3\xAAt\xC3\xA9" "e (%s)", wiimErrorName(e));
         } else {
@@ -1141,8 +1144,7 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         }
         return;
     }
-    std::string resp;
-    if (before.playing && before.index > 0) {
+    if (action == wr::RestoreAction::PutBack) {
         // Remise de la file d'avant, au même morceau et à la même position
         const int c = createQueue(control, before.ctx);
         // Lecture aléatoire : CreateQueue remélange la file (peu après sa création) et PlayQueueWithIndex suit
@@ -1150,16 +1152,11 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         auto placeOf = [&]() {
             std::string back;
             if (browseQueue(control, before.listName, back) != 200) return before.index;
-            const wr::QueueInfo q = wr::parseQueueContext(back);
-            for (size_t k = 0; k < q.items.size(); ++k)
-                if (q.items[k].title == before.title) return (int)k + 1;
-            return before.index;
+            const int k = wr::queueIndexOf(wr::parseQueueContext(back), before.title, false);
+            return k > 0 ? k : before.index;
         };
         auto playAt = [&](int index) {
-            return upnpRequest(control, "PlayQueueWithIndex",
-                               wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
-                                            {{"QueueName", before.listName}, {"Index", std::to_string(index)}}),
-                               resp);
+            return playQueueAt(control, before.listName, index);
         };
         int p = -1, tries = 0;
         if (c == 200) {
@@ -1184,7 +1181,7 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise (%d, %d, essai %d)", c, p, tries);
     } else {
         // Rien ne jouait (ou lecture hors file : Spotify, AirPlay…) : on arrête ce que la recherche a lancé
-        const WiimError e = client_.command(before.playing ? "setPlayerCmd:pause" : "setPlayerCmd:stop");
+        const WiimError e = client_.command(action == wr::RestoreAction::Pause ? "setPlayerCmd:pause" : "setPlayerCmd:stop");
         logEvent("Apr\xC3\xA8s la recherche : lecture arr\xC3\xAAt\xC3\xA9" "e (%s)", wiimErrorName(e));
     }
     nextPoll_ = millis();
@@ -1253,7 +1250,7 @@ void WiimWorker::runSearch(const String& query) {
     for (auto& v : variants) {
         // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
         const std::string name = std::string(kSearchQueue) + "-" + std::to_string(++searchCount_ % 2);
-        upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+        deleteQueue(control, name);
         const std::string& url = v.second;
         const std::string ctx = wr::queueFromTemplate(templ, name, url);
         int create = createQueue(control, ctx);
@@ -1336,10 +1333,7 @@ void WiimWorker::runPlaySearchResult(int index) {
         return;
     }
     if (findPlayQueue(control, false))
-        code = upnpRequest(control, "PlayQueueWithIndex",
-                           wr::soapBody(kPlayQueue, "PlayQueueWithIndex",
-                                        {{"QueueName", searchQueue_}, {"Index", std::to_string(index)}}),
-                           resp);
+        code = playQueueAt(control, searchQueue_, index);
     logEvent("Recherche : r\xC3\xA9sultat %d -> %d", index, code);
     WiimEvent ev;
     ev.kind = WiimEvent::FavPlayed;
@@ -1384,7 +1378,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     // Relevé d'abord : DeleteQueue arrête la lecture, même pour une file inconnue (vu sur un WiiM, 2026-11-16)
     const Playback before = snapshot(control);
     const bool muted = before.known && !before.muted && client_.command("setPlayerCmd:mute:1") == WiimError::None;
-    upnpRequest(control, "DeleteQueue", wr::soapBody(kPlayQueue, "DeleteQueue", {{"QueueName", name}}), resp);
+    deleteQueue(control, name);
     const int c = createQueue(
         control,
         wr::queueFromTemplate(templ, name,
@@ -1438,16 +1432,14 @@ void WiimWorker::runPlayFavorite(const String& id) {
             // Album sans pistes (cœur de la recherche d'albums) : le WiiM les lit depuis SearchUrl. On attend
             // qu'il en ait avant PlayQueueWithIndex ; les appuis (volume…) restent traités pendant l'attente.
             std::string resp, back;
-            c = upnpRequest(control, "CreateQueue", wr::soapBody(kPlayQueue, "CreateQueue", {{"QueueContext", ctx}}), resp);
+            c = createQueue(control, ctx);
             while (c == 200 && loaded == 0 && millis() - t0 < 10000) {
                 pause(500, true);
                 if (browseQueue(control, q.listName, back) == 200 && !back.empty())
                     loaded = wr::parseQueueContext(back).tracks;
             }
             if (c == 200)
-                p = upnpRequest(control, "PlayQueueWithIndex",
-                                wr::soapBody(kPlayQueue, "PlayQueueWithIndex", {{"QueueName", q.listName}, {"Index", "1"}}),
-                                resp);
+                p = playQueueAt(control, q.listName, 1);
         }
         std::string name = q.listName;  // nom affiché : titre de la tuile, sinon nom de la file
         for (auto& f : fav::list())

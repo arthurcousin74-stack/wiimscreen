@@ -8,20 +8,9 @@
 #include "ota.h"
 #include "portal.h"
 #include "pc.h"
-#include "sound.h"
 #include "version.h"
 #include "voice_service.h"
 
-// ------------------------------------------------------------------ sound (silent)
-
-namespace sound {
-void begin(int) {}
-void tap() {}
-void error() {}
-void confirm() {}
-void suspend() {}
-void resume() {}
-}  // namespace sound
 
 // ------------------------------------------------------------------ setup portal and update page
 

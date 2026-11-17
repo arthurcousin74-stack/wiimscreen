@@ -130,6 +130,7 @@ Stop wiimscreen before you edit the file, then start it again. The names are the
 | `pc_platform.cpp` | Time, threads, settings file, SDL window and input, options, restart |
 | `pc_http_fs.cpp` | HTTP/1.1 client, LittleFS on a folder |
 | `net_direct.cpp` | TCP sockets, TLS with OpenSSL (system certificates for public servers; the app pins the WiiM certificate), UDP for SSDP |
-| `desktop_services.cpp` | No sound, no microphone; settings and update messages |
+| `desktop_services.cpp` | No microphone; settings and update messages |
+| `pc_sound.cpp` | Silent taps and beeps (shared with the simulator) |
 
 The simulator (`tools/sim`) uses the same `platform/pc` layer with a fake WiiM or a relay.

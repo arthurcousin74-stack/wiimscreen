@@ -41,6 +41,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, WAV header |
+| `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
 | `lib/core/src/qobuz.*` | Depth-aware JSON helpers, Qobuz tracks/albums parsing, `GetUserInfo` access parsing |

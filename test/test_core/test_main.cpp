@@ -10,6 +10,7 @@
 #include "dsp.h"
 #include "voice.h"
 #include "firmware.h"
+#include "decisions.h"
 #include "upnp.h"
 #include "qobuz.h"
 
@@ -250,6 +251,64 @@ static void test_json_unicode() {
     TEST_ASSERT_EQUAL_STRING("a\xEF\xBF\xBD" "b", s.c_str());  // moitié seule : U+FFFD
     TEST_ASSERT_EQUAL_STRING("\xF0\x9F\x8E\xB5 x", jsonText("\"\\uD83C\\uDFB5 x\"").c_str());
     TEST_ASSERT_EQUAL_STRING("12", jsonText("\"\\u12\"").c_str());  // chiffres incomplets : pas de caractère inventé
+}
+
+static void test_decisions() {
+    PlayerStatus now;
+    now.playing = true;
+    now.title = "B";
+    TEST_ASSERT_TRUE(pendingConfirmed(Awaited::Track, now, "A", 0, true));
+    now.title = "";
+    TEST_ASSERT_FALSE(pendingConfirmed(Awaited::Track, now, "A", 0, true));    // titre manqué : pas un changement
+    TEST_ASSERT_FALSE(pendingConfirmed(Awaited::Music, now, "A", 0, true));
+    now.title = "A";
+    now.positionMs = 1000;
+    TEST_ASSERT_TRUE(pendingConfirmed(Awaited::Track, now, "A", 60000, true));  // « précédent » : morceau repris
+    TEST_ASSERT_TRUE(pendingConfirmed(Awaited::Playing, now, "A", 0, true));
+    TEST_ASSERT_FALSE(pendingConfirmed(Awaited::Playing, now, "A", 0, false));
+    now.title = "B";
+    now.loading = true;
+    TEST_ASSERT_FALSE(pendingConfirmed(Awaited::Music, now, "A", 0, true));      // encore en chargement
+    TEST_ASSERT_FALSE(pendingConfirmed(Awaited::None, now, "A", 0, true));
+
+    PlaybackBefore before;
+    PlayerStatus after;
+    TEST_ASSERT_EQUAL((int)RestoreAction::Nothing, (int)restoreAction(before, after));
+    after.title = "Search result";  // rien ne jouait ; le WiiM est en pause sur la file de recherche
+    TEST_ASSERT_EQUAL((int)RestoreAction::StopSearchQueue, (int)restoreAction(before, after));
+    after.playing = true;
+    TEST_ASSERT_EQUAL((int)RestoreAction::Stop, (int)restoreAction(before, after));
+    before.playing = true;
+    before.title = "Song";
+    before.posMs = 90000;
+    TEST_ASSERT_EQUAL((int)RestoreAction::Pause, (int)restoreAction(before, after));  // hors file (AirPlay…)
+    before.inQueue = true;
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBack, (int)restoreAction(before, after));
+    after.title = "Song";
+    after.positionMs = 92000;
+    TEST_ASSERT_EQUAL((int)RestoreAction::Nothing, (int)restoreAction(before, after));
+    after.positionMs = 2000;  // même morceau, reparti du début : la recherche l'a relancé
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBack, (int)restoreAction(before, after));
+
+    QueueStability st;
+    TEST_ASSERT_FALSE(st.feed(0, 700));
+    TEST_ASSERT_FALSE(st.feed(2, 1400));
+    for (int k = 0; k < 4; ++k) TEST_ASSERT_FALSE(st.feed(7, 2100 + 700 * k));
+    TEST_ASSERT_TRUE(st.feed(7, 4900));  // 4 répétitions du même nombre, plus de 3 s
+    QueueStability quick;
+    for (int k = 0; k < 4; ++k) TEST_ASSERT_FALSE(quick.feed(3, 100 * k));  // trop tôt
+    TEST_ASSERT_TRUE(quick.feed(3, 3000));
+
+    QueueInfo q;
+    q.items = {{"So What", "", "", ""}, {"Blue in Green", "", "", ""}};
+    TEST_ASSERT_EQUAL(2, queueIndexOf(q, "Blue in Green", false));
+    TEST_ASSERT_EQUAL(0, queueIndexOf(q, "blue in green", false));
+    TEST_ASSERT_EQUAL(2, queueIndexOf(q, "BLUE IN GREEN!", true));
+    TEST_ASSERT_EQUAL(0, queueIndexOf(q, "", true));
+
+    TEST_ASSERT_EQUAL_STRING("Miles Davis", cleanTranscript(" \"Miles Davis.\" ").c_str());
+    TEST_ASSERT_EQUAL_STRING("caf", cleanTranscript("caf\xC3\xA9", 4).c_str());  // pas de demi-caractère
+    TEST_ASSERT_EQUAL_STRING("", cleanTranscript("...").c_str());
 }
 
 static void test_http_response() {
@@ -917,6 +976,7 @@ int main() {
     RUN_TEST(test_urls_and_images);
     RUN_TEST(test_json_escapes);
     RUN_TEST(test_http_response);
+    RUN_TEST(test_decisions);
     RUN_TEST(test_json_unicode);
     RUN_TEST(test_fingerprint);
     RUN_TEST(test_hosts);

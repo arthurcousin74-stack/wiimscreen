@@ -1,24 +1,15 @@
 // PC desktop build: the Tab5 services that have no meaning on a computer.
 // - Setup portal (Wi-Fi access point for a phone): the computer is already on the network; settings are a text
 //   file (shown on the screen). - Update over Wi-Fi: a computer updates with git pull and a new build.
-// - Sound: silent for now. - Dictation: no microphone support yet (the microphone button is not shown without
+// - Sound: platform/pc/pc_sound.cpp (silent). - Dictation: no microphone support yet (the microphone button is not shown without
 //   an OpenAI key; with one, « Micro indisponible »).
 #include "M5Unified.h"
 #include "ota.h"
 #include "pc.h"
 #include "portal.h"
-#include "sound.h"
 #include "i18n.h"
 #include "voice_service.h"
 
-namespace sound {
-void begin(int) {}
-void tap() {}
-void error() {}
-void confirm() {}
-void suspend() {}
-void resume() {}
-}  // namespace sound
 
 static void waitForTap(uint32_t afterMs) {
     const uint32_t shown = millis();
