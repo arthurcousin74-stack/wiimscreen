@@ -19,9 +19,13 @@ pio run -e sim                       # simulator: the real app + a fake WiiM in 
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
 pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning)
 pio run -e desktop && ./platform/pc/selftest.sh   # computer build (Raspberry Pi/Linux/macOS): direct to a mock WiiM
+# Sanitizers (CI runs the first): separate build folder so normal builds are not touched
+PLATFORMIO_BUILD_DIR=.pio/build-asan PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -g -O1" pio run -e sim
+PLATFORMIO_BUILD_DIR=.pio/build-tsan PLATFORMIO_BUILD_FLAGS="-fsanitize=thread -g -O1" pio run -e simreal
 ```
 
-Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
+The PC builds share `[pc_base]` in platformio.ini and compile the project's own files with `-Wall -Wextra` (keep them
+warning-free). Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
 (missing glyph, shared cover image, chips over the battery).
 
 Firmware version: CI passes `-DFW_VERSION="<run>-<sha>"` through `PLATFORMIO_BUILD_FLAGS`; local builds get
