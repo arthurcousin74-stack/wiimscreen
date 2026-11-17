@@ -256,6 +256,10 @@ static void test_http_response() {
     TEST_ASSERT_EQUAL(404, r.status);
     TEST_ASSERT_FALSE(parseHttpResponse("garbage", r));
     TEST_ASSERT_FALSE(parseHttpResponse("HTTP/1.1 200 OK\r\nno-end", r));
+    // Longueur de morceau hostile (débordement si additionnée) : se termine, corps borné par l'entrée
+    const std::string evil = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\nffffffffffffffec\r\nxyz\r\n0\r\n\r\n";
+    parseHttpResponse(evil, r);
+    TEST_ASSERT_TRUE(r.body.size() <= evil.size());
 }
 
 static void test_fingerprint() {
@@ -634,6 +638,9 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&user_auth_token=***",
                              maskSecrets(q.searchUrl).c_str());
     TEST_ASSERT_EQUAL_STRING("a=1&mytoken=x", maskSecrets("a=1&mytoken=x").c_str());  // pas un paramètre "token"
+    TEST_ASSERT_EQUAL_STRING("{\"clientId\":\"***\",\"accessToken\" : \"***\",\"userName\":\"x\"}",
+                             maskSecrets("{\"clientId\":\"123\",\"accessToken\" : \"a\\\"b\",\"userName\":\"x\"}").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\"token\":12}", maskSecrets("{\"token\":12}").c_str());  // pas une chaîne : inchangé
     TEST_ASSERT_EQUAL_STRING("x?app_id=***&uid=***&eid=***&hmac=***&album_id=42",
                              maskSecrets("x?app_id=123&uid=9&eid=abc&hmac=f00&album_id=42").c_str());
     TEST_ASSERT_EQUAL_STRING("so***@ex***", maskAccount(q.user).c_str());

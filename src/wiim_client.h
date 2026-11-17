@@ -44,6 +44,8 @@ public:
 
     // Empreinte vue lors de la dernière poignée de main (utile en cas de changement)
     const String& lastSeenFingerprint() const { return lastSeen_; }
+    // Empreinte épinglée en cours (enregistrée ou relevée au premier contact), vide si aucune
+    String pinnedFingerprint() const;
     // Vrai une seule fois, juste après l'enregistrement d'une nouvelle empreinte
     bool takeJustPinned() {
         bool v = justPinned_;

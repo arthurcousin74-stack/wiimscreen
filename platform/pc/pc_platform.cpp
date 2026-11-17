@@ -472,7 +472,8 @@ void setup();
 void loop();
 
 int main(int argc, char** argv) {
-    signal(SIGPIPE, SIG_IGN);  // a closed connection must not end the program (send() returns an error instead)
+    signal(SIGPIPE, SIG_IGN);
+    umask(077);  // settings (OpenAI key, Wi-Fi password copy) and favorites: readable by this user only  // a closed connection must not end the program (send() returns an error instead)
     bool headless = false, portrait = false;
     std::string wiim;
     for (int i = 0; i < argc; ++i) g_argv.push_back(argv[i]);

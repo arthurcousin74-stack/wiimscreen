@@ -9,6 +9,26 @@
 
 #include "core.h"
 
+// Corps de réponse gardé jusqu'à `cap` octets (« chunked » compris : getSize() vaut alors -1 et getString() n'aurait
+// pas de limite). N'importe quel appareil du réseau peut répondre à la recherche SSDP.
+class CappedBody : public Stream {
+public:
+    explicit CappedBody(size_t cap) : cap_(cap) {}
+    size_t write(uint8_t c) override { return write(&c, 1); }
+    size_t write(const uint8_t* b, size_t n) override {
+        if (data.size() < cap_) data.append(reinterpret_cast<const char*>(b), std::min(n, cap_ - data.size()));
+        return n;
+    }
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+    std::string data;
+
+private:
+    size_t cap_;
+};
+
 // getStatusEx en HTTPS (WiiM) puis en HTTP (anciens LinkPlay) : identité du lecteur
 static bool identify(const std::string& ip, wr::WiimIdentity& out) {
     for (bool https : {true, false}) {
@@ -24,12 +44,13 @@ static bool identify(const std::string& ip, wr::WiimIdentity& out) {
         http.setReuse(false);
         String url = String(https ? "https://" : "http://") + ip.c_str() + "/httpapi.asp?command=getStatusEx";
         if (!http.begin(https ? static_cast<WiFiClient&>(secure) : plain, url)) continue;
-        int code = http.GET();
-        int size = http.getSize();
-        String body = (code == 200 && size < 16 * 1024) ? http.getString() : String();
+        const int code = http.GET();
+        const int size = http.getSize();  // -1 : inconnue (« chunked »)
+        CappedBody body(16 * 1024);
+        if (code == 200 && size < 16 * 1024) http.writeToStream(&body);
         http.end();
-        if (body.length()) {
-            out = wr::parseStatusEx(body.c_str());
+        if (!body.data.empty()) {
+            out = wr::parseStatusEx(body.data);
             if (out.ok) return true;
         }
     }

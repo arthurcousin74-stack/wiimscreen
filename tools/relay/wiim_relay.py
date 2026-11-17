@@ -14,8 +14,10 @@ then the bytes go both ways unchanged. The app checks the WiiM certificate itsel
 
 Safety:
 - listens on 127.0.0.1 only (same computer) unless you give --listen;
-- goes only to private addresses (your network: the WiiM) and, for public hosts, to TLS on port 443 with the
-  certificate checked (Qobuz, Deezer, album covers), or plain HTTP on port 80 (some covers);
+- goes only to private addresses (your network: the WiiM) and, for public hosts, to TLS on port 443 or plain HTTP
+  on port 80 (some covers); never to this computer, link-local (169.254.x), multicast or reserved addresses;
+- checks the certificate and the name of every host name; only a private IP address (the WiiM, self-signed, pinned
+  by the app) is accepted without a check; each name is resolved once (no DNS rebinding between check and use);
 - never logs what passes through (tokens are in the HTTP headers): one line per connection, host and port only.
 """
 
@@ -39,18 +41,29 @@ def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
-def is_private(host):
-    """True if every address of `host` is on the local network (RFC 1918, link-local, ULA)."""
+def resolve(host, port):
+    """(address, kind) for `host`, resolved ONCE (the connection uses this same address: no DNS rebinding between the
+    check and the connection). kind: "private" (your network), "public", or None when refused."""
     try:
-        infos = socket.getaddrinfo(host, None)
-    except OSError:
+        info = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0]
+    except (OSError, IndexError):
+        return None, None
+    addr = info[4][0]
+    ip = ipaddress.ip_address(addr.split("%")[0])
+    if ip.is_loopback:
+        return (addr, "private") if ALLOW_LOOPBACK else (None, None)
+    # 0.0.0.0 / :: (this computer), multicast, link-local (169.254.x: cloud metadata), reserved: never
+    if ip.is_unspecified or ip.is_multicast or ip.is_link_local or ip.is_reserved:
+        return None, None
+    return addr, "private" if ip.is_private else "public"
+
+
+def is_ip_literal(host):
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
         return False
-    addrs = {info[4][0] for info in infos}
-    return bool(addrs) and all(
-        ipaddress.ip_address(a.split("%")[0]).is_private
-        and (ALLOW_LOOPBACK or not ipaddress.ip_address(a.split("%")[0]).is_loopback)
-        for a in addrs
-    )
 
 
 def read_line(sock):
@@ -98,23 +111,26 @@ def bridge(a, b, idle_s=120):
 
 def open_target(kind, host, port):
     """Connection to the target, or (None, reason)."""
-    private = is_private(host)
-    if not private:
+    addr, where = resolve(host, port)
+    if addr is None:
+        return None, "address not allowed"
+    if where == "public":
         if kind == "TLS" and port != 443:
             return None, "not on your network: TLS on port 443 only"
         if kind == "TCP" and port != 80:
             return None, "not on your network: plain HTTP on port 80 only"
-    raw = socket.create_connection((host, port), timeout=8)
+    raw = socket.create_connection((addr, port), timeout=8)
     if kind == "TCP":
         return raw, ""
-    if private:
-        # The WiiM has a self-signed certificate: the app checks its fingerprint (pinning)
+    if where == "private" and is_ip_literal(host):
+        # The WiiM, given by its address, has a self-signed certificate: the app checks its fingerprint (pinning)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+        tls = ctx.wrap_socket(raw)
     else:
-        ctx = ssl.create_default_context()
-    tls = ctx.wrap_socket(raw, server_hostname=None if private else host)
+        # A host name is always checked (certificate and name), even if it resolves to a private address
+        tls = ssl.create_default_context().wrap_socket(raw, server_hostname=host)
     return tls, hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest()
 
 

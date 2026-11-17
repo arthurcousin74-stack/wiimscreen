@@ -152,10 +152,23 @@ bool WiimWorker::rediscover() {
     lastRediscover_ = millis();
     for (auto& d : discoverWiims(2000))
         if (d.uuid == cfg_.wiimUuid.c_str() && d.ip != cfg_.host.c_str()) {
+            // L'uuid se lit sans authentification : n'importe quel appareil peut s'en servir. On garde l'empreinte
+            // épinglée (sinon le prochain certificat serait accepté et enregistré) et on ne suit la nouvelle adresse
+            // qu'après une connexion qui la vérifie.
+            const String oldHost = cfg_.host;
+            cfg_.fingerprint = client_.pinnedFingerprint();
             cfg_.host = d.ip.c_str();
+            client_.configure(cfg_);
+            wr::PlayerStatus check;
+            const WiimError e = client_.status(check);
+            if (e != WiimError::None) {
+                logEvent("WiiM vu \xC3\xA0 %s mais non suivi (%s)", cfg_.host.c_str(), wiimErrorName(e));
+                cfg_.host = oldHost;
+                client_.configure(cfg_);
+                continue;
+            }
             logEvent("WiiM retrouv\xC3\xA9 \xC3\xA0 %s", cfg_.host.c_str());
             saveWiim(cfg_.host, cfg_.wiimUuid, cfg_.wiimName);
-            client_.configure(cfg_);
             pqControl_.clear();  // nouvelle adresse : chercher à nouveau le service PlayQueue
             WiimEvent ev;
             ev.kind = WiimEvent::Moved;
@@ -646,25 +659,13 @@ static int sendQueue(const std::string& control, const std::string& ctx, const s
 static bool readQueueStable(WiimWorker* w, const std::string& control, const std::string& name, int seconds,
                             wr::QueueInfo& out, bool poll = false);
 
-// Recherche publique Deezer (api.deezer.com, sans clé, HTTPS vérifié) : morceaux avec leur album
+static int deezerGet(const std::string& path, std::string& out, std::string& error);
+
+// Recherche publique Deezer (api.deezer.com, sans clé) : morceaux avec leur album
 static std::vector<wr::DeezerTrack> deezerSearch(const std::string& query, int limit, int& code) {
-    std::vector<wr::DeezerTrack> found;
-    WiFiClientSecure tls;
-    tls.setCACertBundle(ca_bundle_start, caBundleSize());
-    tls.setHandshakeTimeout(8);
-    HTTPClient http;
-    http.setConnectTimeout(6000);
-    http.setTimeout(10000);
-    http.setReuse(false);
-    const std::string url =
-        "https://api.deezer.com/search?q=" + wr::urlQueryEncode(query) + "&limit=" + std::to_string(limit);
-    code = -1;
-    if (http.begin(tls, url.c_str())) {
-        code = http.GET();
-        if (code == 200 && http.getSize() < 512 * 1024) found = wr::parseDeezerTracks(http.getString().c_str());
-        http.end();
-    }
-    return found;
+    std::string body, error;
+    code = deezerGet("search?q=" + wr::urlQueryEncode(query) + "&limit=" + std::to_string(limit), body, error);
+    return code == 200 && error.empty() ? wr::parseDeezerTracks(body) : std::vector<wr::DeezerTrack>();
 }
 
 // Crée une file. Sur un WiiM Pro, CreateQueue n'a qu'un argument (QueueContext) et lance toujours la file

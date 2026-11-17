@@ -8,7 +8,9 @@
 #include "HTTPClient.h"
 #include "LittleFS.h"
 #include "ca_bundle.h"
+#include "core.h"
 #include "pc.h"
+#include "upnp.h"
 
 // The firmware embeds Mozilla's root certificates; the relay checks public servers instead
 // (definitions of the symbols declared in ca_bundle.h: extern, so they link from other files)
@@ -87,23 +89,14 @@ int HTTPClient::request(const char* method, const uint8_t* body, size_t n) {
             else if (k == "transfer-encoding" && lower(v).find("chunked") != std::string::npos) chunked = true;
             else if (k == "location") location = v;
         }
-        body_ = raw.substr(he + 4);
-        if (chunked) {
-            std::string out;
-            size_t q = 0;
-            while (q < body_.size()) {
-                const size_t le = body_.find("\r\n", q);
-                if (le == std::string::npos) break;
-                const size_t len = std::strtoul(body_.substr(q, le - q).c_str(), nullptr, 16);
-                if (!len) break;
-                out += body_.substr(le + 2, len);
-                q = le + 2 + len + 2;
-            }
-            body_.swap(out);
-            size_ = -1;
-        }
+        // Body (Content-Length or "chunked"): the firmware's own parser, unit-tested in lib/core
+        wr::HttpResponse parsed;
+        body_ = wr::parseHttpResponse(raw, parsed) ? parsed.body : std::string();
+        if (chunked) size_ = -1;
         if (follow_ && !location.empty() && (code == 301 || code == 302 || code == 303 || code == 307 || code == 308)) {
-            url_ = location.compare(0, 4, "http") == 0 ? location : url_.substr(0, slash) + location;
+            const std::string next = location.compare(0, 4, "http") == 0 ? location : url_.substr(0, slash) + location;
+            if (wr::urlOrigin(next) != wr::urlOrigin(url_)) headers_.clear();  // no app header to another server
+            url_ = next;
             continue;
         }
         return code;

@@ -385,6 +385,20 @@ std::string maskSecrets(const std::string& text) {
             if (e > v && o.compare(v, e - v, "***") != 0) o.replace(v, e - v, "***");
             p = v + 3;
         }
+        // JSON form: "key" : "value" (GetUserInfo, API answers)
+        const std::string q = std::string("\"") + key + "\"";
+        p = 0;
+        while ((p = o.find(q, p)) != std::string::npos) {
+            size_t v = p + q.size();
+            while (v < o.size() && (o[v] == ' ' || o[v] == ':')) ++v;
+            p = v;
+            if (v >= o.size() || o[v] != '"') continue;
+            size_t e = ++v;
+            while (e < o.size() && o[e] != '"') e += o[e] == '\\' ? 2 : 1;
+            e = std::min(e, o.size());
+            if (e > v && o.compare(v, e - v, "***") != 0) o.replace(v, e - v, "***");
+            p = v + 3;
+        }
     }
     return o;
 }

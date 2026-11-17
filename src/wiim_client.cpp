@@ -21,6 +21,8 @@ void WiimClient::configure(const Settings& s) {
     hasPin_ = https_ && wr::parseFingerprint(s.fingerprint.c_str(), pin_);
 }
 
+String WiimClient::pinnedFingerprint() const { return hasPin_ ? String(wr::toHex(pin_, sizeof pin_).c_str()) : String(); }
+
 void WiimClient::disconnect() {
     if (conn_) conn_->stop();
     conn_.reset();
