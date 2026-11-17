@@ -5,12 +5,17 @@
 // the window. With --script, taps come from a file and screenshots are written (no window needed: --headless).
 #include <random>
 #include <SDL2/SDL.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <csignal>
 #include <chrono>
 #include <condition_variable>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -21,9 +26,31 @@
 #include "M5Unified.h"
 #include "Preferences.h"
 #include "WiFi.h"
-#include "sim.h"
+#include "pc.h"
 
 SimM5 M5;
+
+#ifdef PC_DESKTOP
+// Address of the computer on the network: the interface that would be used to reach the Internet (no packet sent)
+IPAddress WiFiSim::localIP() const {
+    IPAddress ip;
+    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in to{};
+    to.sin_family = AF_INET;
+    to.sin_port = htons(53);
+    inet_pton(AF_INET, "8.8.8.8", &to.sin_addr);
+    sockaddr_in me{};
+    socklen_t n = sizeof me;
+    if (fd >= 0 && connect(fd, (sockaddr*)&to, sizeof to) == 0 && getsockname(fd, (sockaddr*)&me, &n) == 0) {
+        char s[INET_ADDRSTRLEN];
+        ip.text = inet_ntop(AF_INET, &me.sin_addr, s, sizeof s);
+    }
+    if (fd >= 0) close(fd);
+    return ip;
+}
+#else
+IPAddress WiFiSim::localIP() const { return IPAddress(); }
+#endif
 SerialSim Serial;
 EspSim ESP;
 WiFiSim WiFi;
@@ -51,16 +78,16 @@ uint32_t esp_random() {
 
 // ------------------------------------------------------------------ Serial, restart
 
-bool quietSerial() { return sim::quiet(); }
+bool quietSerial() { return pc::quiet(); }
 
 void SerialSim::println(const char* s) {
-    if (!sim::quiet()) printf("%s\n", s);
+    if (!pc::quiet()) printf("%s\n", s);
 }
 void SerialSim::print(const char* s) {
-    if (!sim::quiet()) printf("%s", s);
+    if (!pc::quiet()) printf("%s", s);
 }
 int SerialSim::printf(const char* fmt, ...) {
-    if (sim::quiet()) return 0;
+    if (pc::quiet()) return 0;
     va_list ap;
     va_start(ap, fmt);
     int n = vprintf(fmt, ap);
@@ -68,7 +95,7 @@ int SerialSim::printf(const char* fmt, ...) {
     return n;
 }
 
-void EspSim::restart() { sim::restart(); }
+void EspSim::restart() { pc::restart(); }
 
 // ------------------------------------------------------------------ FreeRTOS
 
@@ -129,7 +156,7 @@ std::map<std::string, std::string>& prefs() {
     static std::map<std::string, std::string> p;
     return p;
 }
-std::string prefsPath() { return sim::stateDir() + "/settings.txt"; }
+std::string prefsPath() { return pc::stateDir() + "/settings.txt"; }
 void loadPrefs() {
     static bool loaded = false;
     if (loaded) return;
@@ -190,10 +217,16 @@ bool Preferences::clear() {
 }
 bool Preferences::isKey(const char* key) { return prefs().count(key) > 0; }
 
-void sim::defaultSettings() {
+void pc::defaultSettings() {
     loadPrefs();
     if (prefs().count("ssid")) return;
-    // First start: already configured, so the simulator opens on the main screen (not the setup portal)
+    // First start: already configured, so the app opens on the main screen (not the Tab5's Wi-Fi setup portal)
+#ifdef PC_DESKTOP
+    prefs()["ssid"] = "PC";  // the computer is already on the network
+    prefs()["host"] = "";    // the WiiM is found on the network (SSDP), or given with --wiim
+    savePrefs();
+    return;
+#endif
     prefs()["ssid"] = "Simulateur";
 #ifdef SIM_REAL
     // Real WiiM through the relay: the app looks for it (discovery by the relay), as a new Tab5 does
@@ -210,13 +243,19 @@ void sim::defaultSettings() {
 
 // ------------------------------------------------------------------ microphone, power
 
+#ifdef PC_DESKTOP
+bool SimMic::begin() { return false; }  // no microphone support yet on a PC: « Micro indisponible »
+int SimPower::getBatteryLevel() const { return -1; }
+#else
 bool SimMic::begin() { return on = true; }
+int SimPower::getBatteryLevel() const { return 85; }
+#endif
 bool SimMic::record(int16_t* buf, size_t len, uint32_t) {
     std::memset(buf, 0, len * 2);  // silence: the dictation text comes from transcribe() (fake)
     return on;
 }
 void SimPower::powerOff() {
-    printf("Simulateur : mise en veille (fin du programme)\n");
+    printf("Mise en veille : fin du programme\n");
     fflush(stdout), _exit(0);
 }
 
@@ -235,6 +274,8 @@ SDL_Renderer* g_ren = nullptr;
 SDL_Texture* g_tex = nullptr;
 int g_texW = 0, g_texH = 0;
 float g_scale = 1.0f;
+int g_long = 1280, g_short = 720;  // --size
+bool g_fullscreen = false;
 uint32_t g_lastFrame = 0;
 bool g_mouseDown = false, g_pressQueued = false, g_releaseQueued = false;
 int g_mouseX = -1, g_mouseY = -1;
@@ -259,7 +300,7 @@ void readCanvas(std::vector<uint8_t>& out, int& w, int& h) {
 void shot(const std::string& name) {
     int w, h;
     readCanvas(g_rgb, w, h);
-    const std::string path = sim::outDir() + "/" + name + ".ppm";
+    const std::string path = pc::outDir() + "/" + name + ".ppm";
     FILE* f = fopen(path.c_str(), "wb");
     if (!f) return;
     fprintf(f, "P6\n%d %d\n255\n", w, h);
@@ -277,7 +318,8 @@ void present() {
         g_tex = SDL_CreateTexture(g_ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, w, h);
         g_texW = w;
         g_texH = h;
-        SDL_SetWindowSize(g_win, (int)(w * g_scale), (int)(h * g_scale));
+        if (!g_fullscreen) SDL_SetWindowSize(g_win, (int)(w * g_scale), (int)(h * g_scale));
+        SDL_RenderSetLogicalSize(g_ren, w, h);  // SDL scales the picture and the mouse/touch positions
     }
     SDL_UpdateTexture(g_tex, nullptr, g_rgb.data(), w * 3);
     SDL_RenderClear(g_ren);
@@ -326,12 +368,12 @@ void SimM5::update() {
             if (e.type == SDL_QUIT) fflush(stdout), _exit(0);
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                 g_mouseDown = g_pressQueued = true;
-                g_mouseX = (int)(e.button.x / g_scale), g_mouseY = (int)(e.button.y / g_scale);
+                g_mouseX = e.button.x, g_mouseY = e.button.y;
             } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                 g_mouseDown = false;
                 g_releaseQueued = true;
             } else if (e.type == SDL_MOUSEMOTION && g_mouseDown) {
-                g_mouseX = (int)(e.motion.x / g_scale), g_mouseY = (int)(e.motion.y / g_scale);
+                g_mouseX = e.motion.x, g_mouseY = e.motion.y;
             } else if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
                 static int n = 0;
                 shot("capture-" + std::to_string(++n));
@@ -364,7 +406,14 @@ void SimM5::update() {
 // ------------------------------------------------------------------ options
 
 namespace {
-#ifdef SIM_REAL
+#if defined(PC_DESKTOP)
+std::string configDir() {
+    const char* x = getenv("XDG_CONFIG_HOME");
+    const char* h = getenv("HOME");
+    return x && *x ? std::string(x) + "/wiimscreen" : std::string(h ? h : ".") + "/.config/wiimscreen";
+}
+std::string g_state = configDir(), g_out = configDir() + "/captures";
+#elif defined(SIM_REAL)
 std::string g_state = ".pio/simreal-state", g_out = ".pio/sim-out";
 #else
 std::string g_state = ".pio/sim-state", g_out = ".pio/sim-out";
@@ -374,18 +423,22 @@ bool g_quiet = false;
 std::vector<std::string> g_argv;
 }  // namespace
 
-const std::string& sim::stateDir() { return g_state; }
-const std::string& sim::outDir() { return g_out; }
-const std::string& sim::relay() { return g_relay; }
-bool sim::quiet() { return g_quiet; }
+int pcScreenLong() { return g_long; }
+int pcScreenShort() { return g_short; }
 
-void sim::restart() {
-    printf("Simulateur : red\xC3\xA9marrage\n");
+const std::string& pc::stateDir() { return g_state; }
+const std::string& pc::outDir() { return g_out; }
+const std::string& pc::relay() { return g_relay; }
+bool pc::quiet() { return g_quiet; }
+
+void pc::restart() {
+    printf("Red\xC3\xA9marrage\n");
     fflush(stdout);
     std::vector<char*> args;
     for (auto& a : g_argv) args.push_back(const_cast<char*>(a.c_str()));
     args.push_back(nullptr);
-    execv("/proc/self/exe", args.data());
+    execv("/proc/self/exe", args.data());  // Linux
+    execvp(args[0], args.data());           // macOS and others: the same command again
     std::exit(1);
 }
 
@@ -419,7 +472,9 @@ void setup();
 void loop();
 
 int main(int argc, char** argv) {
-    bool headless = false;
+    signal(SIGPIPE, SIG_IGN);  // a closed connection must not end the program (send() returns an error instead)
+    bool headless = false, portrait = false;
+    std::string wiim;
     for (int i = 0; i < argc; ++i) g_argv.push_back(argv[i]);
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -430,6 +485,16 @@ int main(int argc, char** argv) {
         else if (a == "--state") g_state = next();
         else if (a == "--out") g_out = next();
         else if (a == "--relay") g_relay = next();
+        else if (a == "--fullscreen") g_fullscreen = true;
+        else if (a == "--size") {
+            int w = 0, h = 0;
+            if (sscanf(next().c_str(), "%dx%d", &w, &h) != 2 || w < 320 || h < 240 || w > 7680 || h > 7680) {
+                fprintf(stderr, "--size : largeur x hauteur, par exemple 800x480\n");
+                return 1;
+            }
+            g_long = std::max(w, h), g_short = std::min(w, h);
+            portrait = h > w;
+        } else if (a == "--wiim") wiim = next();
         else if (a == "--script") {
             if (!loadScript(next())) return 1;
         } else if (a == "--reset") {
@@ -437,21 +502,47 @@ int main(int argc, char** argv) {
         } else {
             fprintf(stderr,
                     "usage: %s [--scale 0.6] [--script fichier] [--headless] [--state dossier] [--out dossier] "
-                    "[--reset] [--quiet] [--relay h\xC3\xB4te:port]\n",
+                    "[--reset] [--quiet] [--relay h\xC3\xB4te:port] [--size 800x480] [--fullscreen] [--wiim adresse]\n",
                     argv[0]);
             return a == "--help" ? 0 : 1;
         }
     }
-    mkdir(g_state.c_str(), 0755);
-    mkdir(g_out.c_str(), 0755);
-    sim::defaultSettings();
+    std::error_code ec;
+    std::filesystem::create_directories(g_state, ec);
+    std::filesystem::create_directories(g_out, ec);
+    pc::defaultSettings();
+    // --wiim: this WiiM (also when discovery cannot work, e.g. WSL); --size taller than wide: portrait
+    if (!wiim.empty() || portrait) {
+        loadPrefs();
+        auto get = [](const char* k) {  // (operator[] would add an empty value: read as rotation 0)
+            auto it = prefs().find(k);
+            return it == prefs().end() ? std::string() : it->second;
+        };
+        if (!wiim.empty() && get("host") != wiim) prefs()["host"] = wiim, prefs().erase("fp");
+        const std::string rot = get("rotation");
+        const bool isPortrait = rot == "0" || rot == "2";
+        if (portrait && !isPortrait) prefs()["rotation"] = "0";
+        if (!portrait && isPortrait) prefs()["rotation"] = "1";
+        savePrefs();
+    }
+#ifdef PC_DESKTOP
+    if (!g_quiet) printf("wiimscreen : r\xC3\xA9glages et favoris dans %s\n", g_state.c_str());
+#endif
     if (!headless) {
         if (SDL_Init(SDL_INIT_VIDEO) != 0) {
             fprintf(stderr, "SDL : %s (essaie --headless)\n", SDL_GetError());
             return 1;
         }
-        g_win = SDL_CreateWindow("wiimscreen \xE2\x80\x94 simulateur", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                 (int)(1280 * g_scale), (int)(720 * g_scale), 0);
+#ifdef PC_DESKTOP
+        const char* title = "wiimscreen";
+#else
+        const char* title = "wiimscreen \xE2\x80\x94 simulateur";
+#endif
+        const int w0 = portrait ? g_short : g_long, h0 = portrait ? g_long : g_short;
+        g_win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)(w0 * g_scale),
+                                 (int)(h0 * g_scale),
+                                 g_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_RESIZABLE);
+        if (g_fullscreen) SDL_ShowCursor(SDL_DISABLE);  // touch screen: no mouse pointer
         g_ren = g_win ? SDL_CreateRenderer(g_win, -1, 0) : nullptr;
         if (!g_ren) {
             fprintf(stderr, "SDL : %s\n", SDL_GetError());

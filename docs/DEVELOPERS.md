@@ -99,6 +99,9 @@ python tools/preview/topng.py out/*.ppm
 The simulator runs the full app on a PC, with a fake WiiM or with your real WiiM through a relay. Refer to
 [tools/sim/README.md](../tools/sim/README.md).
 
+The `desktop` build runs the app on a Raspberry Pi or a computer, directly on the network. Refer to
+[DESKTOP.md](DESKTOP.md). Simulator and desktop share the computer layer in `platform/pc/`.
+
 ## Other ESP32 boards
 
 We tested only the Tab5. Other ESP32 boards need a small quantity of new code.

@@ -50,6 +50,13 @@ jobs:
           pio run -e simreal
           ./tools/relay/selftest.sh
 
+      # Computer version (Raspberry Pi / Linux / macOS): direct connection to a mock WiiM
+      - name: Version ordinateur (desktop)
+        run: |
+          sudo apt-get install -y -qq libssl-dev
+          pio run -e desktop
+          ./platform/pc/selftest.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: sim-screens

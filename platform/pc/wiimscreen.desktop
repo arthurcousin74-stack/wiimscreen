@@ -1,0 +1,9 @@
+# Linux desktop launcher (also Raspberry Pi OS with desktop: copy to ~/.config/autostart/ to start at login).
+# Edit the path of Exec if the project is not in ~/wiimscreen. See docs/DESKTOP.md.
+[Desktop Entry]
+Type=Application
+Name=wiimscreen
+Comment=WiiM remote
+Exec=sh -c "$HOME/wiimscreen/.pio/build/desktop/program --fullscreen --quiet"
+Terminal=false
+Categories=AudioVideo;Audio;

@@ -7,7 +7,7 @@
 #include "art.h"
 #include "discovery.h"
 #include "favorites.h"
-#include "sim.h"
+#include "pc.h"
 
 // ------------------------------------------------------------------ discovery: two WiiMs on the network
 
@@ -41,7 +41,7 @@ void ArtFetcher::request(const std::string& url, bool) {
     if (url.compare(0, 6, "sim://") != 0) return;  // nothing else exists in the simulator
     ArtImage img;
     img.url = url;
-    const std::vector<uint8_t> png = sim::coverPng(url, 300);
+    const std::vector<uint8_t> png = pc::coverPng(url, 300);
     img.data = static_cast<uint8_t*>(malloc(png.size()));
     memcpy(img.data, png.data(), png.size());
     img.len = png.size();
@@ -94,7 +94,7 @@ void hsv(float h, float s, float v, uint8_t* rgb) {
 }  // namespace
 
 // Gradient of the album's hue with circles or stripes: each album gets its own colours (and accent colour)
-std::vector<uint8_t> sim::coverPng(const std::string& url, int n) {
+std::vector<uint8_t> pc::coverPng(const std::string& url, int n) {
     int hue = 200, pattern = 0;
     sscanf(url.c_str(), "sim://cover/%d/%d", &hue, &pattern);
     std::vector<uint8_t> raw;

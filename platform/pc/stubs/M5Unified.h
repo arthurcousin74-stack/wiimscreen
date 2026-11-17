@@ -9,11 +9,15 @@
 // No « using namespace lgfx »: lgfx has its own millis()/delay() for PC builds (ambiguous with Arduino's)
 using lgfx::textdatum_t;
 
+int pcScreenLong();
+int pcScreenShort();
+
 class SimDisplay : public M5Canvas {
 public:
     // Rotation 1/3: landscape 1280×720, 0/2: portrait 720×1280 (like the Tab5 screen)
+    // Screen size of the PC window (--size, default 1280×720 like the Tab5): rotation 1/3 landscape, 0/2 portrait
     void setRotation(int r) {
-        const int w = r % 2 ? 1280 : 720, h = r % 2 ? 720 : 1280;
+        const int w = r % 2 ? pcScreenLong() : pcScreenShort(), h = r % 2 ? pcScreenShort() : pcScreenLong();
         if (width() == w && height() == h) return;
         deleteSprite();
         setColorDepth(24);
@@ -61,7 +65,7 @@ struct SimImu {
 };
 
 struct SimPower {
-    int getBatteryLevel() const { return 85; }
+    int getBatteryLevel() const;  // 85 % in the simulator; none (-1) on a desktop
     [[noreturn]] void powerOff();
 };
 

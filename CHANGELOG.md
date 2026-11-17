@@ -3,6 +3,17 @@
 Versions follow [Semantic Versioning](https://semver.org/). Firmware builds show their version at the bottom of
 the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
+## [Unreleased]
+
+### Added
+- **Computer version (experimental)**: `pio run -e desktop` runs the same app on a Raspberry Pi, Linux or macOS,
+  directly on the network (sockets, OpenSSL, SSDP discovery, certificate pinning as on the Tab5). Window or full
+  screen, touch or mouse, any screen size from 800×480 (`--size`), settings in `~/.config/wiimscreen`, autostart
+  files for the Pi. Tested on Linux against a mock WiiM (CI); not yet on a Raspberry Pi or a Mac. docs/DESKTOP.md.
+
+### Changed
+- The computer layer of the simulator moved to `platform/pc/` (shared with the desktop build).
+
 ## [0.1.1-beta] — 2026-11-16 — direct Qobuz search becomes an option
 
 ### Changed

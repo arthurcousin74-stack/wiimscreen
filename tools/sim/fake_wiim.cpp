@@ -11,7 +11,7 @@
 #include "favorites.h"
 #include "i18n.h"
 #include "log.h"
-#include "sim.h"
+#include "pc.h"
 #include "voice.h"
 #include "wiim_worker.h"
 

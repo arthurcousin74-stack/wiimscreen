@@ -1,0 +1,19 @@
+# Raspberry Pi without a desktop (Raspberry Pi OS Lite): start wiimscreen full screen at boot.
+# Install (see docs/DESKTOP.md): edit User and the paths if your user is not "pi", then
+#   sudo cp platform/pc/wiimscreen.service /etc/systemd/system/ && sudo systemctl enable --now wiimscreen
+[Unit]
+Description=wiimscreen (WiiM remote)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+# The user must be in the groups video, render and input (the default "pi" user is)
+WorkingDirectory=/home/pi/wiimscreen
+Environment=SDL_VIDEODRIVER=kmsdrm
+ExecStart=/home/pi/wiimscreen/.pio/build/desktop/program --fullscreen --quiet
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

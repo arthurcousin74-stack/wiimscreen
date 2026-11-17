@@ -9,6 +9,12 @@
 
 struct IPAddress {
     String text = "192.168.1.42";
+    IPAddress() = default;
+    IPAddress(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+        char s[16];
+        snprintf(s, sizeof s, "%u.%u.%u.%u", a, b, c, d);
+        text = s;
+    }
     String toString() const { return text; }
 };
 
@@ -19,7 +25,7 @@ struct WiFiSim {
     void setAutoReconnect(bool) {}
     void disconnect(bool = false) {}
     int status() const { return WL_CONNECTED; }
-    IPAddress localIP() const { return IPAddress(); }
+    IPAddress localIP() const;  // desktop: the computer's address on the network
 };
 extern WiFiSim WiFi;
 
@@ -50,12 +56,14 @@ protected:
     uint32_t timeoutMs_ = 5000, connectMs_ = 5000;
     uint8_t fingerprint_[32] = {};
     bool hasFingerprint_ = false;
+    bool insecure_ = false;  // desktop build: no certificate check (the WiiM, pinned by the app)
+    void* ssl_ = nullptr;    // desktop build: OpenSSL connection
 };
 
 class WiFiClientSecure : public WiFiClient {
 public:
     WiFiClientSecure() { tls_ = true; }
-    void setInsecure() {}                         // the relay checks public servers; the WiiM is pinned by the app
+    void setInsecure() { insecure_ = true; }      // the relay/OpenSSL checks public servers; the WiiM is pinned by the app
     void setCACertBundle(const uint8_t*, size_t) {}
     void setHandshakeTimeout(int) {}
     bool getFingerprintSHA256(uint8_t out[32]) const {

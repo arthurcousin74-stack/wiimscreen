@@ -15,6 +15,7 @@ enum followRedirects_t { HTTPC_DISABLE_FOLLOW_REDIRECTS, HTTPC_STRICT_FOLLOW_RED
 class HTTPClient {
 public:
     bool begin(WiFiClient& client, const char* url);
+    bool begin(WiFiClient& client, const String& url) { return begin(client, url.c_str()); }
     void end();
     void addHeader(const char* name, const char* value) { headers_.push_back({name, value}); }
     void setConnectTimeout(int ms) { connectMs_ = ms; }

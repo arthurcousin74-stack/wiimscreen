@@ -21,7 +21,7 @@ Options: `--reset` (first start again: settings back to the defaults below), `--
 |---|---|
 | Main loop, screens, navigation, keyboard, results, tiles, Journal, menus, pending rings, messages | `fake_wiim.cpp`: the WiiM behind the real `WiimWorker` interface (catalog of 7 albums and 2 radios, 6 presets, Qobuz/Deezer favorites, search, favorites, playback with position) |
 | Settings code (`settings.cpp`), backup fields, Journal | `fake_services.cpp`: covers drawn as PNG per album, favorites in memory, silent sound, setup portal and update screens (no web server), dictation returns « Miles Davis » (`SIM_DICTEE=…` to change) |
-| `lib/core` (layout, parsing, text) | `stubs/`: Arduino `String`, FreeRTOS on `std::thread`, Wi-Fi always connected, M5Unified (display = canvas, mouse = touch, microphone = silence) |
+| `lib/core` (layout, parsing, text) | `platform/pc/stubs/` (shared with the desktop build): Arduino `String`, FreeRTOS on `std::thread`, Wi-Fi always connected, M5Unified (display = canvas, mouse = touch, microphone = silence) |
 
 Default settings on the first start: configured (no setup portal), a Deezer profile number (Deezer tiles), a fake
 OpenAI key (the microphone shows; nothing is sent). Searches « erreur » and « rien » show the error and the

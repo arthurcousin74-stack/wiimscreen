@@ -373,6 +373,9 @@ static void test_layout() {
         checkLayout(1280, 720, n);  // Tab5 paysage
         checkLayout(720, 1280, n);  // Tab5 portrait
         checkLayout(960, 540, n);
+        checkLayout(800, 480, n);   // écran officiel 7" du Raspberry Pi (version ordinateur)
+        checkLayout(480, 800, n);
+        checkLayout(1920, 1080, n);  // écran d'ordinateur
     }
     Layout L = computeLayout(1280, 720, 12);
     TEST_ASSERT_EQUAL(6, L.perPage);  // 12 presets : 2 pages de 6

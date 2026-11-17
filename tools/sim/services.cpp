@@ -7,7 +7,7 @@
 #include "i18n.h"
 #include "ota.h"
 #include "portal.h"
-#include "sim.h"
+#include "pc.h"
 #include "sound.h"
 #include "version.h"
 #include "voice_service.h"

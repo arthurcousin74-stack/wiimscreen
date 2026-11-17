@@ -18,6 +18,7 @@ SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && pytho
 pio run -e sim                       # simulator: the real app + a fake WiiM in an SDL window (tools/sim/README.md)
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
 pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning)
+pio run -e desktop && ./platform/pc/selftest.sh   # computer build (Raspberry Pi/Linux/macOS): direct to a mock WiiM
 ```
 
 Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
@@ -52,7 +53,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/settings.*` | NVS-backed settings |
 | `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
-| `tools/sim/` | PC simulator: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, HTTPClient, LittleFS, Preferences), fake WiiM (`WiimWorker`), fake data, `net_relay.cpp` (simreal: connections through the relay), scripts |
+| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), SDL window/input/options (`pc_platform.cpp`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
+| `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
 | `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), mock WiiM and `selftest.sh` |
 
 ## Conventions
@@ -121,10 +123,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   executing queued commands (play/pause, volume) so taps are not ignored for several seconds.
 - **OpenAI transcription** runs in its own task (`sttTask`); the main loop only checks `g_stt.done`.
 - **VLW fonts have no symbols** such as ▶ ■ ♥: write words ("Lecture :") or draw icons.
-- **Simulator**: `src/` must keep compiling there. New hardware or network calls in `main.cpp` need a stub in
-  `tools/sim/stubs` or a fake in `tools/sim`; new `WiimWorker` public methods need a fake in `tools/sim/fake_wiim.cpp`.
+- **Simulator and desktop build**: `src/` must keep compiling there. New hardware or network calls in `main.cpp`
+  need a stub in `platform/pc/stubs` (and a desktop/sim implementation) or a fake in `tools/sim`; new `WiimWorker` public methods need a fake in `tools/sim/fake_wiim.cpp`.
   `simreal` compiles the real `wiim_worker.cpp`, `wiim_client.cpp`, `art.cpp`, `favorites.cpp`: Arduino network
-  APIs they use must exist in `tools/sim/stubs` (WiFiClient, WiFiClientSecure, HTTPClient, LittleFS).
+  APIs they use must exist in `platform/pc/stubs` (WiFiClient, WiFiClientSecure, HTTPClient, LittleFS); `desktop`
+  also compiles `discovery.cpp` (WiFiUDP). Fonts do not scale with the screen: check small sizes (800×480).
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
   **shuffle on**, `CreateQueue` reshuffles: find a track by title in a fresh `BrowseQueue`, never reuse an old
   index. Status `load` = loading; seek only once it plays. (Seen with `simreal` on a real WiiM, 2026-11-16.)
