@@ -42,6 +42,7 @@ std::string soapBody(const std::string& serviceType, const std::string& action,
 // One track of a queue, from its DIDL-Lite metadata.
 struct QueueTrack {
     std::string title, artist, album, art;
+    std::string albumId;  // <song:albumid> of the WiiM (Qobuz album id), empty if absent
 };
 
 // Content of a queue (QueueContext of BrowseQueue / CreateQueue, already unescaped once).

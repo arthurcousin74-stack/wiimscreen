@@ -32,6 +32,7 @@ struct PlayerStatus {
     int volume = 0;
     bool muted = false;
     int mode = 0;            // source : 1 AirPlay, 2 DLNA, 31 Spotify, 41 Bluetooth…
+    int loop = -1;           // "loop" : répétition et lecture aléatoire (0-5), -1 si absent
     uint32_t positionMs = 0;
     uint32_t durationMs = 0;  // 0 : flux sans durée (radio)
     // Les WiiM ne donnent pas toujours titre/artiste/album ici : voir TrackMeta

@@ -14,6 +14,14 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 ### Changed
 - The computer layer of the simulator moved to `platform/pc/` (shared with the desktop build).
 
+### Fixed
+- Search through the WiiM with shuffle on: the results were listed in a shuffled order and a tap could start another
+  track. Shuffle is turned off for the search and put back after it; a result now plays from its album, at this
+  track, and the title is checked after the start.
+- A track that was paused before a search is put back, paused at the same position (it was lost).
+- The music before a search was not put back when its queue was very large (Qobuz search queue of 1000 tracks).
+- Direct Qobuz answers with extra spaces in their HTTP headers are read correctly.
+
 ## [0.1.1-beta] — 2026-11-16 — direct Qobuz search becomes an option
 
 ### Changed

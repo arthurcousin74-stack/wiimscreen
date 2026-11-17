@@ -27,6 +27,7 @@ enum class RestoreAction {
     Nothing,          // nothing changed
     StopSearchQueue,  // nothing played before, the WiiM stays paused on the search queue: stop it
     PutBack,          // put the previous queue back, same track and position
+    PutBackPaused,    // a track was paused in a known queue: put it back (same track, position), paused
     Pause,            // something played outside a queue (AirPlay, Spotify…): pause what the search started
     Stop,             // nothing played before: stop what the search started
 };
@@ -37,6 +38,11 @@ struct PlaybackBefore {
     bool inQueue = false;  // its queue and its place in it are known (can be put back)
 };
 RestoreAction restoreAction(const PlaybackBefore& before, const PlayerStatus& now);
+
+// Loop mode ("loop" of getPlayerStatus, "setPlayerCmd:loopmode:n") with the same repeat but no shuffle, or -1 if
+// shuffle is already off. 0 repeat all, 1 repeat one, 2 shuffle + repeat all, 3 shuffle, 4 no repeat, 5 shuffle +
+// repeat one. A search through a WiiM queue turns shuffle off for its duration: else the WiiM shuffles the results.
+int loopWithoutShuffle(int loop);
 
 // A queue filled by the WiiM (search, favorites, album) grows step by step (1-2 tracks after 1 s, 7 after 6 s):
 // it is complete when the same non-zero count comes back 4 more times in a row and at least 3 s have passed.

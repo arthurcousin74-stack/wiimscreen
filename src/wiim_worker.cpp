@@ -347,7 +347,8 @@ void WiimWorker::run() {
 namespace {
 
 constexpr const char* kPlayQueue = "urn:schemas-wiimu-com:service:PlayQueue:1";
-constexpr size_t kMaxBody = 1024 * 1024;  // en PSRAM ; certaines files du WiiM dépassent 192 Ko
+constexpr size_t kMaxBody = 3 * 1024 * 1024;  // en PSRAM ; une file de recherche Qobuz monte à 1000 morceaux, 1,35 Mo
+                                              // (vu sur un WiiM, 2026-11-17) : tronquée, sa remise échouait
 
 // Flux qui garde au plus `cap` octets (HTTPClient gère « chunked » et Content-Length)
 class CapStream : public Stream {
@@ -810,10 +811,25 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
             if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
         }
     }
-    const int play = index > 0 ? playQueueAt(control, name, index)
-                               : -1;
-    logEvent("%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d) : CreateQueue %d, Play %d (%lu ms)", label, title.c_str(), index,
-             create, play, (unsigned long)(millis() - t0));
+    int play = index > 0 ? playQueueAt(control, name, index) : -1;
+    // Lecture aléatoire : le WiiM remélange la file peu après CreateQueue et PlayQueueWithIndex suit le nouvel ordre
+    // (vu sur un WiiM, 2026-11-17 : le résultat 1 a lancé un autre morceau). Titre vérifié, place relue, nouvel essai.
+    int tries = 1;
+    for (; play == 200 && !title.empty() && tries < 3; ++tries) {
+        pause(1500, true);
+        wr::TrackMeta m;
+        if (client_.metaInfo(m) != WiimError::None || m.title.empty() ||
+            wr::normalizeText(m.title) == wr::normalizeText(title))
+            break;
+        std::string back;
+        if (browseQueue(control, name, back) != 200 || back.empty()) break;
+        const int k = wr::queueIndexOf(wr::parseQueueContext(back), title, true);
+        if (k == 0) break;
+        index = k;
+        play = playQueueAt(control, name, index);
+    }
+    logEvent("%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d, essai %d) : CreateQueue %d, Play %d (%lu ms)", label,
+             title.c_str(), index, tries, create, play, (unsigned long)(millis() - t0));
     nextPoll_ = millis() + 800;
     return play == 200;
 }
@@ -1106,6 +1122,7 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
     p.playing = st.playing;
     p.muted = st.muted;
     p.posMs = st.positionMs;
+    p.loop = st.loop;
     if (client_.metaInfo(m) == WiimError::None) p.title = m.title;
     // File en cours (« CurrentQueue ») et place du morceau dedans
     std::string ctx;
@@ -1120,6 +1137,21 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
     logEvent("Avant la recherche : %s \xC2\xAB %s \xC2\xBB%s", p.playing ? "lecture" : "arr\xC3\xAAt", p.title.c_str(),
              p.index ? " (file connue)" : "");
     return p;
+}
+
+// Lecture aléatoire : CreateQueue mélange la file de recherche (résultats dans le désordre : « Children » de
+// Robert Miles en tête pour « miles ») et la remise de la musique d'avant doit chercher son morceau. Le WiiM garde
+// le morceau et la position quand on change ce mode (vu sur un WiiM, 2026-11-17).
+bool WiimWorker::shuffleOff(const Playback& before) {
+    const int plain = wr::loopWithoutShuffle(before.loop);
+    if (plain < 0) return false;
+    return client_.command("setPlayerCmd:loopmode:" + String(plain)) == WiimError::None;
+}
+
+void WiimWorker::shuffleBack(const Playback& before, bool changed) {
+    if (!changed) return;
+    const WiimError e = client_.command("setPlayerCmd:loopmode:" + String(before.loop));
+    logEvent("Recherche : lecture al\xC3\xA9" "atoire remise (%s)", wiimErrorName(e));
 }
 
 void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& before) {
@@ -1144,7 +1176,7 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         }
         return;
     }
-    if (action == wr::RestoreAction::PutBack) {
+    if (action == wr::RestoreAction::PutBack || action == wr::RestoreAction::PutBackPaused) {
         // Remise de la file d'avant, au même morceau et à la même position
         const int c = createQueue(control, before.ctx);
         // Lecture aléatoire : CreateQueue remélange la file (peu après sa création) et PlayQueueWithIndex suit
@@ -1178,7 +1210,10 @@ void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
             }
             client_.command("setPlayerCmd:seek:" + String(before.posMs / 1000));
         }
-        logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise (%d, %d, essai %d)", c, p, tries);
+        // Le morceau était en pause : il le reste (le son est encore coupé pour la recherche)
+        if (action == wr::RestoreAction::PutBackPaused && p == 200) client_.command("setPlayerCmd:pause");
+        logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise%s (%d, %d, essai %d)",
+                 action == wr::RestoreAction::PutBackPaused ? " en pause" : "", c, p, tries);
     } else {
         // Rien ne jouait (ou lecture hors file : Spotify, AirPlay…) : on arrête ce que la recherche a lancé
         const WiimError e = client_.command(action == wr::RestoreAction::Pause ? "setPlayerCmd:pause" : "setPlayerCmd:stop");
@@ -1191,6 +1226,7 @@ void WiimWorker::runSearch(const String& query) {
     resultsFrom_ = ResultsFrom::WiimQueue;
     searchUrl_.clear();
     searchTitles_.clear();
+    searchAlbums_.clear();
     WiimEvent ev;
     ev.kind = WiimEvent::SearchDone;
     ev.name = query;
@@ -1246,6 +1282,7 @@ void WiimWorker::runSearch(const String& query) {
     // entendre un morceau que l'on n'a pas choisi ; rétabli après la remise de la musique d'avant.
     const bool muted = before.known && !before.muted &&
                        client_.command("setPlayerCmd:mute:1") == WiimError::None;
+    const bool unshuffled = shuffleOff(before);
     wr::QueueInfo best;
     for (auto& v : variants) {
         // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
@@ -1275,6 +1312,7 @@ void WiimWorker::runSearch(const String& query) {
         if (relevant) break;  // en rapport : terminé ; sinon, écriture suivante
     }
     restoreAfterSearch(control, before);  // le WiiM lance la file de recherche dès sa création
+    shuffleBack(before, unshuffled);
     if (muted) {
         pause(600, false);  // la musique d'avant a repris (ou la lecture est arrêtée)
         logEvent("Recherche : son r\xC3\xA9tabli (%s)", wiimErrorName(client_.command("setPlayerCmd:mute:0")));
@@ -1283,7 +1321,11 @@ void WiimWorker::runSearch(const String& query) {
     ev.ok = true;
     ev.tracks = best.items;
     searchTitles_.clear();
-    for (auto& t : best.items) searchTitles_.push_back(t.title);
+    searchAlbums_.clear();
+    for (auto& t : best.items) {
+        searchTitles_.push_back(t.title);
+        searchAlbums_.push_back(t.albumId);
+    }
     push(std::move(ev));
 }
 
@@ -1327,7 +1369,14 @@ void WiimWorker::runPlaySearchResult(int index) {
         qobuzModel(control, templ)) {
         WiimEvent ev;
         ev.kind = WiimEvent::FavPlayed;
-        ev.ok = playAlbumAt(control, templ, searchUrl_, searchTitles_[index - 1], "Liste Qobuz");
+        // Résultat d'une recherche : son album, à ce morceau. La file de recherche grandit jusqu'à 1000 morceaux et,
+        // en lecture aléatoire, le WiiM la remélange pendant qu'elle grandit : un autre morceau partait et la remise
+        // après une recherche échouait (vu sur un WiiM, 2026-11-17). Un album a une taille fixe.
+        const std::string& album = index <= (int)searchAlbums_.size() ? searchAlbums_[index - 1] : std::string();
+        if (!album.empty())
+            ev.ok = playAlbumAt(control, templ, wr::qobuzAlbumUrl(album), searchTitles_[index - 1], "Qobuz (album)");
+        else
+            ev.ok = playAlbumAt(control, templ, searchUrl_, searchTitles_[index - 1], "Liste Qobuz");
         if (!ev.ok) ev.text = wr::L("the WiiM did not start this track", "le WiiM n'a pas lanc\xC3\xA9 ce morceau");
         push(std::move(ev));
         return;
@@ -1378,6 +1427,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     // Relevé d'abord : DeleteQueue arrête la lecture, même pour une file inconnue (vu sur un WiiM, 2026-11-16)
     const Playback before = snapshot(control);
     const bool muted = before.known && !before.muted && client_.command("setPlayerCmd:mute:1") == WiimError::None;
+    const bool unshuffled = shuffleOff(before);
     deleteQueue(control, name);
     const int c = createQueue(
         control,
@@ -1386,6 +1436,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     wr::QueueInfo q;
     const bool loaded = c == 200 && readQueueStable(this, control, name, 8, q);
     restoreAfterSearch(control, before);
+    shuffleBack(before, unshuffled);
     if (muted) {
         pause(600, false);
         client_.command("setPlayerCmd:mute:0");
@@ -1397,6 +1448,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     ev.ok = loaded;
     ev.tracks = q.items;
     searchTitles_.clear();
+    searchAlbums_.clear();
     for (auto& t : q.items) searchTitles_.push_back(t.title);
     if (!loaded) ev.text = wr::L("no favorite track on Qobuz", "aucun morceau favori sur Qobuz");
     push(std::move(ev));

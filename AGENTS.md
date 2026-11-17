@@ -139,6 +139,12 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
   **shuffle on**, `CreateQueue` reshuffles: find a track by title in a fresh `BrowseQueue`, never reuse an old
   index. Status `load` = loading; seek only once it plays. (Seen with `simreal` on a real WiiM, 2026-11-16.)
+- **Search through a WiiM queue**: shuffle is turned off first (`shuffleOff`, `wr::loopWithoutShuffle`) and put back
+  after the restore (`shuffleBack`), else the results come shuffled. A result plays from its **album queue**
+  (`QueueTrack::albumId`), not from the search queue (it grows to 1000 tracks, 1.35 MB: `kMaxBody` is 3 MB). A track
+  paused before the search is put back paused (`RestoreAction::PutBackPaused`). (Code comments date these 2026-11-17.)
+- **HTTP header values**: compare them through `headerValue()` in `core.cpp` (Qobuz sends `Transfer-Encoding:  chunked`
+  with two spaces).
 - **Direct Qobuz search is opt-in** (`Settings::qobuzDirect`, setup page › Advanced, off by default): it reuses
   the WiiM's Qobuz app ID and token from `GetUserInfo`, which Qobuz does not approve. With it off, `qobuzAccess()`
   returns false and `GetUserInfo` is never called; search and the favorites list go through WiiM queues, and the

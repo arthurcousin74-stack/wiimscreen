@@ -259,6 +259,25 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
 - The WiiM keeps only one or two queues: recreating one (restore) can drop the list's queue, so a list built from a
   queue is played again by recreating it from its `SearchUrl`.
 
+**Checked on a real WiiM with the `simreal` simulator (2026-11-17):**
+
+- **Loop codes**: `setPlayerCmd:loopmode:n` took the same codes as the `loop` field read back (`3` shuffle →
+  `4` no shuffle, no repeat), unlike the table of the official document. `wr::loopWithoutShuffle` maps `2`→`0`,
+  `3`→`4`, `5`→`1` (`5` = shuffle + repeat one). The WiiM keeps the track and the position when this mode changes.
+- **Shuffle and a search queue**: with shuffle on, `CreateQueue` shuffles the search results (an unrelated track
+  came first) and the WiiM reshuffles the queue while it grows. wiimscreen turns shuffle off for the search
+  (`WiimWorker::shuffleOff`) and puts the mode back after the restore (`shuffleBack`).
+- **A Qobuz `track/search` queue grows to 1000 tracks** (`QueueContext` of 1.35 MB): a body cut at 1 MB could not be
+  put back with `CreateQueue`. `kMaxBody` is 3 MB (PSRAM).
+- Each track of a Qobuz queue carries `<song:albumid>` in its DIDL-Lite metadata (`QueueTrack::albumId`). A search
+  result is played from its **album queue** (`album/get?album_id=…`, fixed size) at the track found by title, not
+  from the search queue; the title is checked with `getMetaInfo` after `PlayQueueWithIndex`, with a new try if the
+  queue was reshuffled.
+- **A track paused in a queue** was lost after a search (the search queue took its place): it is put back at the
+  same position and paused again (`RestoreAction::PutBackPaused`).
+- Qobuz's API answers with `Transfer-Encoding:  chunked` (two spaces) and chunk sizes with leading zeros
+  (`00000002`): header values are trimmed before they are compared (`httpFrame`, `parseHttpResponse`).
+
 ### Deezer
 
 - **Favorites of a public profile (no key, checked 2026-11-16):** `GET https://api.deezer.com/user/<profile number>/albums`,

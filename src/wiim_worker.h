@@ -134,8 +134,11 @@ private:
         std::string title, ctx, listName;  // morceau en cours ; file qui le contient (si trouvée)
         int index = 0;                      // place du morceau dans cette file (1 = premier), 0 si inconnue
         uint32_t posMs = 0;
+        int loop = -1;  // mode de répétition / lecture aléatoire avant la recherche
     };
     Playback snapshot(const std::string& control);
+    bool shuffleOff(const Playback& before);  // pendant une recherche par file : sinon le WiiM mélange les résultats
+    void shuffleBack(const Playback& before, bool changed);
     void restoreAfterSearch(const std::string& control, const Playback& before);
     bool deezerModel(const std::string& control, std::string& templ);
     void runDeezerSearch(const String& query);
@@ -174,6 +177,7 @@ private:
     std::string searchQueue_;  // file des derniers résultats affichés
     std::string searchUrl_;    // son adresse (SearchUrl), pour la recréer au moment du choix
     std::vector<std::string> searchTitles_;  // titres des résultats affichés, dans l'ordre
+    std::vector<std::string> searchAlbums_;  // album Qobuz de chacun (song:albumid), recherche par file du WiiM
     std::string pqControl_;  // URL de contrôle du service PlayQueue (trouvée une fois)
     bool hasReport_ = false;
     WiimReport report_;

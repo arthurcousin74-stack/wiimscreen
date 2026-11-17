@@ -205,6 +205,10 @@ static void test_http_frame() {
     TEST_ASSERT_FALSE(f.reusable);
     // Corps vide (Content-Length: 0)
     TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").complete);
+    // Espaces en plus après les deux-points (Qobuz : « Transfer-Encoding:  chunked », vu le 2026-11-17)
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\nTransfer-Encoding:  chunked\r\n\r\n0\r\n\r\n").complete);
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length:2\r\n\r\nOK").reusable);
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nConnection:  close\r\nContent-Length: 2\r\n\r\nOK").reusable);
 }
 
 static void test_quality() {
@@ -290,6 +294,29 @@ static void test_decisions() {
     after.positionMs = 2000;  // même morceau, reparti du début : la recherche l'a relancé
     TEST_ASSERT_EQUAL((int)RestoreAction::PutBack, (int)restoreAction(before, after));
 
+    // En pause dans une file connue (vu sur un WiiM, 2026-11-17 : le morceau en pause était perdu)
+    PlaybackBefore paused;
+    paused.title = "Song";
+    paused.posMs = 240000;
+    paused.inQueue = true;
+    PlayerStatus searchQ;
+    searchQ.title = "Search result";
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBackPaused, (int)restoreAction(paused, searchQ));
+    searchQ.playing = true;
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBackPaused, (int)restoreAction(paused, searchQ));
+    PlayerStatus same;
+    same.title = "Song";
+    TEST_ASSERT_EQUAL((int)RestoreAction::Nothing, (int)restoreAction(paused, same));  // rien n'a bougé
+    paused.inQueue = false;  // hors file : rien à remettre
+    searchQ.playing = false;
+    TEST_ASSERT_EQUAL((int)RestoreAction::StopSearchQueue, (int)restoreAction(paused, searchQ));
+
+    TEST_ASSERT_EQUAL(4, loopWithoutShuffle(3));  // aléatoire sans répétition (vu sur un WiiM, 2026-11-17)
+    TEST_ASSERT_EQUAL(0, loopWithoutShuffle(2));
+    TEST_ASSERT_EQUAL(1, loopWithoutShuffle(5));
+    TEST_ASSERT_EQUAL(-1, loopWithoutShuffle(4));
+    TEST_ASSERT_EQUAL(-1, loopWithoutShuffle(-1));
+
     QueueStability st;
     TEST_ASSERT_FALSE(st.feed(0, 700));
     TEST_ASSERT_FALSE(st.feed(2, 1400));
@@ -320,6 +347,10 @@ static void test_http_response() {
     TEST_ASSERT_TRUE(parseHttpResponse(
         "HTTP/1.1 200 OK\r\nTransfer-Encoding: Chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n", r));
     TEST_ASSERT_EQUAL_STRING("Wikipedia", r.body.c_str());
+    // Qobuz (vu le 2026-11-17) : deux espaces, tailles de bloc avec des zéros devant
+    TEST_ASSERT_TRUE(parseHttpResponse(
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding:  chunked\r\nConnection: close\r\n\r\n00000002\r\n{}\r\n0\r\n\r\n", r));
+    TEST_ASSERT_EQUAL_STRING("{}", r.body.c_str());
 
     TEST_ASSERT_TRUE(parseHttpResponse("HTTP/1.0 404 Not Found\r\n\r\n", r));
     TEST_ASSERT_EQUAL(404, r.status);
@@ -680,6 +711,7 @@ static void test_upnp_queue() {
         "&lt;SearchUrl&gt;https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&amp;amp;user_auth_token=SECRET"
         "&lt;/SearchUrl&gt;&lt;Login_username&gt;someone@example.com&lt;/Login_username&gt;&lt;/ListInfo&gt;"
         "&lt;Tracks&gt;&lt;Track1&gt;&lt;URL&gt;u1&lt;/URL&gt;&lt;Metadata&gt;&amp;lt;DIDL-Lite&amp;gt;&amp;lt;item&amp;gt;"
+        "&amp;lt;song:albumid&amp;gt;y5ze2lnjhm3ze&amp;lt;/song:albumid&amp;gt;"
         "&amp;lt;dc:title&amp;gt;So What&amp;lt;/dc:title&amp;gt;&amp;lt;upnp:artist&amp;gt;Miles Davis&amp;lt;/upnp:artist&amp;gt;"
         "&amp;lt;upnp:album&amp;gt;Kind of Blue&amp;lt;/upnp:album&amp;gt;&amp;lt;upnp:albumArtURI&amp;gt;https://a/b.jpg"
         "&amp;lt;/upnp:albumArtURI&amp;gt;&amp;lt;/item&amp;gt;&amp;lt;/DIDL-Lite&amp;gt;"
@@ -700,6 +732,8 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL_STRING("Miles Davis", q.items[0].artist.c_str());
     TEST_ASSERT_EQUAL_STRING("Kind of Blue", q.items[0].album.c_str());
     TEST_ASSERT_EQUAL_STRING("https://a/b.jpg", q.items[0].art.c_str());
+    TEST_ASSERT_EQUAL_STRING("y5ze2lnjhm3ze", q.items[0].albumId.c_str());  // <song:albumid> du WiiM
+    TEST_ASSERT_EQUAL_STRING("", q.items[1].albumId.c_str());
     TEST_ASSERT_EQUAL_STRING("", q.items[1].title.c_str());  // piste sans métadonnées
     TEST_ASSERT_EQUAL_STRING("someone@example.com", q.user.c_str());
     TEST_ASSERT_EQUAL_STRING("https://www.qobuz.com/api.json/0.2/album/get?album_id=abc123&user_auth_token=***",

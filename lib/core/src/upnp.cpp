@@ -217,6 +217,7 @@ QueueInfo parseQueueContext(const std::string& xml) {
                     if (xmlElement(didl, "artist", v) || xmlElement(didl, "creator", v)) item.artist = trim(xmlUnescape(v));
                     if (xmlElement(didl, "album", v)) item.album = trim(xmlUnescape(v));
                     if (xmlElement(didl, "albumArtURI", v)) item.art = trim(xmlUnescape(v));
+                    if (xmlElement(didl, "albumid", v)) item.albumId = trim(xmlUnescape(v));
                 }
                 if (!item.title.empty()) q.titles.push_back(item.title);
                 q.items.push_back(item);

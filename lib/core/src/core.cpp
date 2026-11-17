@@ -222,6 +222,7 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     long n;
     if (jsonInt(json, "mode", n)) st.mode = static_cast<int>(n);
     if (jsonInt(json, "mute", n)) st.muted = n == 1;
+    if (jsonInt(json, "loop", n) && n >= 0 && n <= 5) st.loop = static_cast<int>(n);
     if (jsonInt(json, "curpos", n) && n > 0) st.positionMs = static_cast<uint32_t>(n);
     if (jsonInt(json, "totlen", n) && n > 0) st.durationMs = static_cast<uint32_t>(n);
     for (std::string* f : {&st.title, &st.artist, &st.album})
@@ -418,6 +419,19 @@ ImageType sniffImage(const uint8_t* d, size_t n) {
     return ImageType::Unknown;
 }
 
+// Valeur d'un en-tête (en-têtes déjà en minuscules), espaces autour retirés : « Transfer-Encoding:  chunked » (deux
+// espaces, envoyé par Qobuz, vu le 2026-11-17) comme « transfer-encoding: chunked ». Vide si absent.
+static std::string headerValue(const std::string& headers, const char* name) {
+    const std::string key = std::string("\n") + name + ":";
+    const size_t p = headers.find(key);
+    if (p == std::string::npos) return std::string();
+    size_t b = p + key.size(), e = headers.find("\r\n", b);
+    if (e == std::string::npos) e = headers.size();
+    while (b < e && (headers[b] == ' ' || headers[b] == '\t')) ++b;
+    while (e > b && (headers[e - 1] == ' ' || headers[e - 1] == '\t')) --e;
+    return headers.substr(b, e - b);
+}
+
 bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
     size_t eol = raw.find("\r\n");
     if (eol == std::string::npos || raw.compare(0, 5, "HTTP/") != 0) return false;
@@ -430,7 +444,7 @@ bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
     std::transform(headers.begin(), headers.end(), headers.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     std::string body = raw.substr(hdrEnd + 4);
-    if (headers.find("transfer-encoding: chunked") != std::string::npos) {
+    if (headerValue(headers, "transfer-encoding").find("chunked") != std::string::npos) {
         std::string dec;
         size_t p = 0;
         while (p < body.size()) {
@@ -457,14 +471,15 @@ HttpFrame httpFrame(const std::string& raw) {
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     const size_t bodyStart = hdrEnd + 4;
     const bool http10 = headers.compare(0, 8, "http/1.0") == 0;
-    const bool closes = headers.find("\nconnection: close") != std::string::npos ||
-                        (http10 && headers.find("\nconnection: keep-alive") == std::string::npos);
-    size_t p = headers.find("\ncontent-length:");
-    if (p != std::string::npos) {
-        long n = std::strtol(headers.c_str() + p + 16, nullptr, 10);
+    const std::string connection = headerValue(headers, "connection");
+    const bool closes = connection.find("close") != std::string::npos ||
+                        (http10 && connection.find("keep-alive") == std::string::npos);
+    const std::string length = headerValue(headers, "content-length");
+    if (!length.empty()) {
+        long n = std::strtol(length.c_str(), nullptr, 10);
         if (n < 0) return f;
         f.complete = raw.size() >= bodyStart + static_cast<size_t>(n);
-    } else if (headers.find("\ntransfer-encoding: chunked") != std::string::npos) {
+    } else if (headerValue(headers, "transfer-encoding").find("chunked") != std::string::npos) {
         f.complete = raw.find("\r\n0\r\n\r\n", bodyStart - 2) != std::string::npos;
     } else {
         return f;  // longueur inconnue : lire jusqu'à la fermeture

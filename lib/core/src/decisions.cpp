@@ -19,6 +19,10 @@ bool pendingConfirmed(Awaited what, const PlayerStatus& now, const std::string& 
 }
 
 RestoreAction restoreAction(const PlaybackBefore& before, const PlayerStatus& now) {
+    // Paused in a known queue: the search queue took its place (playing, or paused on another title)
+    if (!before.playing && before.inQueue && !before.title.empty() &&
+        (now.playing || (!now.title.empty() && now.title != before.title)))
+        return RestoreAction::PutBackPaused;
     // Same title but back to the start (the search queue held the track that played): changed too
     const bool restarted = before.posMs > 8000 && now.positionMs + 4000 < before.posMs;
     const bool changed = now.playing && (!before.playing || now.title != before.title || restarted);
@@ -38,6 +42,15 @@ bool QueueStability::feed(int tracks, uint32_t elapsedMs) {
     }
     last_ = tracks;
     return false;
+}
+
+int loopWithoutShuffle(int loop) {
+    switch (loop) {
+        case 2: return 0;
+        case 3: return 4;
+        case 5: return 1;
+        default: return -1;
+    }
 }
 
 int queueIndexOf(const QueueInfo& q, const std::string& title, bool loose) {
