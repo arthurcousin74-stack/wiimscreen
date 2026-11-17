@@ -1,5 +1,5 @@
-// Simulator: Wi-Fi is always connected. In the "real WiiM" build (env simreal), network connections go through
-// the relay (tools/relay/wiim_relay.py) — see net_relay.cpp. In the fake build they are never opened.
+// PC: Wi-Fi is always connected. Connections: through the relay in simreal (tools/sim/net_relay.cpp), direct
+// with sockets and OpenSSL in desktop (net_direct.cpp); never opened in the fake-WiiM simulator.
 #pragma once
 #include "Arduino.h"
 

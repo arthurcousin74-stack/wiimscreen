@@ -2,9 +2,9 @@
 
 > Open-source (MIT) ESP32 firmware that turns a touchscreen board into a remote control and "now playing" display for WiiM music streamers (WiiM Mini, Pro, Pro Plus, Amp, Ultra and other LinkPlay devices), using the WiiM local HTTP API (httpapi.asp) — no cloud. Shows album art with colors taken from the cover, track info, progress, presets as artwork tiles, volume; ambient view with a microphone spectrum visualizer; automatic WiiM discovery (SSDP); phone-based setup via QR code; Qobuz and Deezer search and favorites played through the WiiM; optional voice dictation for search (OpenAI speech-to-text); over-the-air updates from a browser. Written in C++ with PlatformIO, Arduino-ESP32 3.x (pioarduino), M5Unified and M5GFX; hardware-free logic is in a unit-tested library and the layout scales with the screen size.
 
-Tested hardware: only the M5Stack Tab5 (ESP32-P4, 5" 1280x720 touchscreen, ESP32-C6 Wi-Fi) so far. Other ESP32-S3/ESP32-P4 boards with a touchscreen and PSRAM should be portable (see the README section "Other ESP32 boards"); none has been tested.
+Tested hardware: only the M5Stack Tab5 (ESP32-P4, 5" 1280x720 touchscreen, ESP32-C6 Wi-Fi) so far. Other ESP32-S3/ESP32-P4 boards with a touchscreen and PSRAM should be portable (see docs/DEVELOPERS.md, "Other ESP32 boards"); none has been tested. An experimental computer version (Raspberry Pi, Linux, macOS; docs/DESKTOP.md) runs the same app with SDL2 and OpenSSL, and a PC simulator (tools/sim) runs it with a fake WiiM or through a relay to a real one.
 
-Status: beta — builds and passes native unit tests; UI rendered and checked on PC; hardware testing in progress on the Tab5. On-screen text is in French; code comments are mostly French.
+Status: beta — builds and passes native unit tests; UI rendered and checked on PC; hardware testing in progress on the Tab5. On-screen text is in English (default) or French; code comments are mostly French.
 
 ## Support
 
@@ -14,14 +14,14 @@ a suggestion from the maintainers, not a requirement.
 
 ## Start here
 
-- [README](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/README.md): features, supported/tested hardware, flashing, setup, architecture, porting to other ESP32 boards, how to reuse the code
+- [README](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/README.md): features, supported/tested hardware, flashing, setup; technical details in docs/DEVELOPERS.md
 - [AGENTS.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/AGENTS.md): build/test commands, file layout, conventions, pitfalls already solved (Arduino-ESP32 3.x, ESP32-P4/C6 Wi-Fi, CA bundle format, shared I2S)
 - [WiiM / LinkPlay HTTP API notes](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/docs/WIIM_API_NOTES.md): getPlayerStatus, getMetaInfo (album art URL, sample rate), getPresetInfo (preset artwork), getStatusEx (uuid, name), commands, SSDP discovery, quirks
 - [LISEZMOI.md](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/LISEZMOI.md): full user guide in French
 
 ## Code
 
-- [lib/core](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/lib/core/src): hardware-free, unit-tested logic — WiiM response parsing, screen layout, accent color from album art, FFT spectrum, motion detection, French voice-intent parsing, OTA image filtering
+- [lib/core](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/lib/core/src): hardware-free, unit-tested logic — WiiM response parsing, screen layout, accent color from album art, FFT spectrum, motion detection, UPnP PlayQueue and Qobuz/Deezer parsing, OTA image filtering
 - [src/wiim_client.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/wiim_client.cpp): HTTPS client for the WiiM with TLS certificate pinning and keep-alive
 - [src/wiim_worker.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/wiim_worker.cpp): background FreeRTOS task owning all WiiM networking (polling, command queue, presets, rediscovery)
 - [src/discovery.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/discovery.cpp): find WiiM players on the LAN (SSDP M-SEARCH + getStatusEx)

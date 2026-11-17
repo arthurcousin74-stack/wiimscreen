@@ -36,8 +36,8 @@ and include photos of the running screens in your pull request.
 
 ## Translations
 
-UI strings are currently French and live in `src/ui.cpp`, `src/main.cpp`, `src/portal.cpp`, `src/ota.cpp` and the voice
-phrases in `lib/core/src/voice.cpp`. A small string table to support several languages would be a welcome first step.
+UI strings are in English and French, side by side in the code: `wr::L("English", "Français")` (`lib/core/src/i18n.h`).
+A third language would need a string table instead of the two-argument helper; the Journal stays in French.
 
 ## Code of conduct
 

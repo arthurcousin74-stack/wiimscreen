@@ -1,4 +1,4 @@
-// Simulator: NVS settings kept in a text file (tools/sim: state directory), one namespace.
+// PC: NVS settings kept in a text file (<state directory>/settings.txt), one namespace.
 #pragma once
 #include "Arduino.h"
 

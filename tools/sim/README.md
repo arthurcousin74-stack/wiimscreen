@@ -20,7 +20,7 @@ Options: `--reset` (first start again: settings back to the defaults below), `--
 | Real (same code as the Tab5) | Replaced (`tools/sim/`) |
 |---|---|
 | Main loop, screens, navigation, keyboard, results, tiles, Journal, menus, pending rings, messages | `fake_wiim.cpp`: the WiiM behind the real `WiimWorker` interface (catalog of 7 albums and 2 radios, 6 presets, Qobuz/Deezer favorites, search, favorites, playback with position) |
-| Settings code (`settings.cpp`), backup fields, Journal | `fake_services.cpp`: covers drawn as PNG per album, favorites in memory, silent sound, setup portal and update screens (no web server), dictation returns « Miles Davis » (`SIM_DICTEE=…` to change) |
+| Settings code (`settings.cpp`), backup fields, Journal | `services.cpp` and `fake_data.cpp`: covers drawn as PNG per album, favorites in memory, silent sound, setup portal and update screens (no web server), dictation returns « Miles Davis » (`SIM_DICTEE=…` to change) |
 | `lib/core` (layout, parsing, text) | `platform/pc/stubs/` (shared with the desktop build): Arduino `String`, FreeRTOS on `std::thread`, Wi-Fi always connected, M5Unified (display = canvas, mouse = touch, microphone = silence) |
 
 Default settings on the first start: configured (no setup portal), a Deezer profile number (Deezer tiles), a fake
@@ -69,7 +69,7 @@ covers, certificate pinning. Only the lowest layer changes: each connection goes
 
 The relay listens on 127.0.0.1 by default. It connects only to private addresses (your WiiM), and to public
 hosts only with TLS on port 443 (certificate checked) or HTTP on port 80. It logs host and port only, never the
-data (Qobuz and Deezer tokens are in the HTTP headers). `tools/relay/selftest.sh` checks the chain with a mock
+data (the Qobuz token is in the HTTP headers). `tools/relay/selftest.sh` checks the chain with a mock
 WiiM (CI runs it).
 
 Checked with a real WiiM (2026-11, Windows 11 + WSL in NAT mode, relay with `--wiim`): the simulator finds the

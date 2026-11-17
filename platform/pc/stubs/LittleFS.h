@@ -1,4 +1,4 @@
-// Simulator: LittleFS on a directory of the PC (state directory /fs).
+// PC: LittleFS on a directory of the computer (<state directory>/fs).
 #pragma once
 #include <cstdio>
 

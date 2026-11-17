@@ -151,10 +151,11 @@ Sources: [WiiM forum (Qobuz queue)](https://forum.wiimhome.com/threads/possible-
   wiimscreen's search screen uses (B). It first reads the queue back without `PlayQueueWithIndex` (whether the
   WiiM fills it before playing is not known yet), then starts it if it stays empty. *(Changed: the user reported
   that a search started the first result. `CreateQueue` has no `QueuePolicy` argument on this WiiM and always
-  plays, see *Loading a queue without playing it*; the search screen now asks Qobuz directly (`GetUserInfo`) and only
-  creates a queue when a result is chosen.)*
+  plays, see *Loading a queue without playing it*. Since 0.1.1 the WiiM does the search by default (music muted, then
+  put back); with the opt-in *direct Qobuz search* the Tab5 asks Qobuz (`GetUserInfo`) and creates a queue only when
+  a result is chosen.)*
 
-- Journal › *Essais*: same trick with `favorite/getUserFavorites?type=tracks` then `type=albums`, read back
+- Former Journal test (removed in 0.1.0): same trick with `favorite/getUserFavorites?type=tracks` then `type=albums`, read back
   without playing. **First result on a real WiiM: the tracks query loaded 1 favorite track** (so the WiiM does add
   the user's token); the read-back was probably too short (now: stable for ~3 s, 3 s minimum). Albums: not known.
 - **PlayQueue actions on a WiiM (SCPD, 2026-11):** `CreateQueue ReplaceQueue DeleteQueue BackUpQueue AppendQueue
@@ -299,7 +300,7 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   `SearchQueueOnline(QueueName, SearchKey, Queuelimit) -> QueueContext`,
   `GetQueueOnline(QueueName, QueueID, QueueType, Queuelimit, QueueAutoInsert) -> QueueContext`,
   `BackUpQueue(QueueContext)`, `SetQueuePolicy(QueueName)`, `ReplaceQueue(QueueContext)`, `AppendQueue(QueueContext)`.
-  Journal › *Essais* tries them to load results **without starting playback** (sound muted during the test).
+  They were tried (former Journal test, removed) to load results **without starting playback**: none did.
   Source: [wiimplay](https://pkg.go.dev/github.com/shumatech/wiimplay/upnp).
 - **Verified on a real WiiM (2026-11):** a `Deezer2` queue with `SearchUrl` `https://<id>.airable.io/deezer/album/<id>`
   (no tracks) is filled by the WiiM (127 tracks for a large album); `/deezer/track/<id>` and the guessed airable

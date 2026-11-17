@@ -1,4 +1,4 @@
-// Simulator: a small HTTP/1.1 client over the simulator's WiFiClient (so over the relay).
+// PC (simulator and desktop): a small HTTP/1.1 client over WiFiClient (relay in simreal, direct in desktop).
 #pragma once
 #include <string>
 #include <utility>

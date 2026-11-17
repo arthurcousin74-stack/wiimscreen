@@ -1,4 +1,4 @@
-// Simulator: the parts of Arduino-ESP32 that wiimscreen uses, on a PC (POSIX threads, std::string).
+// PC (simulator and desktop): the parts of Arduino-ESP32 that wiimscreen uses (POSIX threads, std::string).
 #pragma once
 
 #include <algorithm>

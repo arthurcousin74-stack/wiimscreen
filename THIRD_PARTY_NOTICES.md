@@ -26,8 +26,8 @@ and of every library above is public, so anyone can rebuild and relink the firmw
 
 ## Online services used at runtime (optional)
 
-- **OpenAI speech-to-text** (voice commands, only when an API key is configured): subject to OpenAI's terms.
-- **[Radio Browser](https://www.radio-browser.info/)** (station search by voice): community radio directory, free API.
+- **OpenAI speech-to-text** (voice dictation in the search field, only when an API key is configured): subject to
+  OpenAI's terms.
 - **Album art and preset images** are downloaded from the URLs the WiiM reports (streaming services' CDNs).
 
 ## Trademarks

@@ -36,7 +36,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/i18n.*` | Interface language: `wr::L("English", "Français")`, `setLang`, `langFromCode` |
 | `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
-| `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, URL encoding, WAV header |
+| `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, WAV header |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
 | `lib/core/src/qobuz.*` | Depth-aware JSON helpers, Qobuz tracks/albums parsing, `GetUserInfo` access parsing |
@@ -50,7 +50,10 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/voice_service.*` | OpenAI transcription (dictation in the search field) |
 | `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
-| `src/settings.*` | NVS-backed settings |
+| `src/settings.*` | NVS-backed settings (+ LittleFS backup copy) |
+| `src/log.*` | Journal: last 40 events in RAM, also on the serial port (`logEvent`) |
+| `src/sound.*` | Taps and beeps on the speaker |
+| `src/version.h`, `src/ca_bundle.h` | Firmware version (CI or `tools/version.py`); embedded Mozilla root certificates |
 | `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
 | `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), SDL window/input/options (`pc_platform.cpp`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
@@ -74,8 +77,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - UI changes: render them with `tools/preview` and look at the PNGs before committing; `docs/*.png` come from it.
 - Layout dimensions scale with `sc(v) = v * min(width, height) / 540`; `checkLayout` tests guard overlaps and
   touch-target sizes for 1280×720, 720×1280 and 960×540.
-- Never log or echo secrets (Wi-Fi password, OpenAI key, the Qobuz/Deezer tokens from `GetUserInfo`). Validate anything that
-  ends up in an HTTP header. These tokens stay in RAM (`WiimWorker::qobuz_`, `deezerToken_`): never in NVS, LittleFS
+- Never log or echo secrets (Wi-Fi password, OpenAI key, the Qobuz token and app ID from `GetUserInfo`). Validate anything that
+  ends up in an HTTP header. These tokens stay in RAM (`WiimWorker::qobuz_`; Deezer needs none): never in NVS, LittleFS
   or logs.
 
 ## Pitfalls already solved (don't reintroduce)
@@ -119,7 +122,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Settings survive a full USB flash**: the merged image written at `0x0` pads over the NVS (0x9000), so
   `setup()` keeps a copy in LittleFS (`fav::saveSettingsBackup`, `settingsToBackup`) and restores it when the NVS
   is empty. Add new settings to `settingsToBackup()` / `settingsFromBackup()` too.
-- **Long worker jobs** (search, favorites, tests) wait with `WiimWorker::pause()`, never `vTaskDelay`: it keeps
+- **Long worker jobs** (search, favorites, queue scans) wait with `WiimWorker::pause()`, never `vTaskDelay`: it keeps
   executing queued commands (play/pause, volume) so taps are not ignored for several seconds.
 - **OpenAI transcription** runs in its own task (`sttTask`); the main loop only checks `g_stt.done`.
 - **VLW fonts have no symbols** such as ▶ ■ ♥: write words ("Lecture :") or draw icons.
