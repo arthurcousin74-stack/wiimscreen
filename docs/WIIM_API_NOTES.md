@@ -34,8 +34,11 @@ Example from the doc **[doc]**:
   `31` Spotify Connect, `32` TIDAL Connect, `40` line-in, `41` Bluetooth, `42` external storage, `43` optical,
   `50` mirror, `60` voice mail, `99` multiroom guest.
 - `loop` (read) **[doc]**: `0` loop all, `1` single, `2` shuffle loop, `3` shuffle no loop, `4` no shuffle no loop.
-  Note that `setPlayerCmd:loopmode:n` uses **different codes** (`0` sequence no loop, `1` single, `2` shuffle loop,
-  `-1` sequence loop).
+  The official document gives **different codes** for `setPlayerCmd:loopmode:n` (`0` sequence no loop, `1` single,
+  `2` shuffle loop, `-1` sequence loop), but on a real WiiM (firmware 4.8.833748, 2026-11-17, nothing playing) each of
+  `0`, `1`, `2`, `3`, `4` and `-1` sent with `loopmode` was read back unchanged in `loop`; `5` and `6` answered `OK`
+  and changed nothing. wiimscreen sends the `loop` codes (`3` → `4` to turn shuffle off). What `-1` does was not
+  checked.
 
 ## Track info: `getMetaInfo`
 
@@ -261,9 +264,9 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
 
 **Checked on a real WiiM with the `simreal` simulator (2026-11-17):**
 
-- **Loop codes**: `setPlayerCmd:loopmode:n` took the same codes as the `loop` field read back (`3` shuffle →
-  `4` no shuffle, no repeat), unlike the table of the official document. `wr::loopWithoutShuffle` maps `2`→`0`,
-  `3`→`4`, `5`→`1` (`5` = shuffle + repeat one). The WiiM keeps the track and the position when this mode changes.
+- **Loop codes**: `setPlayerCmd:loopmode:n` takes the same codes as the `loop` field read back (see `loop` above).
+  `wr::loopWithoutShuffle` maps `2`→`0`, `3`→`4`, `5`→`1` (`5` = shuffle + repeat one in some LinkPlay lists; this
+  WiiM ignored `loopmode:5`). The WiiM keeps the track and the position when this mode changes.
 - **Shuffle and a search queue**: with shuffle on, `CreateQueue` shuffles the search results (an unrelated track
   came first) and the WiiM reshuffles the queue while it grows. wiimscreen turns shuffle off for the search
   (`WiimWorker::shuffleOff`) and puts the mode back after the restore (`shuffleBack`).
