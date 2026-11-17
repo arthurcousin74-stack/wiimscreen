@@ -40,7 +40,7 @@ struct WiimEvent {
     std::vector<wr::Preset> presets;
     String uuid, name;  // Identity ; name : texte cherché (SearchDone)
     std::vector<wr::QueueTrack> tracks;  // SearchDone : résultats
-    bool played = false;                 // SearchDone : la lecture du premier résultat a été lancée
+    bool automatic = false;              // FavSaved : tuile ajoutée par la tâche (Flow), pas par un appui
     std::vector<wr::QobuzAlbum> albums;  // QobuzFavorites / DeezerFavorites : albums favoris du compte
 };
 
@@ -173,7 +173,9 @@ private:
     uint32_t nextPoll_ = 0;
     int netFailures_ = 0;
     uint32_t lastRediscover_ = 0;
-    bool identityChecked_ = false;
+    uint32_t identityTriedAt_ = 0;  // getStatusEx demandé (0 = jamais) ; nouvel essai après 5 min si échec
+    uint32_t pqFailedAt_ = 0;       // service PlayQueue introuvable à cet instant (0 = pas d'échec récent)
+    uint32_t modelScanAt_ = 0;      // dernière recherche des modèles de file Qobuz/Deezer dans les files du WiiM
     WiimError lastPollError_ = WiimError::None;
     bool polledOnce_ = false;
 };

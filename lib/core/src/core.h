@@ -49,6 +49,11 @@ struct PlayerStatus {
 
 // Valeur d'un champ texte d'un objet JSON plat ({"cle":"valeur",...}).
 bool jsonString(const std::string& json, const std::string& key, std::string& out);
+// UTF-8 of a code point (U+0000..U+10FFFF; others ignored)
+void appendUtf8(std::string& out, unsigned long cp);
+// JSON escape \uXXXX at s[i] == 'u' (with its low surrogate when it is a pair, e.g. an emoji) appended as UTF-8;
+// a lone surrogate becomes U+FFFD. Returns the index of the last character used (i if the digits are invalid).
+size_t decodeJsonUnicode(const std::string& s, size_t i, std::string& out);
 // Champ entier, écrit 12 ou "12".
 bool jsonInt(const std::string& json, const std::string& key, long& out);
 PlayerStatus parsePlayerStatus(const std::string& json);

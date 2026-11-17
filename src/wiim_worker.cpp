@@ -148,8 +148,8 @@ void WiimWorker::execute(const String& cmd) {
 // Le WiiM ne répond plus : il a peut-être changé d'adresse. On cherche le même (uuid),
 // jamais un autre lecteur ; l'empreinte enregistrée doit toujours correspondre.
 bool WiimWorker::rediscover() {
-    if (!cfg_.wiimUuid.length() || millis() - lastRediscover_ < 120000) return false;
-    lastRediscover_ = millis();
+    if (!cfg_.wiimUuid.length() || (lastRediscover_ && millis() - lastRediscover_ < 120000)) return false;
+    lastRediscover_ = millis() | 1;  // 0 = jamais essayé (permis dès le démarrage)
     for (auto& d : discoverWiims(2000))
         if (d.uuid == cfg_.wiimUuid.c_str() && d.ip != cfg_.host.c_str()) {
             // L'uuid se lit sans authentification : n'importe quel appareil peut s'en servir. On garde l'empreinte
@@ -170,6 +170,7 @@ bool WiimWorker::rediscover() {
             logEvent("WiiM retrouv\xC3\xA9 \xC3\xA0 %s", cfg_.host.c_str());
             saveWiim(cfg_.host, cfg_.wiimUuid, cfg_.wiimName);
             pqControl_.clear();  // nouvelle adresse : chercher à nouveau le service PlayQueue
+            pqFailedAt_ = 0;
             WiimEvent ev;
             ev.kind = WiimEvent::Moved;
             ev.text = cfg_.host;
@@ -181,8 +182,8 @@ bool WiimWorker::rediscover() {
 
 // Adresse saisie à la main : on lit une fois l'identité du WiiM pour pouvoir le suivre
 void WiimWorker::learnIdentity() {
-    if (identityChecked_ || cfg_.wiimUuid.length()) return;
-    identityChecked_ = true;
+    if (cfg_.wiimUuid.length() || (identityTriedAt_ && millis() - identityTriedAt_ < 300000)) return;
+    identityTriedAt_ = millis() | 1;  // nouvel essai dans 5 min en cas d'échec (sinon plus de suivi du WiiM)
     std::string body;
     if (client_.command("getStatusEx", &body) != WiimError::None) return;
     wr::WiimIdentity id = wr::parseStatusEx(body);
@@ -322,6 +323,8 @@ void WiimWorker::run() {
             runDeezerFavorites();
         }
         if (play.length()) runPlayFavorite(play);
+        // Appui sur un résultat avant une nouvelle recherche : il vise la liste affichée, pas la suivante
+        if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (search.length()) {
             if (searchSource == 1) runDeezerSearch(search);
             else if (searchSource == 2) runQobuzFavoriteList(search);
@@ -329,7 +332,6 @@ void WiimWorker::run() {
             else if (searchSource == 4) runQobuzAlbumSearch(search);
             else runSearch(search);
         }
-        if (searchPlay > 0) runPlaySearchResult(searchPlay);
         if (save.wanted) runSaveFavorite(save);
         if (albumSave.wanted) runSaveAlbumFavorite(albumSave);
         if (pollNow || (int32_t)(millis() - nextPoll_) >= 0) pollOnce();
@@ -423,6 +425,9 @@ bool WiimWorker::findPlayQueue(std::string& control, bool verbose) {
         control = pqControl_;
         return true;
     }
+    // Pas de service PlayQueue trouvé il y a peu : pas de nouvel essai (2 requêtes et 2 lignes de journal à chaque
+    // changement de morceau sinon) avant 10 min, sauf diagnostic demandé
+    if (!verbose && pqFailedAt_ && millis() - pqFailedAt_ < 600000) return false;
     std::string host = cfg_.host.c_str();
     if (host.empty()) {
         logEvent("File : aucun WiiM choisi");
@@ -441,6 +446,7 @@ bool WiimWorker::findPlayQueue(std::string& control, bool verbose) {
     }
     if (base.empty()) {
         logEvent("File : description UPnP introuvable (ports 49152, 59152)");
+        pqFailedAt_ = millis() | 1;
         return false;
     }
     auto services = wr::parseUpnpServices(desc);
@@ -457,8 +463,10 @@ bool WiimWorker::findPlayQueue(std::string& control, bool verbose) {
     }
     if (!pq) {
         logEvent("File : pas de service PlayQueue sur ce lecteur");
+        pqFailedAt_ = millis() | 1;
         return false;
     }
+    pqFailedAt_ = 0;
     pqControl_ = control = wr::upnpUrl(base, pq->controlUrl);
     if (verbose) {
         std::string scpd;
@@ -640,6 +648,7 @@ void WiimWorker::autoFlowTile(const wr::QueueInfo& q, const std::string& current
     liveFavorite(q, ctx, f);
     WiimEvent ev;
     ev.kind = WiimEvent::FavSaved;
+    ev.automatic = true;  // pas la réponse à un appui sur le cœur : l'enregistrement en cours éventuel continue
     ev.ok = fav::add(f, ctx, err);
     ev.text = ev.ok ? f.title.c_str() : err.c_str();
     logEvent("Flow vu sur le WiiM : tuile \xC2\xAB %s \xC2\xBB ajout\xC3\xA9" "e automatiquement : %s", f.title.c_str(),
@@ -731,6 +740,7 @@ void WiimWorker::playSearchResult(int index) {
 bool WiimWorker::deezerModel(const std::string& control, std::string& templ) {
     if (fav::sourceModel("Deezer2", templ) || fav::sourceModel("Deezer", templ)) return true;
     for (auto& n : queueNames(control, false)) {
+        drainCommands();  // chaque lecture de file peut prendre des secondes : les appuis passent entre deux
         std::string ctx;
         if (browseQueue(control, n, ctx) != 200) continue;
         const wr::QueueInfo q = wr::parseQueueContext(ctx);
@@ -881,9 +891,12 @@ void WiimWorker::runQobuzFavorites() {
     ev.kind = WiimEvent::QobuzFavorites;
     // Modèle de file Qobuz (tuile « Favoris Qobuz », lecture des résultats) : pris dans les files du WiiM
     const bool hadModel = fav::hasQobuzModel();
-    const bool model = qobuzModel(control, templ);
+    // Modèles absents : lecture de toutes les files du WiiM (lente), au plus toutes les 10 min
+    const bool scan = !modelScanAt_ || millis() - modelScanAt_ > 600000;
+    if (scan) modelScanAt_ = millis() | 1;
+    const bool model = (hadModel || scan) && qobuzModel(control, templ);
     if (model && !hadModel) logEvent("Qobuz : mod\xC3\xA8le de file enregistr\xC3\xA9 (tuile Favoris Qobuz)");
-    if (!fav::hasDeezerModel() && deezerModel(control, templ))  // file Deezer gardée par le WiiM : recherche Deezer
+    if (scan && !fav::hasDeezerModel() && deezerModel(control, templ))  // file Deezer gardée par le WiiM
         logEvent("Deezer : mod\xC3\xA8le de file copi\xC3\xA9 depuis le WiiM");
     if (qobuzFavDenied_ || !cfg_.qobuzDirect) {  // refusé par Qobuz, ou accès direct non choisi : pas d'essai
         ev.ok = model && !hadModel;  // seulement pour afficher la tuile « Favoris Qobuz »
@@ -1063,6 +1076,7 @@ void WiimWorker::runSaveAlbumFavorite(const AlbumFavRequest& r) {
 bool WiimWorker::qobuzModel(const std::string& control, std::string& templ) {
     if (fav::qobuzTemplate(templ)) return true;
     for (auto& n : queueNames(control, false)) {
+        drainCommands();  // chaque lecture de file peut prendre des secondes : les appuis passent entre deux
         std::string ctx;
         if (browseQueue(control, n, ctx) == 200 && wr::parseQueueContext(ctx).sourceName == "Qobuz") {
             fav::saveQobuzTemplate(ctx);
@@ -1254,19 +1268,17 @@ void WiimWorker::runSearch(const String& query) {
         logLong("envoy\xC3\xA9 ", url);
         if (create != 200) continue;
         wr::QueueInfo q;
-        const bool played = false;  // jamais de lecture automatique : on attend que l'on choisisse un morceau
         bool found = readBack(name, 10, q);
         if (found) logLong(q.searchUrl == url ? "relu (identique) " : "relu ", wr::maskSecrets(q.searchUrl));
         std::vector<std::string> texts;
         for (auto& t : q.items) texts.insert(texts.end(), {t.title, t.artist, t.album});
         const bool relevant = found && wr::sharesWord(words, texts);
-        logEvent("  %d r\xC3\xA9sultat(s)%s%s", found ? q.tracks : 0, played ? ", lecture lanc\xC3\xA9" "e" : ", sans lecture",
+        logEvent("  %d r\xC3\xA9sultat(s)%s%s", found ? q.tracks : 0, ", sans lecture",
                  found ? (relevant ? ", en rapport" : ", SANS RAPPORT avec la recherche") : "");
         for (size_t i = 0; i < q.items.size() && i < 2; ++i)
             logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
         if (found && (best.tracks == 0 || relevant)) {
             best = q;
-            ev.played = played;
             searchQueue_ = name;
             searchUrl_ = url;
         }
@@ -1282,9 +1294,7 @@ void WiimWorker::runSearch(const String& query) {
     ev.tracks = best.items;
     searchTitles_.clear();
     for (auto& t : best.items) searchTitles_.push_back(t.title);
-    const bool played = ev.played;
     push(std::move(ev));
-    if (played) nextPoll_ = millis();
 }
 
 void WiimWorker::runPlaySearchResult(int index) {

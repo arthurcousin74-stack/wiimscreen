@@ -1,5 +1,7 @@
 #include "upnp.h"
 
+#include "core.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -20,24 +22,6 @@ std::string xmlEscape(const std::string& s) {
         }
     }
     return o;
-}
-
-static void appendUtf8(std::string& o, unsigned long cp) {
-    if (cp < 0x80) {
-        o += static_cast<char>(cp);
-    } else if (cp < 0x800) {
-        o += static_cast<char>(0xC0 | (cp >> 6));
-        o += static_cast<char>(0x80 | (cp & 0x3F));
-    } else if (cp < 0x10000) {
-        o += static_cast<char>(0xE0 | (cp >> 12));
-        o += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        o += static_cast<char>(0x80 | (cp & 0x3F));
-    } else if (cp < 0x110000) {
-        o += static_cast<char>(0xF0 | (cp >> 18));
-        o += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-        o += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-        o += static_cast<char>(0x80 | (cp & 0x3F));
-    }
 }
 
 std::string xmlUnescape(const std::string& s) {

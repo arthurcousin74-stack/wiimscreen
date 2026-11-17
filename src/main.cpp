@@ -54,6 +54,7 @@ static std::vector<wr::Preset> g_presets;              // presets affichés
 static std::vector<wr::Preset> g_wiimPresets;          // presets du WiiM (ou saisis), sans les favoris
 static bool g_favOk = false;                            // mémoire des favoris disponible
 static bool g_favBusy = false;                          // enregistrement d'un favori en cours
+static uint32_t g_busySince = 0;                         // début de la recherche / de l'enregistrement en cours
 static std::vector<wr::Favorite> g_favs;
 static std::vector<wr::QobuzAlbum> g_deezerAlbums;  // albums favoris du compte Deezer
 static std::vector<wr::QobuzAlbum> g_qobuzAlbums;  // albums favoris du compte Qobuz (lus par l'accès du WiiM)
@@ -210,7 +211,7 @@ static void renderNow() {
     // Bouton enfoncé : tuile sous le doigt, ou court effet après un appui
     int pressedPreset = (g_stripTouch && !g_stripDragged) ? g_stripPreset : -1;
     int pressedTransport = -1;
-    if (now < g_flashUntil) {
+    if (g_flashUntil && (int32_t)(g_flashUntil - now) > 0) {  // (différence signée : juste après 49 jours aussi)
         if (pressedPreset < 0) pressedPreset = g_flashPreset;
         pressedTransport = g_flashTransport;
     }
@@ -351,7 +352,20 @@ static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::
 }
 
 static void applyPresets(const std::vector<wr::Preset>& list) {
+    // Doigt posé sur une tuile : son indice ne vaut plus rien dans la nouvelle liste (mauvaise tuile lancée, ou
+    // lecture hors de la liste si elle a raccourci)
+    if (g_stripTouch) {
+        g_stripTouch = false;
+        g_stripPreset = -1;
+    }
     g_presets = list;
+    // Images des tuiles disparues : libérées (PSRAM) quand le cache grandit
+    if (g_presetImages.size() > 48)
+        for (auto it = g_presetImages.begin(); it != g_presetImages.end();) {
+            bool used = it->first == g_art.url;
+            for (auto& p : g_presets) used |= p.picUrl == it->first;
+            it = used ? std::next(it) : g_presetImages.erase(it);
+        }
     g_ui.setPresets(g_presets);
     g_activePreset = -1;
     for (size_t i = 0; i < g_presets.size(); ++i) {
@@ -469,6 +483,11 @@ static void checkImages() {
     ArtImage img;
     bool changed = false;
     while (g_artFetcher.poll(img)) {
+        if (!img.ok()) {
+            // Échec (réseau, format) : rien n'est gardé, l'image sera redemandée (retryImages, nouvelle page)
+            g_coverRequested.erase(img.url);
+            continue;
+        }
         if (!g_artWanted.empty() && img.url == g_artWanted) {
             // Même image pour une tuile (album en cours parmi les favoris) : une copie pour la tuile, sinon elle
             // ne recevait jamais son image (vu dans le simulateur)
@@ -514,6 +533,19 @@ static void checkImages() {
         changed = true;
     }
     if (changed) show();
+}
+
+// Images manquantes (échec, ou résultat perdu pendant un écran sans checkImages) : redemandées toutes les minutes
+static void retryImages() {
+    static uint32_t last = 0;
+    if (millis() - last < 60000) return;
+    last = millis();
+    if (!g_artWanted.empty() && g_art.url != g_artWanted) g_artFetcher.request(g_artWanted, true);
+    for (auto& p : g_presets) {
+        if (p.picUrl.empty()) continue;
+        auto it = g_presetImages.find(p.picUrl);
+        if (it == g_presetImages.end() || !it->second.ok()) g_artFetcher.request(p.picUrl);
+    }
 }
 
 // ------------------------------------------------------- état venant du WiiM
@@ -575,6 +607,14 @@ static void applyReport(const WiimReport& r) {
     if (changed) show();
 }
 
+// Copie de secours des réglages (LittleFS) à jour avec la NVS : la tâche WiiM y écrit l'empreinte, l'adresse et
+// l'identité du WiiM ; sans cela un flash USB complet les perdait jusqu'au redémarrage suivant
+static void backupSettings() {
+    Settings s;
+    loadSettings(s);
+    if (g_favOk && s.configured()) fav::saveSettingsBackup(settingsToBackup(s));
+}
+
 static void serviceWiim() {
     WiimReport r;
     // Relevé commencé avant la dernière commande : il annulerait l'affichage optimiste
@@ -584,10 +624,11 @@ static void serviceWiim() {
         if (g_pendingT >= 0 && r.online && r.cmdSeq >= g_pendingSeq) {
             const auto& pl = r.player;
             bool done = false;
+            // Titre vide (getMetaInfo manqué ce coup-ci) : pas un changement de morceau
             if (g_await == Await::Track)
-                done = pl.title != g_pendingTitle || (g_pendingPos > 5000 && pl.positionMs < 3000);
+                done = (!pl.title.empty() && pl.title != g_pendingTitle) || (g_pendingPos > 5000 && pl.positionMs < 3000);
             else if (g_await == Await::Playing) done = pl.playing == g_pendingPlaying;
-            else if (g_await == Await::Music) done = pl.playing && !pl.loading && pl.title != g_pendingTitle;
+            else if (g_await == Await::Music) done = pl.playing && !pl.loading && !pl.title.empty() && pl.title != g_pendingTitle;
             if (done) {
                 g_pendingT = -1;
                 show();
@@ -610,8 +651,7 @@ static void serviceWiim() {
                 break;
             case WiimEvent::Presets: onPresets(ev.ok, ev.presets); break;
             case WiimEvent::FavSaved:
-                g_favBusy = false;
-                g_albumFavBusy = false;
+                if (!ev.automatic) g_favBusy = g_albumFavBusy = false;
                 if (ev.ok) {
                     sound::confirm();
                     refreshTiles();
@@ -645,12 +685,13 @@ static void serviceWiim() {
                     sound::error();
                     g_activePreset = -1;
                     g_ui.setActivePreset(-1);
-                    setMessage(String(wr::L("Favorite: ", "Favori : ")) + ev.text);
+                    setMessage(String(wr::L("Playback: ", "Lecture : ")) + ev.text);
                 }
                 g_worker.pollSoon();
                 show();
                 break;
             case WiimEvent::Pinned:
+                backupSettings();  // empreinte écrite par la tâche WiiM : aussi dans la copie de secours
                 setMessage(wr::L("WiiM certificate saved", "Certificat du WiiM enregistr\xC3\xA9"));
                 show();
                 break;
@@ -661,6 +702,7 @@ static void serviceWiim() {
                 break;
             case WiimEvent::Moved:
                 g_settings.host = ev.text;
+                backupSettings();
                 setMessage(String(wr::L("WiiM found at its new address (", "WiiM retrouv\xC3\xA9 \xC3\xA0 sa nouvelle adresse (")) +
                            ev.text + ")");
                 show();
@@ -668,6 +710,7 @@ static void serviceWiim() {
             case WiimEvent::Identity:
                 g_settings.wiimUuid = ev.uuid;
                 g_settings.wiimName = ev.name;
+                backupSettings();
                 break;
         }
     }
@@ -680,7 +723,7 @@ static void tickStatus(uint32_t now) {
     bool changed = false;
     int b = batteryLevel();
     if (b != g_state.battery) g_state.battery = b, changed = true;
-    if (g_messageUntil && now > g_messageUntil) {
+    if (g_messageUntil && (int32_t)(now - g_messageUntil) > 0) {
         g_state.message = "";
         g_messageUntil = 0;
         changed = true;
@@ -774,6 +817,7 @@ static bool handleBars(int x, int y) {
 static void openFavoriteList(int source);
 
 static void playPreset(int p) {
+    if (p < 0 || p >= (int)g_presets.size()) return;
     logEvent("Preset %d : %s", g_presets[p].slot, g_presets[p].label.c_str());
     sound::tap();
     if (g_presets[p].favId == kQobuzFavsId || g_presets[p].favId == kDeezerFavsId) {
@@ -1010,6 +1054,7 @@ static void handleTap(int x, int y) {
             const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
             logEvent("Appui Favori : %s", album.c_str());
             g_favBusy = true;
+            g_busySince = millis();
             g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
             setMessage(wr::L("Adding to favorites\xE2\x80\xA6", "Ajout aux favoris\xE2\x80\xA6"), 15000);
 
@@ -1174,6 +1219,7 @@ static void runSearchQuery() {
     logEvent("Recherche %s : %s", g_searchSource == 1 ? "Deezer" : g_searchSource == 2 ? "Albums Qobuz" : "Qobuz",
              q.c_str());
     g_searchBusy = true;
+    g_busySince = millis();
     g_resultsTitle = q;
     g_resultsSource = g_searchSource;
     g_searchStatus = g_searchSource == 1   ? String(wr::L("Searching Deezer\xE2\x80\xA6", "Recherche sur Deezer\xE2\x80\xA6"))
@@ -1195,6 +1241,7 @@ static void openFavoriteList(int source) {
         return;
     }
     g_searchBusy = true;
+    g_busySince = millis();
     const bool deezer = source == 1;
     g_resultsTitle = deezer ? wr::L("Deezer favorites", "Favoris Deezer") : wr::L("Qobuz favorites", "Favoris Qobuz");
     g_resultsSource = source;
@@ -1315,6 +1362,7 @@ static void toggleAlbumFavorite(int i) {
         return;
     }
     g_albumFavBusy = true;
+    g_busySince = millis();
     g_worker.saveAlbumFavorite(a.id.c_str(), a.title.c_str(), a.artist.c_str(), a.image.c_str());
 }
 
@@ -1346,11 +1394,8 @@ static void onSearchDone(const WiimEvent& ev) {
         if (g_searchOpen || g_resultsOpen) {  // toujours sur le clavier ou la liste : on montre les résultats
             g_searchOpen = false;
             g_resultsOpen = true;
-            renderResultsList(-1, ev.played ? String(wr::L("First track started \xC2\xB7 tap another one to play it",
-                                                           "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer"))
-                                            : String());
+            renderResultsList(-1, String());
         }
-        if (ev.played) g_worker.pollSoon();
         return;
     }
     if (g_searchOpen) renderSearch();
@@ -1375,6 +1420,15 @@ void loop() {
     auto t = M5.Touch.getDetail();
     const uint32_t now = millis();
     logMemory();
+    // Images arrivées (tous les écrans : la file de l'ArtFetcher est bornée, un résultat non lu serait perdu)
+    checkImages();
+    retryImages();
+    serviceTranscription();  // tous les écrans : un texte arrivé après la sortie de la recherche est jeté
+    // Réponse jamais arrivée (évènement perdu) : on ne bloque pas la recherche ni le cœur jusqu'au redémarrage
+    if ((g_searchBusy || g_favBusy || g_albumFavBusy) && now - g_busySince > 120000) {
+        logEvent("Pas de r\xC3\xA9ponse de la t\xC3\xA2" "che WiiM : attente abandonn\xC3\xA9" "e");
+        g_searchBusy = g_favBusy = g_albumFavBusy = false;
+    }
 
     // Test tactile : rond sous le doigt tant qu'il touche ; « Fermer » pour sortir
     if (g_touchTest) {
@@ -1491,10 +1545,8 @@ void loop() {
             }
         }
         releaseKey(false);
-        serviceTranscription();
         serviceVoice();
         serviceWiim();
-        checkImages();  // pochettes des résultats (et des tuiles) arrivées pendant la liste
         delay(5);
         return;
     }
@@ -1574,13 +1626,12 @@ void loop() {
 
     serviceWiim();
     tickStatus(now);
-    checkImages();
     serviceMic();
     serviceVoice();
     serviceMotion(now);
 
     // Fin de l'effet « bouton enfoncé »
-    if (g_flashUntil && now >= g_flashUntil) {
+    if (g_flashUntil && (int32_t)(now - g_flashUntil) >= 0) {
         g_flashUntil = 0;
         show();
     }
@@ -1592,7 +1643,8 @@ void loop() {
         else show();
     }
     // Chargement : anneau qui tourne autour du bouton lecture (~20 images/s)
-    if (g_pendingT >= 0 && now - g_pendingSince > 10000) {  // le WiiM n'a rien confirmé : on arrête d'attendre
+    // Le WiiM n'a rien confirmé : on arrête d'attendre (un album chargé par le WiiM peut prendre ~15 s)
+    if (g_pendingT >= 0 && now - g_pendingSince > (g_await == Await::Music ? 20000u : 10000u)) {  // le WiiM n'a rien confirmé : on arrête d'attendre
         g_pendingT = -1;
         show();
     }

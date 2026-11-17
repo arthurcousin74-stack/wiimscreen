@@ -99,13 +99,14 @@ void EspSim::restart() { pc::restart(); }
 
 // ------------------------------------------------------------------ FreeRTOS
 
-SemaphoreHandle_t xSemaphoreCreateMutex() { return new std::recursive_mutex(); }
+// Not recursive, like a FreeRTOS mutex: taking it twice in one task blocks here too (instead of hiding the bug)
+SemaphoreHandle_t xSemaphoreCreateMutex() { return new std::mutex(); }
 BaseType_t xSemaphoreTake(SemaphoreHandle_t m, TickType_t) {
-    static_cast<std::recursive_mutex*>(m)->lock();
+    static_cast<std::mutex*>(m)->lock();
     return pdTRUE;
 }
 BaseType_t xSemaphoreGive(SemaphoreHandle_t m) {
-    static_cast<std::recursive_mutex*>(m)->unlock();
+    static_cast<std::mutex*>(m)->unlock();
     return pdTRUE;
 }
 
@@ -152,6 +153,10 @@ uint32_t ulTaskNotifyTake(BaseType_t clear, TickType_t wait) {
 // ------------------------------------------------------------------ settings (Preferences)
 
 namespace {
+std::recursive_mutex& prefsLock() {  // the WiiM task saves the fingerprint/address while the loop reads settings
+    static std::recursive_mutex m;
+    return m;
+}
 std::map<std::string, std::string>& prefs() {
     static std::map<std::string, std::string> p;
     return p;
@@ -182,42 +187,60 @@ void savePrefs() {
 }  // namespace
 
 bool Preferences::begin(const char*, bool) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     loadPrefs();
     return true;
 }
-void Preferences::end() { savePrefs(); }
+void Preferences::end() {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
+    savePrefs();
+}
 String Preferences::getString(const char* key, const String& def) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     auto it = prefs().find(key);
     return it == prefs().end() ? def : String(it->second);
 }
 bool Preferences::getBool(const char* key, bool def) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     auto it = prefs().find(key);
     return it == prefs().end() ? def : it->second == "1";
 }
 int Preferences::getInt(const char* key, int def) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     auto it = prefs().find(key);
     return it == prefs().end() ? def : std::atoi(it->second.c_str());
 }
 size_t Preferences::putString(const char* key, const String& v) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     prefs()[key] = v.c_str();
     return v.length();
 }
 size_t Preferences::putBool(const char* key, bool v) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     prefs()[key] = v ? "1" : "0";
     return 1;
 }
 size_t Preferences::putInt(const char* key, int v) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     prefs()[key] = std::to_string(v);
     return 4;
 }
-bool Preferences::remove(const char* key) { return prefs().erase(key) > 0; }
+bool Preferences::remove(const char* key) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
+    return prefs().erase(key) > 0;
+}
 bool Preferences::clear() {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     prefs().clear();
     return true;
 }
-bool Preferences::isKey(const char* key) { return prefs().count(key) > 0; }
+bool Preferences::isKey(const char* key) {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
+    return prefs().count(key) > 0;
+}
 
 void pc::defaultSettings() {
+    std::lock_guard<std::recursive_mutex> lock(prefsLock());
     loadPrefs();
     if (prefs().count("ssid")) return;
     // First start: already configured, so the app opens on the main screen (not the Tab5's Wi-Fi setup portal)

@@ -1,4 +1,6 @@
 #include "qobuz.h"
+
+#include "core.h"
 #include "upnp.h"
 
 #include <cctype>
@@ -42,12 +44,6 @@ size_t valueEnd(const std::string& s, size_t i) {
 size_t skipSpace(const std::string& s, size_t i) {
     while (i < s.size() && std::isspace((unsigned char)s[i])) ++i;
     return i;
-}
-
-void appendUtf8(std::string& o, unsigned cp) {
-    if (cp < 0x80) o += char(cp);
-    else if (cp < 0x800) o += char(0xC0 | (cp >> 6)), o += char(0x80 | (cp & 0x3F));
-    else o += char(0xE0 | (cp >> 12)), o += char(0x80 | ((cp >> 6) & 0x3F)), o += char(0x80 | (cp & 0x3F));
 }
 
 bool headerSafe(const std::string& v) {
@@ -97,12 +93,7 @@ std::string jsonText(const std::string& raw) {
             case 'n': o += '\n'; break;
             case 't': o += '\t'; break;
             case 'r': break;
-            case 'u':
-                if (i + 4 < raw.size()) {
-                    appendUtf8(o, (unsigned)std::strtoul(raw.substr(i + 1, 4).c_str(), nullptr, 16));
-                    i += 4;
-                }
-                break;
+            case 'u': i = decodeJsonUnicode(raw, i, o); break;
             default: o += e;  // \" \\ \/
         }
     }

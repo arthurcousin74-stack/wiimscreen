@@ -128,6 +128,51 @@ std::string decodeHexText(const std::string& raw) {
     return validUtf8NoControl(out) ? out : s;
 }
 
+void appendUtf8(std::string& o, unsigned long cp) {
+    if (cp < 0x80) {
+        o += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        o += static_cast<char>(0xC0 | (cp >> 6));
+        o += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        o += static_cast<char>(0xE0 | (cp >> 12));
+        o += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        o += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x110000) {
+        o += static_cast<char>(0xF0 | (cp >> 18));
+        o += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        o += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        o += static_cast<char>(0x80 | (cp & 0x3F));
+    }
+}
+
+size_t decodeJsonUnicode(const std::string& s, size_t i, std::string& out) {
+    auto hex4 = [&](size_t at, unsigned long& v) {
+        if (at + 4 > s.size()) return false;
+        v = 0;
+        for (size_t k = at; k < at + 4; ++k) {
+            const char c = s[k];
+            const int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+            if (d < 0) return false;
+            v = v * 16 + (unsigned long)d;
+        }
+        return true;
+    };
+    unsigned long cp;
+    if (!hex4(i + 1, cp)) return i;
+    size_t end = i + 4;
+    if (cp >= 0xD800 && cp <= 0xDBFF && end + 2 < s.size() && s[end + 1] == '\\' && s[end + 2] == 'u') {
+        unsigned long lo;
+        if (hex4(end + 3, lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+            end += 6;
+        }
+    }
+    if (cp >= 0xD800 && cp <= 0xDFFF) cp = 0xFFFD;  // moitié de paire seule
+    appendUtf8(out, cp);
+    return end;
+}
+
 bool jsonString(const std::string& json, const std::string& key, std::string& out) {
     std::string needle = "\"" + key + "\"";
     size_t p = 0;
@@ -149,22 +194,7 @@ bool jsonString(const std::string& json, const std::string& key, std::string& ou
                 switch (e) {
                     case 'n': out += '\n'; break;
                     case 't': out += '\t'; break;
-                    case 'u':
-                        if (q + 4 < json.size()) {
-                            long cp = std::strtol(json.substr(q + 1, 4).c_str(), nullptr, 16);
-                            q += 4;
-                            if (cp < 0x80) {
-                                out += static_cast<char>(cp);
-                            } else if (cp < 0x800) {
-                                out += static_cast<char>(0xC0 | (cp >> 6));
-                                out += static_cast<char>(0x80 | (cp & 0x3F));
-                            } else {
-                                out += static_cast<char>(0xE0 | (cp >> 12));
-                                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                                out += static_cast<char>(0x80 | (cp & 0x3F));
-                            }
-                        }
-                        break;
+                    case 'u': q = decodeJsonUnicode(json, q, out); break;
                     default: out += e;
                 }
             } else {

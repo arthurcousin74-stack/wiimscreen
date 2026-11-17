@@ -318,7 +318,7 @@ int main(int argc, char** argv) {
         save(out, "24-recherche.ppm");
         ui.renderSearch("", "", false, -1, 0, true, 1, 0.6f);  // dictée en cours
         save(out, "29-dictee.ppm");
-        ui.renderResults("aretha franklin", found, 0, wr::L("First track started \xC2\xB7 tap another one to play it", "Premier morceau lanc\xC3\xA9 \xC2\xB7 touche un autre pour le jouer"));
+        ui.renderResults("aretha franklin", found, 0, "");
         save(out, "25-resultats.ppm");
         ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), {}, 0, wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
         save(out, "31-favoris-qobuz-chargement.ppm");

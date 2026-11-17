@@ -242,6 +242,16 @@ static void test_json_escapes() {
     TEST_ASSERT_FALSE(jsonString("{\"b\":\"1\"}", "a", v));
 }
 
+static void test_json_unicode() {
+    std::string s;
+    TEST_ASSERT_TRUE(jsonString("{\"t\":\"Caf\\u00e9 \\ud83d\\ude00!\"}", "t", s));
+    TEST_ASSERT_EQUAL_STRING("Caf\xC3\xA9 \xF0\x9F\x98\x80!", s.c_str());  // paire UTF-16 : un seul caractère
+    TEST_ASSERT_TRUE(jsonString("{\"t\":\"a\\ud83db\"}", "t", s));
+    TEST_ASSERT_EQUAL_STRING("a\xEF\xBF\xBD" "b", s.c_str());  // moitié seule : U+FFFD
+    TEST_ASSERT_EQUAL_STRING("\xF0\x9F\x8E\xB5 x", jsonText("\"\\uD83C\\uDFB5 x\"").c_str());
+    TEST_ASSERT_EQUAL_STRING("12", jsonText("\"\\u12\"").c_str());  // chiffres incomplets : pas de caractère inventé
+}
+
 static void test_http_response() {
     HttpResponse r;
     TEST_ASSERT_TRUE(parseHttpResponse("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nOK", r));
@@ -911,6 +921,7 @@ int main() {
     RUN_TEST(test_urls_and_images);
     RUN_TEST(test_json_escapes);
     RUN_TEST(test_http_response);
+    RUN_TEST(test_json_unicode);
     RUN_TEST(test_fingerprint);
     RUN_TEST(test_hosts);
     RUN_TEST(test_html_escape);
