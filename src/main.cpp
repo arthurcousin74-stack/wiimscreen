@@ -25,6 +25,7 @@
 #include <map>
 #include <set>
 
+#include "appstate.h"
 #include "art.h"
 #include "core.h"
 #include "decisions.h"
@@ -74,6 +75,8 @@ static uint32_t g_messageUntil = 0;
 static uint32_t g_headerPressStart = 0;
 static bool g_headerPressed = false;
 static uint32_t g_lastTouch = 0;
+static uint32_t g_lastPlayingAt = 0;  // dernier tour de boucle où le WiiM (joignable) jouait : veille, écran éteint
+static bool g_progressDue = false;     // saut de position (avance, retour) : ligne de progression redessinée sans attendre
 static bool g_ambient = false;
 static int g_brightness = -1;
 static bool g_listening = false;  // micro en cours d'écoute
@@ -174,15 +177,21 @@ static uint32_t g_pendingSince = 0, g_pendingSeq = 0;
 static std::string g_pendingTitle;   // morceau affiché au moment de l'appui
 static bool g_pendingPlaying = false;
 static uint32_t g_pendingPos = 0;    // position au moment de l'appui (⏮ peut reprendre le même morceau)
+// Await::Music : la commande est arrivée au WiiM (appui, ou évènement FavPlayed) ; « chargement » vu depuis
+static uint32_t g_pendingReadyAt = 0;
+static bool g_pendingReady = false, g_pendingSawLoading = false;
 
 static void markPending(int button, Await what, bool viaEvent = false);
 static void show();
+
+// Lecture en cours, d'après le dernier relevé ; WiiM injoignable : son dernier état ne compte plus
+static bool playingNow() { return g_state.online && g_state.player.playing; }
 
 static UiState displayState() {
     UiState s = g_state;
     s.pending = g_pendingT;
     auto& p = s.player;
-    if (p.playing && p.durationMs > 0)
+    if (s.online && p.playing && p.durationMs > 0)
         p.positionMs = std::min(p.durationMs, p.positionMs + (millis() - g_statusAt));
     return s;
 }
@@ -194,6 +203,9 @@ static void markPending(int button, Await what, bool viaEvent) {
     // Commande passée par la file : confirmée par un relevé commencé après elle. Favori ou résultat de
     // recherche (autre chemin) : seulement après l'évènement de fin (FavPlayed).
     g_pendingSeq = viaEvent ? UINT32_MAX : g_worker.queued();
+    g_pendingReady = !viaEvent;
+    g_pendingReadyAt = g_pendingSince;
+    g_pendingSawLoading = false;
     g_pendingTitle = g_state.player.title;
     g_pendingPlaying = g_state.player.playing;  // déjà basculé pour lecture/pause
     g_pendingPos = displayState().player.positionMs;
@@ -214,6 +226,9 @@ static void renderResultsList(int pressed = -1, const String& status = String())
 
 static int favoriteState();  // plus bas, avec les favoris
 
+// Court effet « bouton enfoncé » encore actif (différence signée : juste après 49 jours aussi)
+static bool flashActive(uint32_t now) { return g_flashUntil && (int32_t)(g_flashUntil - now) > 0; }
+
 static void renderNow() {
     if (!g_dirty || modalOpen()) return;  // écrans modaux : rien par-dessus (rendu à leur fermeture)
     g_dirty = false;
@@ -221,11 +236,12 @@ static void renderNow() {
     // Bouton enfoncé : tuile sous le doigt, ou court effet après un appui
     int pressedPreset = (g_stripTouch && !g_stripDragged) ? g_stripPreset : -1;
     int pressedTransport = -1;
-    if (g_flashUntil && (int32_t)(g_flashUntil - now) > 0) {  // (différence signée : juste après 49 jours aussi)
+    if (flashActive(now)) {
         if (pressedPreset < 0) pressedPreset = g_flashPreset;
         pressedTransport = g_flashTransport;
     }
     g_lastTick = now;
+    g_progressDue = false;  // la progression fait partie de l'image complète
     g_ui.setFavorite(favoriteState());
     if (g_ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
@@ -496,6 +512,15 @@ static void checkImages() {
         if (!img.ok()) {
             // Échec (réseau, format) : rien n'est gardé, l'image sera redemandée (retryImages, nouvelle page)
             g_coverRequested.erase(img.url);
+            // Pochette du nouveau morceau introuvable : celle du précédent (et sa couleur d'accent) ne reste pas
+            // à côté du nouveau titre ; image par défaut jusqu'au prochain essai
+            if (!g_artWanted.empty() && img.url == g_artWanted && g_art.url != g_artWanted &&
+                (g_art.ok() || !g_art.url.empty())) {
+                g_ui.setArt(nullptr);
+                g_art.reset();
+                g_art.url.clear();
+                changed = true;
+            }
             continue;
         }
         if (!g_artWanted.empty() && img.url == g_artWanted) {
@@ -564,6 +589,7 @@ static void applyReport(const WiimReport& r) {
     UiState next = g_state;
     next.online = r.online;
     bool artCleared = false;
+    const uint32_t shownPos = displayState().player.positionMs;  // position affichée juste avant ce relevé
     if (r.online) {
         wr::PlayerStatus st = r.player;
         if (r.metaOk) {
@@ -593,13 +619,12 @@ static void applyReport(const WiimReport& r) {
     }
 
     // Preset actif : on retient la source quelques secondes après l'appui (le temps que
-    // le WiiM bascule), puis on l'oublie si la source change ou si la lecture s'arrête
-    if (g_activePreset >= 0 && next.online) {
+    // le WiiM bascule), puis on l'oublie si la source change ou si la lecture s'arrête. Rien n'est jugé pendant ce
+    // délai : sur un WiiM à l'arrêt, le premier relevé (rien ne joue, pas de titre) effaçait la tuile choisie.
+    if (g_activePreset >= 0 && next.online && !next.player.loading && wr::expired(millis(), g_activeSince, 6000)) {
         bool stopped = !next.player.playing && next.player.title.empty();
-        if (millis() - g_activeSince > 6000) {
-            if (g_activeMode < 0) g_activeMode = next.player.mode;
-            else if (next.player.mode != g_activeMode) stopped = true;
-        }
+        if (g_activeMode < 0) g_activeMode = next.player.mode;
+        else if (next.player.mode != g_activeMode) stopped = true;
         if (stopped) {
             g_activePreset = -1;
             g_ui.setActivePreset(-1);
@@ -611,8 +636,22 @@ static void applyReport(const WiimReport& r) {
         if (due || !g_state.online) requestPresets();
     }
 
-    bool changed = artCleared || next.player != g_state.player || next.meta != g_state.meta ||
+    // La position avance à chaque relevé pendant la lecture : la ligne de progression (1 fois/s) la dessine, sans
+    // image complète (~1,8 Mo). Un saut (avance, retour, morceau repris) est dessiné tout de suite ; à l'arrêt,
+    // toute différence est un vrai changement.
+    wr::PlayerStatus samePos = next.player;
+    samePos.positionMs = g_state.player.positionMs;
+    bool changed = artCleared || samePos != g_state.player || next.meta != g_state.meta ||
                    next.online != g_state.online;
+    if (!changed && next.player.positionMs != g_state.player.positionMs) {
+        if (!next.online || !next.player.playing) {
+            changed = true;
+        } else if (next.player.durationMs > 0) {
+            const uint32_t newPos = std::min(next.player.durationMs, next.player.positionMs + (millis() - r.at));
+            const uint32_t gap = newPos > shownPos ? newPos - shownPos : shownPos - newPos;
+            if (gap > 2500) g_progressDue = true;
+        }
+    }
     g_state = next;
     if (changed) show();
 }
@@ -632,7 +671,14 @@ static void serviceWiim() {
         applyReport(r);
         // Confirmation de la commande en attente
         if (g_pendingT >= 0 && r.online && r.cmdSeq >= g_pendingSeq) {
-            if (wr::pendingConfirmed(g_await, r.player, g_pendingTitle, g_pendingPos, g_pendingPlaying)) {
+            // Music : sans nouveau titre (tuile de ce qui joue déjà, radio sans titre), le WiiM qui joue après
+            // avoir chargé, ou quelques secondes après la commande, confirme aussi (sinon l'anneau tournait 20 s)
+            bool settled = false;
+            if (g_await == Await::Music && g_pendingReady) {
+                if (r.player.loading) g_pendingSawLoading = true;
+                settled = wr::musicSettled(r.player, g_pendingSawLoading, millis() - g_pendingReadyAt);
+            }
+            if (settled || wr::pendingConfirmed(g_await, r.player, g_pendingTitle, g_pendingPos, g_pendingPlaying)) {
                 g_pendingT = -1;
                 show();
             }
@@ -682,7 +728,11 @@ static void serviceWiim() {
                 }
                 break;
             case WiimEvent::FavPlayed:
-                if (g_pendingT >= 0) g_pendingSeq = g_worker.queued();  // les relevés suivants peuvent confirmer
+                if (g_pendingT >= 0) {
+                    g_pendingSeq = g_worker.queued();  // les relevés suivants peuvent confirmer
+                    g_pendingReady = true;             // la file est lancée : délai de musicSettled compté d'ici
+                    g_pendingReadyAt = millis();
+                }
                 if (!ev.ok) {
                     g_pendingT = -1;
                     sound::error();
@@ -783,6 +833,16 @@ static void chooseWiim() {
 
 // --------------------------------------------------------------------- appuis
 
+// Avant le premier relevé, volume (0), son coupé et lecture sont des valeurs par défaut : un appui sur « + »
+// enverrait vol 5, lecture/pause l'inverse de l'état réel. Ces appuis attendent l'état du WiiM.
+static bool wiimStateKnown(const char* what) {
+    if (g_state.player.ok) return true;
+    logEvent("Appui %s ignor\xC3\xA9 : \xC3\xA9tat du WiiM pas encore re\xC3\xA7u", what);
+    setMessage(wr::L("Waiting for the WiiM status\xE2\x80\xA6", "En attente de l'\xC3\xA9tat du WiiM\xE2\x80\xA6"), 3000);
+    show();
+    return false;
+}
+
 // Barres (volume, coupure du son, progression) : affichage immédiat, commande en fond
 static bool handleBars(int x, int y) {
     int vol;
@@ -798,6 +858,7 @@ static bool handleBars(int x, int y) {
         return true;
     }
     if (g_ui.hitMute(x, y)) {
+        if (!wiimStateKnown("son coup\xC3\xA9/r\xC3\xA9tabli")) return true;
         logEvent("Appui son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", x, y);
         sound::tap();
         p.muted = !p.muted;
@@ -1087,6 +1148,7 @@ static void handleTap(int x, int y) {
         return;
     }
     static const char* kNames[] = {"volume -", "pr\xC3\xA9" "c\xC3\xA9" "dent", "lecture/pause", "suivant", "volume +"};
+    if ((t == wr::kVolDown || t == wr::kVolUp || t == wr::kPlayPause) && !wiimStateKnown(kNames[t])) return;
     logEvent("Appui %s (%d,%d)", kNames[t], x, y);
     sound::tap();
     auto& p = g_state.player;
@@ -1195,7 +1257,7 @@ void setup() {
     requestPresets();
     g_state.online = true;  // jusqu'au premier relevé (une seconde environ)
     g_state.battery = batteryLevel();
-    g_lastTouch = millis();
+    g_lastTouch = g_lastPlayingAt = millis();
     show();
 }
 
@@ -1235,6 +1297,7 @@ static void openFavoriteList(bool deezer) {
         setMessage(wr::L("Search in progress, try again in a moment",
                          "Recherche en cours, r\xC3\xA9" "essaie dans un instant"),
                    3000);
+        show();  // message affiché, tuile relâchée
         return;
     }
     g_searchBusy = true;
@@ -1364,6 +1427,11 @@ static void toggleAlbumFavorite(int i) {
 
 // Résultats arrivés (tâche WiiM)
 static void onSearchDone(const WiimEvent& ev) {
+    // Réponse d'une recherche abandonnée (attente trop longue) arrivée pendant une autre : pas sous son titre
+    if (std::string(ev.name.c_str()) != g_resultsTitle) {
+        logEvent("Recherche : r\xC3\xA9sultat ancien ignor\xC3\xA9 (%s)", ev.name.c_str());
+        return;
+    }
     g_searchBusy = false;
     g_albumResults = ev.albums;
     if (!ev.ok || ev.tracks.empty()) {
@@ -1421,9 +1489,19 @@ void loop() {
     retryImages();
     serviceTranscription();  // tous les écrans : un texte arrivé après la sortie de la recherche est jeté
     // Réponse jamais arrivée (évènement perdu) : on ne bloque pas la recherche ni le cœur jusqu'au redémarrage
-    if ((g_searchBusy || g_favBusy || g_albumFavBusy) && now - g_busySince > 120000) {
+    if ((g_searchBusy || g_favBusy || g_albumFavBusy) && wr::expired(now, g_busySince, 120000)) {
         logEvent("Pas de r\xC3\xA9ponse de la t\xC3\xA2" "che WiiM : attente abandonn\xC3\xA9" "e");
+        const bool search = g_searchBusy, favorite = g_favBusy || g_albumFavBusy;
         g_searchBusy = g_favBusy = g_albumFavBusy = false;
+        // Écran redessiné : plus de « recherche en cours » ni de cœur en attente
+        const String noAnswer = wr::L("No answer from the WiiM. Try again.", "Pas de r\xC3\xA9ponse du WiiM. R\xC3\xA9" "essaie.");
+        if (favorite) setMessage(noAnswer, 5000);
+        if (search) {
+            g_searchStatus = noAnswer;
+            if (g_searchOpen) renderSearch();
+            else if (g_resultsOpen && g_searchResults.empty()) g_ui.renderResults(g_resultsTitle, g_searchResults, 0, noAnswer);
+        }
+        show();
     }
 
     // Test tactile : rond sous le doigt tant qu'il touche ; « Fermer » pour sortir
@@ -1631,37 +1709,58 @@ void loop() {
         g_flashUntil = 0;
         show();
     }
-    // Progression : une image par seconde pendant la lecture (écran allumé)
+    // Progression : une image par seconde pendant la lecture (écran allumé ; WiiM joignable)
     const auto& p = g_state.player;
-    // Seule la ligne de progression est redessinée si rien d'autre n'a changé (~3 % de l'écran)
-    if (g_brightness > 0 && p.playing && p.durationMs > 0 && now - g_lastTick >= 1000) {
+    const bool playing = playingNow();
+    if (playing) g_lastPlayingAt = now;
+    // Seule la ligne de progression est redessinée si rien d'autre n'a changé (~3 % de l'écran) ; tout de suite
+    // après un saut de position
+    if (g_brightness > 0 && playing && p.durationMs > 0 && (g_progressDue || now - g_lastTick >= 1000)) {
+        g_progressDue = false;
         if (!g_dirty && !modalOpen() && g_ui.updateProgress(displayState())) g_lastTick = now;
         else show();
     }
     // Chargement : anneau qui tourne autour du bouton lecture (~20 images/s)
-    // Le WiiM n'a rien confirmé : on arrête d'attendre (un album chargé par le WiiM peut prendre ~15 s)
-    if (g_pendingT >= 0 && now - g_pendingSince > (g_await == Await::Music ? 20000u : 10000u)) {  // le WiiM n'a rien confirmé : on arrête d'attendre
+    // Le WiiM n'a rien confirmé : on arrête d'attendre (un album chargé par le WiiM peut prendre ~15 s).
+    // markPending() note millis(), plus tard que `now` : différence signée (wr::expired), sinon elle bouclait à
+    // ~4e9 et l'anneau était annulé dans le même tour.
+    if (g_pendingT >= 0 && wr::expired(now, g_pendingSince, g_await == Await::Music ? 20000u : 10000u)) {
         g_pendingT = -1;
         show();
     }
     if (g_brightness > 0 && !g_ambient && (p.loading || g_pendingT >= 0) && !g_stripTouch && now - g_lastTick >= 50) {
-        // Animation d'attente : seulement la rangée des boutons, sauf si un rendu complet est déjà prévu
+        // Animation d'attente : seulement la rangée des boutons, sauf si un rendu complet est déjà prévu ; le
+        // bouton reste enfoncé pendant son court effet
         g_lastTick = now;
-        if (g_dirty || modalOpen() || !g_ui.updateTransport(displayState())) show();
+        if (g_dirty || modalOpen() || !g_ui.updateTransport(displayState(), flashActive(now) ? g_flashTransport : -1))
+            show();
     }
 
-    const uint32_t idle = now - g_lastTouch;
-    if (!g_ambient && !modalOpen() && g_brightness == kBrightOn && idle > kAmbientMs && p.playing &&
-        g_state.online)
-        enterAmbient();
-    // Mise en veille (réglage) : sans appui ni lecture depuis sleepMin minutes
-    if (g_settings.sleepMin > 0 && !p.playing && !modalOpen() && idle > (uint32_t)g_settings.sleepMin * 60000UL)
-        goToSleep("automatique");
-    if (idle > kOffMs && !p.playing) {
-        if (g_ambient) exitAmbient();  // micro coupé avec l'écran
-        setBrightness(0);
-    } else if (idle > kDimMs && g_brightness == kBrightOn) {
-        setBrightness(kBrightDim);
+    // Écran et veille : depuis le dernier appui, et depuis la dernière lecture vue (lib/core/src/appstate.h)
+    auto since = [now](uint32_t t) { return (int32_t)(now - t) > 0 ? now - t : 0u; };
+    wr::IdleInput idle;
+    idle.touchIdleMs = since(g_lastTouch);
+    idle.notPlayingMs = since(g_lastPlayingAt);
+    idle.online = g_state.online;
+    idle.playing = p.playing;
+    idle.modal = modalOpen();
+    idle.ambient = g_ambient;
+    idle.fullBright = g_brightness == kBrightOn;
+    idle.dark = g_brightness == 0;
+    idle.sleepMin = g_settings.sleepMin;
+    wr::IdleTimes times;
+    times.ambientMs = kAmbientMs;
+    times.dimMs = kDimMs;
+    times.offMs = kOffMs;
+    switch (wr::idleAction(idle, times)) {
+        case wr::IdleAction::None: break;
+        case wr::IdleAction::Ambient: enterAmbient(); break;
+        case wr::IdleAction::Dim: setBrightness(kBrightDim); break;
+        case wr::IdleAction::Off:
+            if (g_ambient) exitAmbient();  // micro coupé avec l'écran
+            setBrightness(0);
+            break;
+        case wr::IdleAction::Sleep: goToSleep("automatique"); break;  // sans appui ni lecture depuis sleepMin minutes
     }
     renderNow();
     delay(5);
