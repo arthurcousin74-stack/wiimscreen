@@ -100,4 +100,16 @@ std::vector<std::pair<std::string, std::string>> decodeFields(const std::string&
     return out;
 }
 
+std::string flagText(bool v) { return v ? "1" : "0"; }
+
+bool parseFlag(const char* v, bool defaultValue) {
+    const bool zero = v[0] == '0' && !v[1], one = v[0] == '1' && !v[1];
+    return defaultValue ? !zero : one;
+}
+
+int parseNumber(const char* v, int lo, int hi) {
+    const long n = std::strtol(v, nullptr, 10);
+    return n < lo ? lo : n > hi ? hi : static_cast<int>(n);
+}
+
 }  // namespace wr

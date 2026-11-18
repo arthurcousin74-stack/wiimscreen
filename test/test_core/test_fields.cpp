@@ -47,8 +47,102 @@ static void test_fields() {
     TEST_ASSERT_TRUE(decodeFields("").empty());
 }
 
+// Réglages décrits par un tableau (même usage que src/settings.cpp, avec std::string au lieu de String)
+struct FakeSettings {
+    std::string name;
+    std::string model = "modele-par-defaut";
+    bool on = true;      // défaut vrai : tout sauf "0"
+    bool extra = false;  // défaut faux : "1" seulement
+    int level = 5;
+    int minutes = 0;
+    std::vector<int> derived;  // déduit, hors du tableau
+};
+using FakeField = SettingField<FakeSettings, std::string>;
+static constexpr FakeField kFake[] = {
+    FakeField::text("name", &FakeSettings::name),
+    FakeField::text("model", &FakeSettings::model, true),
+    FakeField::flag("on", &FakeSettings::on),
+    FakeField::flag("extra", &FakeSettings::extra),
+    FakeField::number("level", &FakeSettings::level, 1, 20),
+    FakeField::number("minutes", &FakeSettings::minutes, 0, 240, false),
+};
+// Le contrôle de src/settings.cpp : un membre ajouté sans sa ligne change le compte
+static_assert(aggregateFieldCount<FakeSettings>() == sizeof(kFake) / sizeof(kFake[0]) + 1, "FakeSettings");
+struct FakeSettingsGrown {  // FakeSettings avec un réglage de plus, oublié dans le tableau
+    std::string name;
+    std::string model = "modele-par-defaut";
+    bool on = true;
+    bool extra = false;
+    int level = 5;
+    int minutes = 0;
+    std::vector<int> derived;
+    std::string forgotten;
+};
+static_assert(aggregateFieldCount<FakeSettingsGrown>() != sizeof(kFake) / sizeof(kFake[0]) + 1, "Grown");
+struct OneMore {
+    std::string a;
+    bool b = false;
+    int c = 0;
+    std::vector<Preset> d;
+    std::string e;
+};
+static_assert(aggregateFieldCount<OneMore>() == 5, "OneMore");
+
+static void test_setting_values() {
+    TEST_ASSERT_EQUAL_STRING("1", flagText(true).c_str());
+    TEST_ASSERT_EQUAL_STRING("0", flagText(false).c_str());
+    TEST_ASSERT_TRUE(parseFlag("", true));
+    TEST_ASSERT_TRUE(parseFlag("yes", true));
+    TEST_ASSERT_TRUE(parseFlag("00", true));
+    TEST_ASSERT_FALSE(parseFlag("0", true));
+    TEST_ASSERT_TRUE(parseFlag("1", false));
+    TEST_ASSERT_FALSE(parseFlag("yes", false));
+    TEST_ASSERT_FALSE(parseFlag("1 ", false));
+    TEST_ASSERT_EQUAL(7, parseNumber(" 7", 1, 20));
+    TEST_ASSERT_EQUAL(2, parseNumber("2x", 0, 3));
+    TEST_ASSERT_EQUAL(1, parseNumber("abc", 1, 20));  // illisible : 0, puis la borne basse
+    TEST_ASSERT_EQUAL(240, parseNumber("99999999999999999999", 0, 240));
+    TEST_ASSERT_EQUAL(0, parseNumber("-5", 0, 240));
+}
+
+static void test_settings_table() {
+    FakeSettings s;
+    s.name = "Salon\tWi-Fi";
+    s.on = false;
+    s.extra = true;
+    s.level = 12;
+    s.minutes = 30;
+    const std::string text = encodeSettings(s, kFake);
+    // Ordre du tableau, nombres en décimal, cases en 1/0 (format des copies de secours déjà écrites)
+    TEST_ASSERT_EQUAL_STRING("name\tSalon\\tWi-Fi\nmodel\tmodele-par-defaut\non\t0\nextra\t1\nlevel\t12\nminutes\t30\n",
+                             text.c_str());
+    FakeSettings back;
+    back.derived = {1};
+    decodeSettings(text, back, FakeSettings(), kFake);
+    TEST_ASSERT_EQUAL_STRING("Salon\tWi-Fi", back.name.c_str());
+    TEST_ASSERT_FALSE(back.on);
+    TEST_ASSERT_TRUE(back.extra);
+    TEST_ASSERT_EQUAL(12, back.level);
+    TEST_ASSERT_EQUAL(30, back.minutes);
+    TEST_ASSERT_EQUAL(1, (int)back.derived.size());  // hors du tableau : pas touché
+
+    // Clés inconnues ignorées, dernière valeur gardée, bornes, texte vide → défaut (emptyIsDefault)
+    FakeSettings odd;
+    odd.model = "autre";
+    decodeSettings("name\tA\nname\tB\nmodel\t\nlevel\t99\nminutes\t-1\nextra\tyes\nautre\tx\n", odd, FakeSettings(),
+                   kFake);
+    TEST_ASSERT_EQUAL_STRING("B", odd.name.c_str());
+    TEST_ASSERT_EQUAL_STRING("modele-par-defaut", odd.model.c_str());
+    TEST_ASSERT_EQUAL(20, odd.level);
+    TEST_ASSERT_EQUAL(0, odd.minutes);
+    TEST_ASSERT_FALSE(odd.extra);
+    TEST_ASSERT_TRUE(odd.on);  // absent : valeur d'avant
+}
+
 void run_fields_tests() {
     RUN_TEST(test_presets_ok);
     RUN_TEST(test_presets_errors);
     RUN_TEST(test_fields);
+    RUN_TEST(test_setting_values);
+    RUN_TEST(test_settings_table);
 }
