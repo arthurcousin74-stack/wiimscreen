@@ -149,6 +149,16 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   (only what is still in that state). A queue that stays empty gets at most one other spelling
   (`wr::searchTryNext`; four tries took 43 s). Change this flow with `tools/relay/selftest.sh`: it runs these cases on
   the mock WiiM. When the real WiiM behaves differently from the mock, fix the mock too.
+- **Search guard**: `searchGuardBegin()` / `searchGuardEnd()` in `wiim_worker.cpp` are the only place that mutes,
+  turns shuffle off, restores and unmutes around a search through a WiiM queue. No search without a player status;
+  a failed restore stops the search queue before the sound comes back; the note is kept until everything is put back.
+- **Favorites are stored without their tracks** when the queue has a `SearchUrl` (the WiiM reads them again);
+  `fav::kMaxContext` (256 KB) bounds the others. Big files are written outside the favorites lock (the main loop
+  takes it).
+- **Main-loop timing** (ring timeout, ambient, dim, screen off, sleep) is decided in `lib/core/src/appstate.*`:
+  `millis()` differences must be signed (`wr::expired`), and "playing" only counts while the WiiM is online.
+- **Parsers take hostile input**: `test_parsers_robust` feeds every parser of `lib/core` truncated and absurd input
+  under ASan/UBSan. Add each new parser to `feedAll()`.
 - **HTTP header values**: compare them through `headerValue()` in `core.cpp` (Qobuz sends `Transfer-Encoding:  chunked`
   with two spaces).
 - **Direct Qobuz search is opt-in** (`Settings::qobuzDirect`, setup page › Advanced, off by default): it reuses
@@ -160,7 +170,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **♥ state**: the worker reads `CurrentQueue` once per track change and puts its `wr::queueKey` in
   `WiimReport::queueKey`; `currentFavorite()` matches favorites by that key first, then by album (Flow has no album).
 - **Live queues** (Deezer Flow, mixes: `wr::isLiveQueue`) are saved and replayed **without their tracks**. A Flow
-  seen on the WiiM becomes a tile by itself once (`WiimWorker::autoFlowTile`, marker `fav::firstTime`).
+  seen on the WiiM becomes a tile by itself once (`WiimWorker::autoFlowTile`, marker `fav::doneOnce` / `fav::markOnce`, written only after the tile is saved).
 - Favorite ids must be unique (`fav::add` retries); the simulator's `esp_random()` is seeded per run.
 - **Progressive JPEGs are not drawn** (TJpgDec): `wr::baselineCoverUrl()` asks Deezer's CDN for a baseline JPEG
   (`…-80-0-1.jpg`); `art.cpp` downloads that variant and keeps the original URL as the image key.

@@ -24,7 +24,33 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - A search through the WiiM that loads nothing ends after about 10 s (one word) or 20 s (several words), not 43 s.
 - If the remote restarts during a search through the WiiM, the next start turns the WiiM's sound and shuffle back on.
 
+### Fixed (code review, 2026-11-18)
+- A crash when an artist, an album or a title is made only of spaces; an endless loop on a malformed Qobuz or Deezer
+  answer; very slow reading of a malformed queue.
+- Automatic sleep no longer starts the moment the music ends: it counts from the last touch and from the end of the
+  music. A WiiM that cannot be reached no longer keeps the screen on.
+- The waiting ring around a button sometimes did not show.
+- Search through the WiiM: no search when the WiiM's state cannot be read; if the music before cannot be put back,
+  the search result is stopped before the sound comes back; the sound and shuffle are put back at the next
+  contact if the WiiM did not answer.
+- Searches for short or non-Latin names ("U2", "AC DC", "Кино") no longer try every spelling.
+- Favorites of long lists are saved without their tracks (the WiiM reads them again); a failed save no longer
+  damages an existing favorite.
+- The cover of the previous track no longer stays when the new one cannot be loaded; the screen is no longer
+  redrawn in full at each status during playback; volume and play taps wait for the first status of the WiiM.
+- Names made of digits and the letters A to F ("2021") are no longer read as hexadecimal; Deezer numbers above
+  2 147 483 647; a Deezer track named "album".
+
+### Security
+- Setup page: a secret form token and a check of the address protect it from other web pages; field lengths are
+  checked on the device.
+- Update page: a wrong code adds a delay that doubles (it no longer ends update mode).
+- Relay of the simulator: it connects only to the known WiiMs and their ports; a key is necessary when it listens
+  on the network (`WIIMSIM_RELAY_KEY`).
+- CI: actions pinned to commits, Python packages to versions. SECURITY.md states the limits of the unsigned update.
+
 ### Tests
+- Unit tests run with AddressSanitizer and UBSan, with malformed input for every parser (50 tests).
 - The mock WiiM has a play-queue service (shuffle, queues that fill step by step, a mode that loads nothing). The
   relay self-test now runs the search through a WiiM queue: results in order, music before put back (paused and
   playing), a result played from its album, an empty WiiM, a search cut by a restart.
