@@ -10,7 +10,7 @@
 // n'est envoyé que pendant l'écoute.
 
 // PCM 16 bits mono → texte. hint : contexte pour aider la
-// transcription. En cas d'échec, `error` contient un message court en français.
+// transcription. En cas d'échec, `error` contient un message court dans la langue de l'interface (wr::L).
 bool transcribe(const int16_t* pcm, size_t samples, uint32_t sampleRate, const String& apiKey,
                 const String& model, const std::string& hint, std::string& text, String& error);
 

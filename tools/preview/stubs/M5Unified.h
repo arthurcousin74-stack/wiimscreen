@@ -1,9 +1,13 @@
-// Aperçu PC : M5.Display devient un canevas M5GFX en mémoire (1280×720).
+// Aperçu PC : M5.Display devient un canevas M5GFX en mémoire (1280×720 par défaut, PREVIEW_SIZE sinon).
 #pragma once
 
 #include <M5GFX.h>
 
-using namespace lgfx;
+#include "Arduino.h"
+
+// Pas de « using namespace lgfx » : son millis() (horloge SDL) rendrait les captures dépendantes du temps.
+// millis() vient de Arduino.h (valeur fixe, définie dans preview.cpp), comme dans platform/pc/stubs.
+using lgfx::textdatum_t;
 
 class PreviewDisplay : public M5Canvas {
 public:

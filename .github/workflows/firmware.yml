@@ -17,6 +17,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # tools/check.sh: a missing prerequisite fails instead of skipping; in the PC builds, a compiler warning in
+      # the project's own files is an error (tools/werror.py; not in libraries, not in the tab5 firmware)
+      CHECK_STRICT: "1"
+      CHECK_WERROR: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
@@ -33,45 +38,51 @@ jobs:
       - name: Installer PlatformIO
         run: pip install "platformio==6.2.0" "click==8.1.8"
 
+      # SDL2: simulator, preview, desktop; OpenSSL headers: desktop; openssl: certificates of the self-tests
+      - name: Paquets système
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev libssl-dev openssl
+
+      # Each gate below is one call of tools/check.sh: the same commands as a contributor runs (CONTRIBUTING.md).
+      # Unit tests of lib/core, with AddressSanitizer + UBSan
       - name: Tests de la logique (PC)
-        run: pio test -e native
+        run: tools/check.sh native
 
       # Simulator: the real app with a fake WiiM; the tour script fails the build if the app crashes or hangs
       - name: Simulateur (tour des écrans, faux WiiM)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev
-          pio run -e sim
-          timeout 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
+          tools/check.sh sim
           pip install "pillow==13.0.0" && python tools/preview/topng.py .pio/sim-out/*.ppm
 
-      # The preview tool makes the docs/*.png images: keep it building
-      - name: Aperçu (preview)
-        run: pio run -e preview
+      # The preview tool makes the docs/*.png images. Golden screens: every preview screen (English, French;
+      # 1280x720 and 800x480) must match tools/preview/golden.sha256 to the byte
+      - name: Aperçu (preview) et écrans de référence
+        id: golden
+        run: tools/check.sh preview
+
+      - name: Écrans de référence en PNG (si la comparaison échoue)
+        if: failure() && steps.golden.outcome == 'failure'
+        run: |
+          pip install "pillow==13.0.0"
+          python tools/preview/topng.py .pio/golden-out/*/*.ppm > /dev/null
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: failure() && steps.golden.outcome == 'failure'
+        with:
+          name: golden-screens
+          path: .pio/golden-out/**/*.png
 
       # Memory errors and undefined behaviour in the project's code: the tour under AddressSanitizer/UBSan
       # (separate build folder; UBSan reports inside the M5GFX library are known and do not fail the build)
       - name: Simulateur sous AddressSanitizer
-        env:
-          PLATFORMIO_BUILD_DIR: .pio/build-asan
-          PLATFORMIO_BUILD_FLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1
-        run: |
-          pio run -e sim
-          ASAN_OPTIONS=detect_leaks=0 timeout 300 .pio/build-asan/sim/program --headless --quiet --reset \
-              --state .pio/asan-state --out .pio/asan-out --script tools/sim/scripts/tour.txt 2> asan.log || { cat asan.log; exit 1; }
-          if grep -v "libdeps" asan.log | grep -E "ERROR: AddressSanitizer|runtime error" ; then exit 1; fi
+        run: tools/check.sh asan
 
       # "Real WiiM" simulator: simulator -> relay -> mock WiiM (status, command, certificate pinning)
       - name: Simulateur et relais (WiiM simulé en HTTPS)
-        run: |
-          pio run -e simreal
-          ./tools/relay/selftest.sh
+        run: tools/check.sh simreal
 
       # Computer version (Raspberry Pi / Linux / macOS): direct connection to a mock WiiM
       - name: Version ordinateur (desktop)
-        run: |
-          sudo apt-get install -y -qq libssl-dev
-          pio run -e desktop
-          ./platform/pc/selftest.sh
+        run: tools/check.sh desktop
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
@@ -85,7 +96,7 @@ jobs:
           echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION=\\\"$V\\\"" >> "$GITHUB_ENV"
 
       - name: Compiler le firmware
-        run: pio run -e tab5
+        run: tools/check.sh tab5
 
       # ESP32-P4 : chargeur de démarrage à 0x2000 (et non 0x0 comme l'ESP32-S3).
       # Mêmes adresses et réglages que « pio run -t upload ».

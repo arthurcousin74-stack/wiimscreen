@@ -14,7 +14,10 @@ pip install platformio "click<8.2"   # click >= 8.2 breaks the platform's esptoo
 pio test -e native                   # unit tests of lib/core on the PC, with ASan/UBSan — run after any logic change
 pio run -e tab5                      # firmware for the M5Stack Tab5
 pio run -e preview                   # PC build of the real UI (needs SDL2 headers: libsdl2-dev)
-SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
+SDL_VIDEODRIVER=dummy .pio/build/preview/program tools/preview/images <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
+python3 tools/preview/check_golden.py            # golden screens (en/fr, 1280x720 + 800x480) vs tools/preview/golden.sha256
+python3 tools/preview/check_golden.py --update   # only after an intended visual change; commit golden.sha256
+tools/check.sh                       # every CI gate in CI order + summary (CHECK_SKIP_RELAY=1, CHECK_WERROR=1: CONTRIBUTING.md)
 pio run -e sim                       # simulator: the real app + a fake WiiM in an SDL window (tools/sim/README.md)
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
 pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning, play queues; ~90 s)
@@ -25,7 +28,7 @@ PLATFORMIO_BUILD_DIR=.pio/build-tsan PLATFORMIO_BUILD_FLAGS="-fsanitize=thread -
 ```
 
 The PC builds share `[pc_base]` in platformio.ini and compile the project's own files with `-Wall -Wextra` (keep them
-warning-free). Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
+warning-free: CI adds `-Werror` on the project's own files through `tools/werror.py`, `CHECK_WERROR=1 tools/check.sh` locally). Use the simulator to check flows (taps, screens, messages) before asking for a hardware test; it found real bugs
 (missing glyph, shared cover image, chips over the battery).
 
 Firmware version: CI passes `-DFW_VERSION="<run>-<sha>"` through `PLATFORMIO_BUILD_FLAGS`; local builds get

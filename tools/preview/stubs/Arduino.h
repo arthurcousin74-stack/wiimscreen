@@ -24,5 +24,9 @@ private:
     std::string s_;
 };
 
+// Horloge figée de l'aperçu (preview.cpp) : l'anneau d'attente animé par millis() est toujours au même angle,
+// pour que les captures soient identiques d'une exécution à l'autre (tools/preview/check_golden.py)
+uint32_t millis();
+
 typedef void* SemaphoreHandle_t;
 typedef void* TaskHandle_t;

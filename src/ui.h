@@ -21,7 +21,8 @@ struct UiState {
     int pending = -1;  // bouton de lecture dont la commande attend la confirmation du WiiM (anneau tournant)
 };
 
-// Affichage sur l'écran couleur du Tab5 (1280×720).
+// Affichage sur l'écran couleur (Tab5 : 1280×720 en paysage, 720×1280 en portrait ; les autres tailles
+// sont mises à l'échelle par sc(), mise en page : wr::computeLayout).
 //
 // Chaque image est entièrement dessinée hors écran (canevas en PSRAM), puis
 // affichée d'un coup : pas de scintillement, et un appui s'affiche en quelques
@@ -29,8 +30,9 @@ struct UiState {
 // preset actif) est tirée de la pochette en cours.
 //
 // Deux vues :
-//  - commandes : grande pochette ; à côté, textes, progression, lecture, volume ;
-//    en bas, les presets en tuiles (image + nom), par pages de 6
+//  - commandes : grande pochette ; à côté (dessous en portrait), textes, progression, lecture, volume ;
+//    en bas, les presets en tuiles (image + nom), par pages : une rangée en paysage, deux en portrait,
+//    de 2 à 6 colonnes selon la largeur (6 par page sur le Tab5)
 //  - ambiance (après un moment sans appui) : grande pochette, grands textes,
 //    visualiseur ; un appui revient aux commandes
 class Ui {
