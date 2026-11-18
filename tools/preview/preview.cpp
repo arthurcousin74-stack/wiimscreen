@@ -301,6 +301,8 @@ int main(int argc, char** argv) {
     save(out, "15-choix-wiim.ppm");
     ui.renderPicker({});
     save(out, "16-aucun-wiim.ppm");
+    ui.renderPicker({{"Salon", "192.168.1.50"}});
+    save(out, "17-un-wiim.ppm");
 
     ui.renderMenu("57-219c0bc");
     save(out, "13-menu.ppm");

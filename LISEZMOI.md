@@ -55,7 +55,7 @@ Au premier démarrage, l'écran affiche « Configuration » avec un QR code.
 2. La page de configuration s'ouvre ; sinon va sur **http://192.168.4.1**.
 3. Renseigne :
    - ton **Wi-Fi** (2,4 GHz) : choisis-le dans la liste et tape son mot de passe. Astuce Android : **Paramètres > Wi-Fi > ton réseau > Partager** affiche le mot de passe sous le QR code
-   - l'**IP du WiiM** : **laisse vide**. Le Tab5 cherche les WiiM sur ton Wi-Fi ; s'il y en a plusieurs, il te demande lequel commander (par leur nom dans l'app WiiM Home). Si son adresse change plus tard, le Tab5 retrouve le même WiiM tout seul
+   - l'**IP du WiiM** : **laisse vide**. Le Tab5 cherche les WiiM sur ton Wi-Fi ; il te montre ceux qu'il trouve et tu touches celui à commander (par son nom dans l'app WiiM Home), même s'il n'y en a qu'un. Si son adresse change plus tard, le Tab5 retrouve le même WiiM tout seul
    - les **presets** : laisse vide pour reprendre ceux de l'app WiiM Home (noms et images). Sinon, une ligne par bouton, `numéro=nom` (12 max) :
    ```
    1=Radio Swiss Jazz

@@ -47,6 +47,8 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - Update page: a wrong code adds a delay that doubles (it no longer ends update mode).
 - Relay of the simulator: it connects only to the known WiiMs and their ports; a key is necessary when it listens
   on the network (`WIIMSIM_RELAY_KEY`).
+- First start: the Tab5 shows the WiiM that it found and waits for a touch, also when there is only one (its
+  certificate is kept at the first contact). It does not follow a WiiM to a new address before that first contact.
 - CI: actions pinned to commits, Python packages to versions. SECURITY.md states the limits of the unsigned update.
 
 ### Tests

@@ -63,7 +63,7 @@ covers, certificate pinning. Only the lowest layer changes: each connection goes
    pio run -e simreal && .pio/build/simreal/program --scale 0.75
    ```
 
-   On the first start, it looks for the WiiM (like a new Tab5). If it finds several, touch yours.
+   On the first start, it looks for the WiiM (like a new Tab5). Touch your WiiM in the list (also when the list has only one WiiM).
 3. To use the relay of another computer, start the relay with `--listen 0.0.0.0:8787`. The relay then shows a
    key (`WIIMSIM_RELAY_KEY=…`), or uses the key that you give with `--secret`. Start the simulator with
    `--relay <address>:8787` and give it this key in the `WIIMSIM_RELAY_KEY` environment variable. The relay refuses

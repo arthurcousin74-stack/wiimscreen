@@ -150,6 +150,9 @@ void WiimWorker::execute(const String& cmd) {
 // jamais un autre lecteur ; l'empreinte enregistrée doit toujours correspondre.
 bool WiimWorker::rediscover() {
     if (!cfg_.wiimUuid.length() || (lastRediscover_ && millis() - lastRediscover_ < 120000)) return false;
+    // HTTPS sans certificat épinglé encore (aucun échange réussi) : rien ne vérifierait la nouvelle adresse, et
+    // l'uuid se lit sans authentification. On ne suit personne tant que le WiiM choisi n'a pas répondu une fois.
+    if (cfg_.https && !client_.pinnedFingerprint().length()) return false;
     lastRediscover_ = millis() | 1;  // 0 = jamais essayé (permis dès le démarrage)
     for (auto& d : discoverWiims(2000))
         if (d.uuid == cfg_.wiimUuid.c_str() && d.ip != cfg_.host.c_str()) {

@@ -798,17 +798,15 @@ static void useWiim(const WiimDevice& d) {
     }
 }
 
-// Sans adresse enregistrée : recherche sur le Wi-Fi, choix sur l'écran s'il y en a plusieurs
+// Sans adresse enregistrée : recherche sur le Wi-Fi, puis choix sur l'écran. Même pour un seul lecteur trouvé :
+// son certificat sera épinglé au premier échange, et n'importe quel appareil du réseau peut répondre à la
+// recherche. Le nom et l'adresse sont montrés, un appui confirme.
 static void chooseWiim() {
     for (;;) {
         g_ui.showInfo(wr::L("Looking for the WiiM\xE2\x80\xA6", "Recherche du WiiM\xE2\x80\xA6"),
                       wr::L("The Tab5 is looking for WiiM players on your Wi-Fi.",
                             "Le Tab5 cherche les lecteurs WiiM sur ton Wi-Fi."));
         std::vector<WiimDevice> found = discoverWiims();
-        if (found.size() == 1) {
-            useWiim(found[0]);
-            return;
-        }
         std::vector<std::pair<std::string, std::string>> list;
         for (auto& d : found) list.push_back({d.name, d.ip});
         g_ui.renderPicker(list);

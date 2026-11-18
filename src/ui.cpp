@@ -1473,7 +1473,8 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     C.setTextDatum(textdatum_t::top_left);
     useFont(C, kBig);
     C.setTextColor(kText);
-    C.drawString(devices.empty() ? wr::L("No WiiM found", "Aucun WiiM trouv\xC3\xA9") : wr::L("Which WiiM?", "Quel WiiM ?"), m, m);
+    C.drawString(devices.empty() ? wr::L("No WiiM found", "Aucun WiiM trouv\xC3\xA9")
+                 : devices.size() == 1 ? wr::L("Use this WiiM?", "Utiliser ce WiiM ?") : wr::L("Which WiiM?", "Quel WiiM ?"), m, m);
     int y = m + C.fontHeight() + sc(16);
     useFont(C, kSmall);
     C.setTextColor(kText2);
@@ -1489,8 +1490,11 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
             y += C.fontHeight() + sc(6);
         }
     } else {
-        C.drawString(wr::L("Several players are on your Wi-Fi: tap the one to control.",
-                           "Plusieurs lecteurs sont sur ton Wi-Fi : touche celui \xC3\xA0 commander."),
+        C.drawString(devices.size() == 1
+                         ? wr::L("One player is on your Wi-Fi: check its name, then tap it.",
+                                 "Un lecteur est sur ton Wi-Fi : v\xC3\xA9rifie son nom, puis touche-le.")
+                         : wr::L("Several players are on your Wi-Fi: tap the one to control.",
+                                 "Plusieurs lecteurs sont sur ton Wi-Fi : touche celui \xC3\xA0 commander."),
                      m, y);
         y += C.fontHeight() + sc(20);
         const int cols = W > H ? 2 : 1, gap = sc(16);

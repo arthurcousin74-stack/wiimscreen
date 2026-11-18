@@ -71,7 +71,7 @@ latest [Actions](../../actions) run (artifact `wiim-remote-tab5`).
 
 1. Scan the QR code on the screen with your phone.
 2. Select your Wi-Fi network and type its password.
-3. Leave the WiiM address empty. The Tab5 finds the WiiM itself.
+3. Leave the WiiM address empty. The Tab5 finds the WiiMs on your Wi-Fi and shows them. Touch your WiiM.
 4. Tap **Save and restart**.
 
 ## How to
