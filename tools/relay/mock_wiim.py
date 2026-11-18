@@ -5,8 +5,12 @@
 #   playing at once; with shuffle on, the queue is shuffled when created and once more shortly after;
 #   PlayQueueWithIndex follows the order BrowseQueue shows; DeleteQueue stops playback; a seek sent while a track
 #   loads is lost; BrowseQueue never gives Login_username back.
-# Usage: python mock_wiim.py <port> <cert.pem> <key.pem> [--upnp-port N] [--nofill-file PATH]
+# Usage: python mock_wiim.py <port> <cert.pem> <key.pem> [--upnp-port N] [--nofill-file PATH] [--fault-file PATH]
 #   --upnp-port 0: no PlayQueue service. While the file PATH exists, the queues stay empty (a WiiM that loads nothing).
+#   --fault-file: one rule per line, "<count> <prefix>": the next <count> requests (-1: all) whose name starts with
+#   <prefix> fail. Names: the httpapi command ("setPlayerCmd:mute:0"; answered "Failed", not applied) or
+#   "upnp <Action> <QueueName or ListName>" ("upnp CreateQueue Mock Album"; answered 500). Counters restart when the
+#   file changes. Command "mockReset": back to the start state (Mock Song playing in the Mock Album queue, shuffle on).
 import html, http.server, json, os, random, re, ssl, sys, threading, time, urllib.parse
 
 args = sys.argv[1:]
@@ -16,6 +20,7 @@ def option(name, default):
     return default
 UPNP_PORT = int(option("--upnp-port", "49152"))
 NOFILL = option("--nofill-file", "")
+FAULTS = option("--fault-file", "")
 PORT, CERT, KEY = int(args[0]), args[1], args[2]
 
 # album id -> (album, artist, titles)
@@ -83,9 +88,30 @@ def queue_xml(name, q):
     return "".join(x) + "</Tracks></PlayList>"
 
 # What plays at the start: a known queue, shuffle on
-queues["Mock Album"] = {"url": "https://www.qobuz.com/api.json/0.2/album/get?album_id=mock&offset=0&limit=50",
-                        "tracks": tracks_of("album/get?album_id=mock"), "created": time.time() - 60, "reshuffled": True}
-state.update(queue="Mock Album", track=queues["Mock Album"]["tracks"][1])
+def reset():
+    queues.clear()
+    queues["Mock Album"] = {"url": "https://www.qobuz.com/api.json/0.2/album/get?album_id=mock&offset=0&limit=50",
+                            "tracks": tracks_of("album/get?album_id=mock"), "created": time.time() - 60, "reshuffled": True}
+    state.update(status="play", vol=25, mute=0, loop=3, pos=30000, t=time.time(), load_until=0,
+                 queue="Mock Album", track=queues["Mock Album"]["tracks"][1])
+reset()
+
+fault_rules = {"text": None, "left": []}
+def fault(name):
+    """True if this request must fail (rules of the fault file)."""
+    try:
+        text = open(FAULTS).read() if FAULTS else ""
+    except OSError:
+        text = ""
+    if text != fault_rules["text"]:
+        fault_rules["text"] = text
+        fault_rules["left"] = [[int(n), prefix] for n, prefix in (line.split(None, 1) for line in text.splitlines() if line.strip())]
+    for rule in fault_rules["left"]:
+        if name.startswith(rule[1]) and rule[0] != 0:
+            rule[0] -= rule[0] > 0
+            print("mock fault:", name, flush=True)
+            return True
+    return False
 
 def hexs(s): return s.encode().hex()
 class H(http.server.BaseHTTPRequestHandler):
@@ -100,7 +126,11 @@ class H(http.server.BaseHTTPRequestHandler):
             advance()
             title, artist, album, _ = state["track"] or ("", "", "", "")
             arg = cmd.rsplit(":", 1)[-1]
-            if cmd == "getPlayerStatus":
+            if fault(cmd):
+                body = "Failed"
+            elif cmd == "mockReset":
+                reset(); body = "OK"
+            elif cmd == "getPlayerStatus":
                 status = "load" if state["status"] == "play" and not now_playing() else state["status"]
                 body = {"status": status, "mode": "10", "curpos": str(state["pos"]), "totlen": "240000" if state["track"] else "0",
                         "vol": str(state["vol"]), "mute": str(state["mute"]), "loop": str(state["loop"]),
@@ -123,7 +153,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 elif cmd.startswith("setPlayerCmd:loopmode:") and arg in ("-1", "0", "1", "2", "3", "4"): state["loop"] = int(arg)
                 elif cmd.startswith("setPlayerCmd:seek:") and state["track"] and time.time() >= state["load_until"]:
                     state["pos"] = int(arg) * 1000  # lost while the track loads
-        print("mock <-", cmd, flush=True)
+        print("mock <-", cmd, "(failed)" if body == "Failed" else "", flush=True)
         self.reply((body if isinstance(body, str) else json.dumps(body)).encode())
 
 SERVICE = "urn:schemas-wiimu-com:service:PlayQueue:1"
@@ -149,6 +179,9 @@ class Upnp(http.server.BaseHTTPRequestHandler):
         with lock:
             advance()
             name = arg("QueueName")
+            listName = re.search(r"<ListName>(.*?)</ListName>", arg("QueueContext"), re.S)
+            if fault("upnp %s %s" % (action, name or (html.unescape(listName.group(1)) if listName else ""))):
+                return self.send(500, "<s:Envelope><s:Body><s:Fault>501 Action Failed</s:Fault></s:Body></s:Envelope>")
             if action == "BrowseQueue":
                 if name == "TotalQueue":
                     ctx = "<PlayQueue><TotalQueue>%d</TotalQueue><PlayListInfo>%s</PlayListInfo></PlayQueue>" % (

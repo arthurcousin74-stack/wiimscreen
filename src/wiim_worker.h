@@ -128,7 +128,9 @@ private:
     void runPlayDeezerAlbum(const std::string& albumId);
     void runSearch(const String& query);
     void runPlaySearchResult(int index);
-    bool qobuzModel(const std::string& control, std::string& templ);
+    bool qobuzModel(const std::string& control, std::string& templ, bool scanQueues = true);
+    void scanModels(const std::string& control);  // une lecture des files du WiiM cherche les deux modèles
+    void noteModel(const wr::QueueInfo& q, const std::string& ctx);
     struct Playback {
         bool known = false, playing = false, muted = false;
         std::string title, ctx, listName;  // morceau en cours ; file qui le contient (si trouvée)
@@ -138,11 +140,20 @@ private:
     };
     Playback snapshot(const std::string& control);
     bool shuffleOff(const Playback& before);  // pendant une recherche par file : sinon le WiiM mélange les résultats
-    void shuffleBack(const Playback& before, bool changed);
+    bool shuffleBack(const Playback& before, bool changed);
     void noteSearchChanges(const Playback& before, bool muted, bool unshuffled);  // gardé si le Tab5 redémarre
     void undoInterruptedSearch(const wr::PlayerStatus& now);
     bool undoChecked_ = false;
-    void restoreAfterSearch(const std::string& control, const Playback& before);
+    bool undoKeepsPlayback_ = false;  // note laissée par une recherche dont la musique d'avant a été remise
+    bool restoreAfterSearch(const std::string& control, const Playback& before);
+    // Ouverture et fermeture d'une recherche par file du WiiM (relevé, son coupé, lecture aléatoire retirée, note ;
+    // remise de la musique d'avant, du mode et du son). Partagées par runSearch et runQobuzFavoriteList.
+    struct SearchGuard {
+        Playback before;
+        bool muted = false, unshuffled = false;
+    };
+    bool searchGuardBegin(const std::string& control, SearchGuard& g, String& error);
+    bool searchGuardEnd(const std::string& control, const SearchGuard& g, String& error);
     bool deezerModel(const std::string& control, std::string& templ);
     void runDeezerSearch(const String& query);
     void runPlayDeezer(int index);
@@ -190,7 +201,11 @@ private:
     uint32_t lastRediscover_ = 0;
     uint32_t identityTriedAt_ = 0;  // getStatusEx demandé (0 = jamais) ; nouvel essai après 5 min si échec
     uint32_t pqFailedAt_ = 0;       // service PlayQueue introuvable à cet instant (0 = pas d'échec récent)
-    uint32_t modelScanAt_ = 0;      // dernière recherche des modèles de file Qobuz/Deezer dans les files du WiiM
+    // Recherche des modèles de file Qobuz/Deezer dans les files du WiiM : une fois après le démarrage, puis à un
+    // intervalle qui double (30 min à 24 h) tant qu'il en manque un ; aussi à la demande (recherche, tuile)
+    uint32_t modelScanNext_ = 0;  // prochaine lecture (0 : dès que possible)
+    uint32_t modelScanGap_ = 0;   // intervalle suivant (0 : pas encore lu)
+    std::string flowTried_;       // tuile Flow automatique refusée (favoris pleins…) : pas de nouvel essai avant redémarrage
     WiimError lastPollError_ = WiimError::None;
     bool polledOnce_ = false;
 };
