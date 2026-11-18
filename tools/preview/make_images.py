@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Input images for the preview screenshots in docs/: an album cover and six preset logos (no real artwork).
 
+The output is committed in tools/preview/images/ and the preview and the golden-screens check use those files, so
+that the screens do not depend on the Pillow/libjpeg version or the fonts of the machine. Regenerate them only on
+purpose: every golden hash changes (python tools/preview/check_golden.py --update), and so do the docs/*.png.
+
 Usage:
-    python tools/preview/make_images.py images/
-    SDL_VIDEODRIVER=dummy .pio/build/preview/program images/ out/ && python tools/preview/topng.py out/*.ppm
+    python tools/preview/make_images.py tools/preview/images/
+    SDL_VIDEODRIVER=dummy .pio/build/preview/program tools/preview/images/ out/ && python tools/preview/topng.py out/*.ppm
 Needs Pillow. Uses DejaVu Sans Bold when present, else Pillow's default font.
 """
 import os

@@ -167,7 +167,6 @@ static void setBrightness(int b) {
     M5.Display.setBrightness(b);
 }
 
-// État affiché : la position avance entre deux relevés pendant la lecture
 // Commande en attente de confirmation : anneau tournant sur le bouton (sinon l'appui semble ignoré
 // pendant que le WiiM réagit). Levée quand le relevé montre le changement, sur erreur, ou après 10 s.
 using Await = wr::Awaited;  // ce que l'on attend (lib/core/src/decisions.h)
@@ -187,6 +186,7 @@ static void show();
 // Lecture en cours, d'après le dernier relevé ; WiiM injoignable : son dernier état ne compte plus
 static bool playingNow() { return g_state.online && g_state.player.playing; }
 
+// État affiché : la position avance entre deux relevés pendant la lecture ; anneau du bouton en attente
 static UiState displayState() {
     UiState s = g_state;
     s.pending = g_pendingT;

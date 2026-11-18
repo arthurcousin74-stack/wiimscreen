@@ -89,18 +89,90 @@ Install SDL2 first (Linux: `sudo apt install libsdl2-dev`; macOS: `brew install 
 
 ```bash
 pio run -e preview
-python tools/preview/make_images.py images/                  # cover and preset images (no real artwork)
-SDL_VIDEODRIVER=dummy .pio/build/preview/program images/ out/
+mkdir -p out
+SDL_VIDEODRIVER=dummy .pio/build/preview/program tools/preview/images/ out/
 python tools/preview/topng.py out/*.ppm
 ```
 
-`PREVIEW_LANG=fr` makes the screens in French. The images in `docs/` come from this tool.
+`PREVIEW_LANG=fr` makes the screens in French. `PREVIEW_SIZE=800x480` sets the landscape screen size (default
+`1280x720`; the portrait screens use the same size, turned). The images in `docs/` come from this tool. The input
+images (an album cover and six preset logos, no real artwork) are in `tools/preview/images/`.
+`tools/preview/make_images.py` made them.
+
+The golden-screens check draws all the screens in English and French, at 1280×720 and 800×480, and compares them
+with `tools/preview/golden.sha256`:
+
+```bash
+python3 tools/preview/check_golden.py            # compare (CI does this)
+python3 tools/preview/check_golden.py --update   # after an intended visual change: commit golden.sha256
+```
+
+When the check fails, it gives the names of the changed screens. Refer to
+[CONTRIBUTING.md](../CONTRIBUTING.md#golden-screens).
+
+All the checks of CI: `tools/check.sh`. Refer to [CONTRIBUTING.md](../CONTRIBUTING.md#checks-the-same-as-ci).
 
 The simulator runs the full app on a PC, with a fake WiiM or with your real WiiM through a relay. Refer to
 [tools/sim/README.md](../tools/sim/README.md).
 
 The `desktop` build runs the app on a Raspberry Pi or a computer, directly on the network. Refer to
 [DESKTOP.md](DESKTOP.md). Simulator and desktop share the computer layer in `platform/pc/`.
+
+## How to add
+
+Checklists for the three most frequent changes. Each list gives the files to change and the trap that no build or
+test finds.
+
+### A setting
+
+- [ ] `src/settings.h`: add the field to `struct Settings`, with its default value.
+- [ ] `src/settings.cpp`: read it in `loadSettings()` and write it in `saveSettings()`. Use the same NVS key in the
+      two functions. An NVS key has a maximum of 15 characters.
+- [ ] `src/settings.cpp`: add it to `settingsToBackup()` **and** to `settingsFromBackup()`, with the same key.
+- [ ] `src/portal.cpp`: add the input to the form in `formPage()`, and read it in the `server.on("/save", …)`
+      handler. A checkbox that is not checked is not in the form data: use `server.hasArg(…)`, as for `qobuzdirect`.
+- [ ] Labels of the setup page: `wr::L("English", "Français")`.
+- [ ] `README.md` (Simplified Technical English) and `LISEZMOI.md`: tell the user what the setting does.
+- [ ] A secret (password, key, token): never write it to the Journal or the serial port.
+
+**Trap:** a field that is not in **both** `settingsToBackup()` and `settingsFromBackup()` operates correctly until a
+full USB flash. The merged image erases the NVS, `setup()` restores the settings from the LittleFS copy, and the
+field goes back to its default value. No test and no simulator run shows this.
+
+### A screen
+
+- [ ] `src/ui.h` / `src/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
+      and call `navRail(n)` if the navigation bar shows on the screen (`hitHome()`, `hitSettings()` and
+      `hitSearch()` match only while the bar is shown). Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
+- [ ] `src/main.cpp`: add a `static bool g_xxxOpen` flag next to `g_menuOpen` and `g_logOpen`.
+- [ ] `src/main.cpp`: add the flag to `modalOpen()`.
+- [ ] `src/main.cpp`: in `loop()`, add a branch `if (g_xxxOpen) { … }` before the controls view, as for
+      `g_logOpen`. It handles the taps (close, `hitHome()`, `hitSettings()`, `hitSearch()`), then calls
+      `serviceWiim()`, `delay(5)` and `return`. To close the screen: set the flag to false, set `g_lastTouch`,
+      call `show()`.
+- [ ] `tools/preview/preview.cpp`: draw the screen and `save()` it, in landscape and, if it is different, in
+      portrait. Then run `python3 tools/preview/check_golden.py --update` and commit `tools/preview/golden.sha256`.
+- [ ] Look at the screen in English and French, at 1280×720 and 800×480 (`.pio/golden-out/`). Optional: add taps
+      and a `shot` to `tools/sim/scripts/tour.txt`.
+
+**Traps:** a flag that is not in `modalOpen()` lets `renderNow()` and the 1 Hz progress tick draw the controls view
+over your screen. A branch that does not call `serviceWiim()` stops the WiiM state while the screen is open: the
+reports and the results of the worker are not applied.
+
+### A text on the screen, or a Journal line
+
+- [ ] A text that the user sees: `wr::L("English", "Français")` (`lib/core/src/i18n.h`), the two languages in the
+      same place, with the same printf specifiers. `wr::L()` gives a `const char*`: write `String(wr::L(…)) + …`.
+      Do not call `wr::L()` during static initialisation (the language is not set yet).
+- [ ] Use only the characters of the fonts: ASCII, Latin-1, Latin Extended-A and some punctuation (`CHARS` in
+      `tools/make_vlw.py`). There are no symbols such as ▶ ■ ♥: write words or draw an icon.
+- [ ] Non-ASCII characters in C strings: UTF-8 escapes (`"R\xC3\xA9glages"`) where the file already uses them.
+- [ ] Check the length at 800×480: `python3 tools/preview/check_golden.py`, then look at the PNGs.
+- [ ] A Journal line (`logEvent(…)`): in **French** only, never `wr::L()`. Never a secret.
+
+**Trap:** a missing glyph does not fail a build or a test: the character is not drawn. A text that is too long is
+cut or covers another element only at some screen sizes. Look at the screens in the two languages and the two sizes.
+A Journal line in English breaks the checks in `docs/HARDWARE_TEST.md`, which quote the Journal lines.
 
 ## Other ESP32 boards
 

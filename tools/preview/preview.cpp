@@ -3,8 +3,13 @@
 //
 //   pio run -e preview
 //   .pio/build/preview/program dossier_images/ dossier_sortie/
-//     dossier_images : cover.jpg, et preset1..6 en .jpg ou .png (facultatifs)
+//     dossier_images : cover.jpg, et preset1..6 en .jpg ou .png (facultatifs) ; tools/preview/images/
 //   python tools/preview/topng.py dossier_sortie/*.ppm
+//
+// Variables d'environnement : PREVIEW_LANG=fr (écrans en français), PREVIEW_SIZE=800x480 (taille de l'écran en
+// paysage, 1280x720 par défaut ; le portrait prend la même taille tournée).
+// Les captures ne dépendent pas de l'heure (millis() figé ci-dessous) : tools/preview/check_golden.py compare
+// leurs empreintes à tools/preview/golden.sha256.
 #include <unistd.h>
 
 #include <cmath>
@@ -17,6 +22,9 @@
 #include "i18n.h"
 
 PreviewM5 M5;
+
+// Horloge figée : l'anneau d'attente (Ui::transport, millis()) est dessiné au même angle à chaque exécution
+uint32_t millis() { return 0; }
 
 ArtImage& ArtImage::operator=(ArtImage&& o) noexcept {
     if (this != &o) {
@@ -82,6 +90,14 @@ int main(int argc, char** argv) {
     const std::string in = argv[1], out = argv[2];
     // Langue de l'interface : PREVIEW_LANG=fr pour les écrans en français (anglais par défaut)
     if (const char* lg = getenv("PREVIEW_LANG")) wr::setLang(wr::langFromCode(lg));
+    // Taille de l'écran en paysage (PREVIEW_SIZE=LxH) ; le portrait est la même taille tournée
+    int W = 1280, H = 720;
+    if (const char* sz = getenv("PREVIEW_SIZE")) {
+        if (sscanf(sz, "%dx%d", &W, &H) != 2 || W < H || H < 240 || W > 4096) {
+            fprintf(stderr, "PREVIEW_SIZE invalide : %s (attendu : 1280x720, 800x480...)\n", sz);
+            return 1;
+        }
+    }
     ArtImage art;
     if (!loadFile((in + "/cover.jpg").c_str(), art)) {
         fprintf(stderr, "image illisible : %s/cover.jpg\n", in.c_str());
@@ -92,7 +108,7 @@ int main(int argc, char** argv) {
 
     auto& D = M5.Display;
     D.setColorDepth(24);
-    if (!D.createSprite(1280, 720)) {
+    if (!D.createSprite(W, H)) {
         fprintf(stderr, "canevas impossible à créer\n");
         return 1;
     }
@@ -245,7 +261,7 @@ int main(int argc, char** argv) {
     // Portrait (rotation 0) : même interface, pochette en haut, presets sur deux rangées
     {
         D.deleteSprite();
-        D.createSprite(720, 1280);
+        D.createSprite(H, W);
         Ui& up = *new Ui();  // jamais détruite (voir la sortie par _exit)
         Settings sp;
         up.begin(sp);
@@ -294,7 +310,7 @@ int main(int argc, char** argv) {
             save(out, "34-albums-resultats-portrait.ppm");
         }
         D.deleteSprite();
-        D.createSprite(1280, 720);
+        D.createSprite(W, H);
     }
 
     ui.renderPicker({{"Salon", "192.168.1.50"}, {"Cuisine", "192.168.1.61"}, {"Bureau", "192.168.1.73"}});

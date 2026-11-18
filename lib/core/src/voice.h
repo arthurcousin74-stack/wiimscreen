@@ -1,5 +1,5 @@
 // Texte et audio sans Arduino (testable sur PC) : normalisation des textes, recherche Deezer publique,
-// encodage d'URL, en-tête WAV pour la transcription de la dictée.
+// numéro de profil Deezer, en-tête WAV pour la transcription de la dictée (encodage d'URL : urlQueryEncode, upnp.h).
 #pragma once
 
 #include <cstddef>
