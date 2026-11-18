@@ -92,7 +92,7 @@ std::string jsonText(const std::string& raw) {
         switch (e) {
             case 'n': o += '\n'; break;
             case 't': o += '\t'; break;
-            case 'r': break;
+            case 'r': case 'b': case 'f': break;  // \r\n -> \n; backspace, form feed: dropped
             case 'u': i = decodeJsonUnicode(raw, i, o); break;
             default: o += e;  // \" \\ \/
         }
@@ -113,6 +113,10 @@ std::vector<std::string> jsonArray(const std::string& raw) {
             continue;
         }
         size_t e = valueEnd(raw, i);
+        if (e <= i) {  // stray '}' or ':' at array level: skipped (it used to loop forever)
+            ++i;
+            continue;
+        }
         out.push_back(raw.substr(i, e - i));
         i = e;
     }

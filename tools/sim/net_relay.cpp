@@ -49,7 +49,10 @@ static int openRelay(const std::string& firstLine, std::string& answer, uint32_t
     }
     timeval tv{(time_t)(timeoutMs / 1000), (suseconds_t)(timeoutMs % 1000) * 1000};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    const std::string line = firstLine + "\n";
+    // Relais sur un autre ordinateur (--listen hors 127.0.0.1) : il exige sa clé, en dernier mot de la ligne.
+    // Variable d'environnement (pas une option : une option se lirait dans la liste des processus).
+    const char* key = getenv("WIIMSIM_RELAY_KEY");
+    const std::string line = firstLine + (key && *key ? std::string(" key=") + key : std::string()) + "\n";
     if (send(fd, line.data(), line.size(), MSG_NOSIGNAL) != (ssize_t)line.size()) {
         close(fd);
         return -1;

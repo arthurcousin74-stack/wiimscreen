@@ -32,8 +32,14 @@ std::string xmlUnescape(const std::string& s) {
             o += s[i];
             continue;
         }
-        size_t semi = s.find(';', i);
-        if (semi == std::string::npos || semi - i > 10) {
+        // ';' cherché sur 10 caractères au plus : pas de parcours jusqu'à la fin pour chaque '&'
+        size_t semi = std::string::npos;
+        for (size_t k = i + 1; k < s.size() && k <= i + 10; ++k)
+            if (s[k] == ';') {
+                semi = k;
+                break;
+            }
+        if (semi == std::string::npos) {
             o += s[i];
             continue;
         }
@@ -44,11 +50,22 @@ std::string xmlUnescape(const std::string& s) {
         else if (ent == "quot") o += '"';
         else if (ent == "apos") o += '\'';
         else if (ent.size() > 1 && ent[0] == '#') {
-            bool hex = ent[1] == 'x' || ent[1] == 'X';
-            char* endp = nullptr;
-            const char* digits = ent.c_str() + (hex ? 2 : 1);
-            unsigned long cp = std::strtoul(digits, &endp, hex ? 16 : 10);
-            if (endp && *endp == 0 && *digits) appendUtf8(o, cp);
+            const bool hex = ent[1] == 'x' || ent[1] == 'X';
+            const size_t start = hex ? 2 : 1;
+            // Chiffres seulement (strtoul accepterait espaces et signes)
+            bool ok = start < ent.size();
+            unsigned long cp = 0;
+            for (size_t k = start; ok && k < ent.size(); ++k) {
+                const char c = ent[k];
+                int d = c >= '0' && c <= '9' ? c - '0' : -1;
+                if (hex && d < 0) d = c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+                ok = d >= 0;
+                cp = cp * (hex ? 16 : 10) + static_cast<unsigned long>(d < 0 ? 0 : d);
+            }
+            // Refusés : NUL et caractères de contrôle (sauf tabulation et retour à la ligne), moitiés de paire
+            // UTF-16, au-delà de U+10FFFF ; l'entité reste alors telle quelle
+            ok = ok && (cp >= 0x20 || cp == '\t' || cp == '\n') && !(cp >= 0xD800 && cp <= 0xDFFF) && cp <= 0x10FFFF;
+            if (ok) appendUtf8(o, cp);
             else o += s.substr(i, semi - i + 1);
         } else {
             o += s.substr(i, semi - i + 1);
@@ -68,17 +85,22 @@ static size_t findOpen(const std::string& xml, const std::string& tag, size_t fr
             ++p;
             continue;
         }
-        size_t nameEnd = q;
-        while (nameEnd < xml.size() && !std::isspace(static_cast<unsigned char>(xml[nameEnd])) && xml[nameEnd] != '>' &&
-               xml[nameEnd] != '/')
+        // Nom lu sur 64 caractères au plus et comparé en place : pas de copie ni de parcours jusqu'à la fin
+        // pour chaque '<' (200 Ko de '<' prenaient 52 s)
+        const size_t limit = std::min(xml.size(), q + 64);
+        size_t nameEnd = q, colon = std::string::npos;
+        while (nameEnd < limit && !std::isspace(static_cast<unsigned char>(xml[nameEnd])) && xml[nameEnd] != '>' &&
+               xml[nameEnd] != '/' && xml[nameEnd] != '<') {
+            if (xml[nameEnd] == ':' && colon == std::string::npos) colon = nameEnd;
             ++nameEnd;
-        std::string name = xml.substr(q, nameEnd - q);
-        size_t colon = name.find(':');
-        std::string local = colon == std::string::npos ? name : name.substr(colon + 1);
-        if (local == tag) {
+        }
+        const size_t localStart = colon == std::string::npos ? q : colon + 1;
+        // Trop long, ou coupé par un autre '<' : pas une balise (chaque '<' coûte au plus la distance au suivant)
+        const bool broken = (nameEnd == limit && limit < xml.size()) || (nameEnd < xml.size() && xml[nameEnd] == '<');
+        if (!broken && nameEnd - localStart == tag.size() && xml.compare(localStart, tag.size(), tag) == 0) {
             size_t gt = xml.find('>', nameEnd);
             if (gt == std::string::npos) return std::string::npos;
-            fullName = name;
+            fullName = xml.substr(q, nameEnd - q);
             contentStart = xml[gt - 1] == '/' ? std::string::npos : gt + 1;  // <tag/> : vide
             return p;
         }
@@ -304,6 +326,14 @@ static void setElement(std::string& xml, const std::string& tag, const std::stri
             return;
         }
     }
+    // Élément vide <tag/> ou <tag /> : remplacé (sinon il resterait avant le nouveau et serait lu en premier)
+    for (const std::string& empty : {"<" + tag + "/>", "<" + tag + " />"}) {
+        size_t z = xml.find(empty);
+        if (z != std::string::npos) {
+            xml.replace(z, empty.size(), open + escapedValue + close);
+            return;
+        }
+    }
     size_t e = xml.find("</" + parentTag + ">");
     if (e != std::string::npos) xml.insert(e, open + escapedValue + close);
 }
@@ -319,7 +349,11 @@ std::string queueFromTemplate(const std::string& templ, const std::string& listN
     if (t != std::string::npos && te != std::string::npos && te > t) x.erase(t, te + 9 - t);
     else if ((t = x.find("<Tracks/>")) != std::string::npos) x.erase(t, 9);
     setElement(x, "ListName", xmlEscape(listName), "PlayList");
-    if (x.find("<ListInfo>") == std::string::npos) x.insert(x.find("</PlayList>"), "<ListInfo></ListInfo>");
+    if (x.find("<ListInfo>") == std::string::npos) {
+        const size_t z = x.find("<ListInfo/>");
+        if (z != std::string::npos) x.replace(z, 11, "<ListInfo></ListInfo>");
+        else x.insert(x.find("</PlayList>"), "<ListInfo></ListInfo>");
+    }
     setElement(x, "SearchUrl", xmlEscape(searchUrl), "ListInfo");
     size_t n = x.find("<TrackNumber>");
     if (n != std::string::npos) {
@@ -351,38 +385,116 @@ std::string urlQueryEncode(const std::string& s) {
     return o;
 }
 
+namespace {
+
+bool startsWith(const std::string& s, size_t at, const char* lit) {
+    const size_t n = std::char_traits<char>::length(lit);
+    return at <= s.size() && s.size() - at >= n && s.compare(at, n, lit) == 0;
+}
+
+bool startsWithNoCase(const std::string& s, size_t at, const char* lit) {
+    const size_t n = std::char_traits<char>::length(lit);
+    if (at > s.size() || s.size() - at < n) return false;
+    for (size_t k = 0; k < n; ++k)
+        if (std::tolower(static_cast<unsigned char>(s[at + k])) != std::tolower(static_cast<unsigned char>(lit[k])))
+            return false;
+    return true;
+}
+
+size_t skipBlank(const std::string& s, size_t i) {
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) ++i;
+    return i;
+}
+
+// Fin d'une valeur de paramètre d'URL commençant en v
+size_t queryValueEnd(const std::string& o, size_t v, bool percentForm) {
+    size_t e = v;
+    while (e < o.size() && o[e] != '&' && o[e] != '<' && o[e] != '"' && o[e] != ' ' && o[e] != '\n' && o[e] != '\r' &&
+           o[e] != '\t' && o[e] != '\'' && !(percentForm && startsWithNoCase(o, e, "%26")))
+        ++e;
+    return e;
+}
+
+// Valeur JSON (chaîne, chaîne échappée \"…\" ou &quot;…&quot;, nombre, littéral) commençant en v : [vs, ve) à masquer
+bool jsonValueSpan(const std::string& o, size_t v, size_t& vs, size_t& ve) {
+    if (v >= o.size()) return false;
+    if (startsWith(o, v, "&quot;")) {
+        vs = v + 6;
+        ve = o.find("&quot;", vs);
+        if (ve == std::string::npos) ve = o.size();
+        return true;
+    }
+    if (startsWith(o, v, "\\\"")) {
+        vs = v + 2;
+        ve = o.find("\\\"", vs);
+        if (ve == std::string::npos) ve = o.size();
+        return true;
+    }
+    if (o[v] == '"') {
+        vs = ve = v + 1;
+        while (ve < o.size() && o[ve] != '"') ve += o[ve] == '\\' ? 2 : 1;
+        ve = std::min(ve, o.size());
+        return true;
+    }
+    if (o[v] == '{' || o[v] == '[') return false;  // objet ou tableau : pas un secret simple
+    vs = ve = v;  // nombre ou littéral
+    while (ve < o.size() && o[ve] != ',' && o[ve] != '}' && o[ve] != ']' && o[ve] != '<' && o[ve] != '&' &&
+           o[ve] != '"' && !std::isspace(static_cast<unsigned char>(o[ve])))
+        ++ve;
+    return true;
+}
+
+}  // namespace
+
 std::string maskSecrets(const std::string& text) {
-    static const char* kKeys[] = {"user_auth_token", "access_token", "token", "secret", "password", "request_sig", "sig",
-                                  "hmac",            "uid",          "eid",   "app_id", "accessToken", "clientId"};
+    static const char* kKeys[] = {"user_auth_token", "access_token", "token",       "secret",   "password",
+                                  "request_sig",     "sig",          "hmac",        "uid",      "eid",
+                                  "app_id",          "accessToken",  "clientId",    "client_secret",
+                                  "refresh_token",   "refreshToken", "api_key",     "apiKey"};
     std::string o = text;
+    auto mask = [&](size_t vs, size_t ve) {
+        ve = std::min(ve, o.size());
+        if (ve > vs && o.compare(vs, ve - vs, "***") != 0) o.replace(vs, ve - vs, "***");
+    };
     for (const char* key : kKeys) {
-        const std::string k = std::string(key) + "=";
+        const std::string k = key;
         size_t p = 0;
         while ((p = o.find(k, p)) != std::string::npos) {
-            bool boundary = p == 0 || o[p - 1] == '?' || o[p - 1] == '&' || o[p - 1] == ';' || o[p - 1] == ' ';
-            size_t v = p + k.size();
-            if (!boundary) {
-                p = v;
-                continue;
+            const size_t ke = p + k.size();
+            // Début de nom : rien avant, ou un séparateur (pas une lettre, un chiffre ou '_' : « mytoken » n'est pas
+            // « token »), ou un caractère encodé %XX (« %26token%3D… »)
+            const size_t ks = p;
+            p = ke;
+            const unsigned char before = ks ? static_cast<unsigned char>(o[ks - 1]) : ' ';
+            const bool boundary = ks == 0 || !(std::isalnum(before) || before == '_') ||
+                                  (ks >= 3 && o[ks - 3] == '%' && std::isxdigit(before) &&
+                                   std::isxdigit(static_cast<unsigned char>(o[ks - 2])));
+            if (!boundary) continue;
+            if (startsWith(o, ke, "=")) {  // paramètre d'URL : key=value
+                mask(ke + 1, queryValueEnd(o, ke + 1, false));
+            } else if (startsWithNoCase(o, ke, "%3D")) {  // paramètre encodé : key%3Dvalue%26…
+                mask(ke + 3, queryValueEnd(o, ke + 3, true));
+            } else if (startsWith(o, ke, ">") && ks > 0 && (before == '<' || before == ':')) {
+                // élément XML <key>value</key> (ou <ns:key>)
+                const size_t e = o.find('<', ke + 1);
+                mask(ke + 1, e == std::string::npos ? o.size() : e);
+            } else if (startsWith(o, ke, "&gt;") && (ks >= 4 && startsWith(o, ks - 4, "&lt;"))) {
+                // élément XML échappé &lt;key&gt;value&lt;/key&gt;
+                const size_t e = o.find("&lt;", ke + 4);
+                mask(ke + 4, e == std::string::npos ? o.size() : e);
+            } else {
+                // Clé JSON : "key", \"key\" ou &quot;key&quot;, puis ':' (blancs et retours à la ligne permis)
+                size_t c;
+                if (startsWith(o, ke, "\"")) c = ke + 1;
+                else if (startsWith(o, ke, "\\\"")) c = ke + 2;
+                else if (startsWith(o, ke, "&quot;")) c = ke + 6;
+                else continue;
+                c = skipBlank(o, c);
+                if (c >= o.size() || o[c] != ':') continue;
+                size_t vs, ve;
+                if (jsonValueSpan(o, skipBlank(o, c + 1), vs, ve)) mask(vs, ve);
             }
-            size_t e = v;
-            while (e < o.size() && o[e] != '&' && o[e] != '<' && o[e] != '"' && o[e] != ' ' && o[e] != '\n') ++e;
-            if (e > v && o.compare(v, e - v, "***") != 0) o.replace(v, e - v, "***");
-            p = v + 3;
-        }
-        // JSON form: "key" : "value" (GetUserInfo, API answers)
-        const std::string q = std::string("\"") + key + "\"";
-        p = 0;
-        while ((p = o.find(q, p)) != std::string::npos) {
-            size_t v = p + q.size();
-            while (v < o.size() && (o[v] == ' ' || o[v] == ':')) ++v;
-            p = v;
-            if (v >= o.size() || o[v] != '"') continue;
-            size_t e = ++v;
-            while (e < o.size() && o[e] != '"') e += o[e] == '\\' ? 2 : 1;
-            e = std::min(e, o.size());
-            if (e > v && o.compare(v, e - v, "***") != 0) o.replace(v, e - v, "***");
-            p = v + 3;
+            // La recherche reprend après le nom : une valeur masquée vaut « *** », sans nom de clé dedans
         }
     }
     return o;

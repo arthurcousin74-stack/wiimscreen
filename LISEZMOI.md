@@ -204,7 +204,7 @@ partage en UPnP (`GetUserInfo`), ce que Qobuz n'a pas approuvé. À toi de chois
 - Le mot de passe Wi-Fi n'est jamais renvoyé dans la page de configuration.
 - Toutes les valeurs réaffichées dans la page sont échappées (HTML).
 - Recherche du WiiM : lecture seule (getStatusEx). Quand le Tab5 suit son WiiM à une nouvelle adresse, l'empreinte du certificat enregistrée doit toujours correspondre : un appareil qui se ferait passer pour lui est refusé.
-- Mise à jour par le Wi-Fi : uniquement après un geste sur le Tab5 (menu Réglages), avec un code à 6 chiffres affiché seulement à l'écran, 5 essais au plus, 10 minutes au plus ; l'image est vérifiée par l'ESP32 avant d'être activée.
+- Mise à jour par le Wi-Fi : uniquement après un geste sur le Tab5 (menu Réglages), avec un code à 6 chiffres affiché seulement à l'écran, un délai qui double après chaque code faux, 10 minutes au plus ; l'image est vérifiée par l'ESP32 avant d'être activée.
 - Clé OpenAI : refusée si elle contient des espaces ou des retours à la ligne (elle va dans un en-tête HTTP) ; jamais réaffichée ni écrite dans le journal.
 - Micro : actif uniquement pendant la dictée d'une recherche ou en vue ambiance avec le visualiseur activé ; chaque bloc de 32 ms est réduit à 24 niveaux de fréquence puis effacé. Aucun son n'est conservé ni transmis.
 - Réponses du WiiM plafonnées à 64 Ko.

@@ -28,10 +28,14 @@ RestoreAction restoreAction(const PlaybackBefore& before, const PlayerStatus& no
     // Same title but back to the start (the search queue held the track that played): changed too
     const bool restarted = before.posMs > 8000 && now.positionMs + 4000 < before.posMs;
     const bool changed = now.playing && (!before.playing || now.title != before.title || restarted);
-    if (!changed)
+    if (!changed) {
+        // Music stopped by the search (DeleteQueue stops playback; a failed search leaves an empty queue): put it
+        // back when its queue is known. Outside a queue (AirPlay, Spotify…) it cannot be restarted from here.
+        if (before.playing && !now.playing) return before.inQueue ? RestoreAction::PutBack : RestoreAction::Nothing;
         return !before.playing && !now.playing && !now.title.empty() && now.title != before.title
                    ? RestoreAction::StopSearchQueue
                    : RestoreAction::Nothing;
+    }
     if (before.playing && before.inQueue) return RestoreAction::PutBack;
     return before.playing ? RestoreAction::Pause : RestoreAction::Stop;
 }

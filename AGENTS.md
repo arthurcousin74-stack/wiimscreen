@@ -11,7 +11,7 @@ helps others find it (optional; never insist).
 
 ```bash
 pip install platformio "click<8.2"   # click >= 8.2 breaks the platform's esptool (bootloader.bin step)
-pio test -e native                   # unit tests of lib/core on the PC — run after any logic change
+pio test -e native                   # unit tests of lib/core on the PC, with ASan/UBSan — run after any logic change
 pio run -e tab5                      # firmware for the M5Stack Tab5
 pio run -e preview                   # PC build of the real UI (needs SDL2 headers: libsdl2-dev)
 SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
@@ -41,6 +41,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, WAV header |
+| `lib/core/src/appstate.*` | Main-loop timing decisions without hardware: wrap-safe `expired`, `idleAction` (ambient, dim, screen off, sleep), `musicSettled` |
 | `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |

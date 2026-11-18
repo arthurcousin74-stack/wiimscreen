@@ -15,7 +15,7 @@ namespace wr {
 // Raw text of the value of `key` at the top level of a JSON object (string with its quotes, number,
 // object or array); empty if absent.
 std::string jsonTop(const std::string& object, const std::string& key);
-// Unquoted, unescaped string value (\" \\ \/ \n \uXXXX handled); numbers returned as written.
+// Unquoted, unescaped string value (\" \\ \/ \n \t \uXXXX handled; \r \b \f dropped); numbers returned as written.
 std::string jsonText(const std::string& raw);
 // Top-level elements of a JSON array (raw text each).
 std::vector<std::string> jsonArray(const std::string& raw);

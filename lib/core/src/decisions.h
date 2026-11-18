@@ -26,7 +26,7 @@ bool pendingConfirmed(Awaited what, const PlayerStatus& now, const std::string& 
 enum class RestoreAction {
     Nothing,          // nothing changed
     StopSearchQueue,  // nothing played before, the WiiM stays paused on the search queue: stop it
-    PutBack,          // put the previous queue back, same track and position
+    PutBack,          // put the previous queue back, same track and position (also when the search stopped it)
     PutBackPaused,    // a track was paused in a known queue: put it back (same track, position), paused
     Pause,            // something played outside a queue (AirPlay, Spotify…): pause what the search started
     Stop,             // nothing played before: stop what the search started
