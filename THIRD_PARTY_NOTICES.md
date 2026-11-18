@@ -7,7 +7,7 @@ It includes or builds with the following third-party components.
 
 | Path | Component | License |
 |---|---|---|
-| `fonts/DejaVuSans.ttf` (and the fonts generated from it in `src/fonts/`) | DejaVu Sans | Bitstream Vera license + public-domain changes, see [`fonts/LICENSE-DejaVu.txt`](fonts/LICENSE-DejaVu.txt) |
+| `fonts/DejaVuSans.ttf` (and the fonts generated from it in `src/ui/fonts/`) | DejaVu Sans | Bitstream Vera license + public-domain changes, see [`fonts/LICENSE-DejaVu.txt`](fonts/LICENSE-DejaVu.txt) |
 | `certs/cacrt_all.pem` (and `certs/x509_crt_bundle.bin` generated from it) | Mozilla's root CA list (via ESP-IDF's `cacrt_all.pem`) | [Mozilla Public License 2.0](https://www.mozilla.org/MPL/2.0/) |
 
 ## Libraries compiled into the firmware

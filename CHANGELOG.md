@@ -5,6 +5,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+### Changed
+- For contributors: `src/` is split into folders by role (`app/`, `ui/`, `net/`, `device/`, `storage/`;
+  `main.cpp` stays at the root), with includes written from `src/` (`#include "net/wiim_worker.h"`). File names
+  and the code (apart from the include lines) are unchanged. No change for the user.
+
 ## [0.2.0-beta] — 2026-11-18 — computer version, safer search, code split for contributors
 
 ### Added

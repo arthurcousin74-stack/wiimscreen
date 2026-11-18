@@ -64,7 +64,7 @@ On macOS: `brew install sdl2` (and `openssl` for the `desktop` gate).
 
 ### Golden screens
 
-`tools/preview/check_golden.py` draws every preview screen with the real `src/ui.cpp` and compares each image, byte
+`tools/preview/check_golden.py` draws every preview screen with the real `src/ui/ui.cpp` and compares each image, byte
 for byte, with `tools/preview/golden.sha256`. The input images are in `tools/preview/images/` (made by
 `tools/preview/make_images.py`; do not regenerate them without a reason, every hash would change).
 

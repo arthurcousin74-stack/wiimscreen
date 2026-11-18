@@ -33,6 +33,11 @@ problems, refer to [AGENTS.md](../AGENTS.md).
   the play queues, Qobuz and Deezer parsing, layout, on-screen keyboard, interface language, accent color, FFT
   spectrum, motion detection and firmware-image filtering. Test it on a PC with `pio test -e native`.
 - **`src/`** contains the device firmware (Arduino-ESP32 3.x on ESP-IDF 5 through pioarduino, M5Unified, M5GFX).
+  `src/main.cpp` is the entry point (`setup()` and `loop()`). The other files are in one folder for each role:
+  `src/app/` (the parts of the app that `main.cpp` calls, the Journal, the version), `src/ui/` (drawing, hit tests,
+  fonts), `src/net/` (all network code: WiiM worker and client, discovery, covers, transcription, root certificates),
+  `src/device/` (setup portal, update page, sounds) and `src/storage/` (settings and favorites on the device).
+  Include a project header with its path from `src/`, for example `#include "net/wiim_worker.h"`.
 - **[WIIM_API_NOTES.md](WIIM_API_NOTES.md)** tells what we verified on a real WiiM, with the dates.
 
 ### Play queues: how the Tab5 starts an album
@@ -125,28 +130,28 @@ test finds.
 
 ### A setting
 
-- [ ] `src/settings.h`: add the field to `struct Settings`, with its default value. Do not add a constructor:
+- [ ] `src/storage/settings.h`: add the field to `struct Settings`, with its default value. Do not add a constructor:
       `Settings` must stay a plain struct.
-- [ ] `src/settings.cpp`: add one line to the table `kFields`: `Field::text(…)`, `Field::flag(…)` or
+- [ ] `src/storage/settings.cpp`: add one line to the table `kFields`: `Field::text(…)`, `Field::flag(…)` or
       `Field::number(…)` with the key and the member. This line gives the NVS read and write and the backup copy.
       An NVS key has a maximum of 15 characters. Do not change the key of an existing setting.
-- [ ] `src/portal.cpp`: add the input to the form in `formPage()`, and read it in the `server.on("/save", …)`
+- [ ] `src/device/portal.cpp`: add the input to the form in `formPage()`, and read it in the `server.on("/save", …)`
       handler. A checkbox that is not checked is not in the form data: use `server.hasArg(…)`, as for `qobuzdirect`.
 - [ ] Labels of the setup page: `wr::L("English", "Français")`.
 - [ ] `README.md` (Simplified Technical English) and `LISEZMOI.md`: tell the user what the setting does.
 - [ ] A secret (password, key, token): never write it to the Journal or the serial port.
 
 **Trap:** a field that is not in `kFields` is not saved, and it goes back to its default value after a full USB flash.
-The build finds this: a `static_assert` in `src/settings.cpp` counts the members of `Settings`
+The build finds this: a `static_assert` in `src/storage/settings.cpp` counts the members of `Settings`
 (`wr::aggregateFieldCount`). If you add a member that the settings code computes (as `presets`), change the
 `+ 1` in this `static_assert` and tell why in a comment.
 
 ### A screen
 
-- [ ] `src/ui.h` / `src/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
+- [ ] `src/ui/ui.h` / `src/ui/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
       and call `navRail(n)` if the navigation bar shows on the screen (`hitHome()`, `hitSettings()` and
       `hitSearch()` match only while the bar is shown). Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
-- [ ] `src/app_internal.h`: add a value `Xxx` to `enum class Screen`. `modalOpen()` then knows the screen: it is
+- [ ] `src/app/app_internal.h`: add a value `Xxx` to `enum class Screen`. `modalOpen()` then knows the screen: it is
       true for all values other than `Screen::Controls`. Put the state of the screen in a struct with a one-line
       comment, as the other structs in this file, and define the object in `src/main.cpp`.
 - [ ] To open the screen: set `g_view.screen = Screen::Xxx`, then draw it (`g_ui.renderXxx(…)`).
@@ -154,9 +159,9 @@ The build finds this: a `static_assert` in `src/settings.cpp` counts the members
       view, as for `Screen::Log`. It handles the taps (close, `hitHome()`, `hitSettings()`, `hitSearch()`), then
       calls `serviceWiim()`, `delay(5)` and `return`. To close the screen: set `g_view.screen = Screen::Controls`,
       set `g_idle.lastTouch`, call `show()`.
-- [ ] A large screen: put its functions in a new file `src/app_xxx.cpp` (namespace `app`, includes
-      `app_internal.h`), and declare there the functions that `main.cpp` calls. The `sim`, `simreal` and `desktop`
-      builds take `+<app*.cpp>`.
+- [ ] A large screen: put its functions in a new file `src/app/app_xxx.cpp` (namespace `app`, includes
+      `app/app_internal.h`), and declare there the functions that `main.cpp` calls. The `sim`, `simreal` and `desktop`
+      builds take `+<app/app*.cpp>`.
 - [ ] `tools/preview/preview.cpp`: draw the screen and `save()` it, in landscape and, if it is different, in
       portrait. Then run `python3 tools/preview/check_golden.py --update` and commit `tools/preview/golden.sha256`.
 - [ ] Look at the screen in English and French, at 1280×720 and 800×480 (`.pio/golden-out/`). Optional: add taps
