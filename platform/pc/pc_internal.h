@@ -5,7 +5,8 @@
 //   pc_platform_prefs.cpp    Preferences (settings.txt in the state folder), settings of a first start
 //   pc_platform_devices.cpp  M5, Serial, ESP and WiFi objects, Serial output, microphone, battery
 //   pc_platform_screen.cpp   SDL window, display canvas shown in it, mouse/touch, screenshots, screen size
-//   pc_platform_script.cpp   --script runner (wait, tap, press, move, release, shot, quit)
+//   pc_platform_script.cpp   --script runner (wait, tap, press, move, release, key, hold, text, shot, quit)
+//   pc_platform_keys.cpp     key input: SDL keyboard/controllers and script keys -> wr::KeyTracker -> takeKey()
 //   pc_platform_exit.cpp     restart (execv of the same command) and power off (_exit)
 #pragma once
 
@@ -15,6 +16,8 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#include "keys.h"
 
 namespace pc_internal {
 // pc_platform.cpp
@@ -34,6 +37,15 @@ extern bool g_fullscreen;
 extern bool g_mouseDown, g_pressQueued, g_releaseQueued;
 extern int g_mouseX, g_mouseY;
 void shot(const std::string& name);
+
+// pc_platform_keys.cpp
+extern bool g_logKeys;  // --log-keys: print each event the app takes
+void initKeyInput();    // after SDL_Init (window mode only)
+bool keyEvent(const SDL_Event& e);  // a key/text/controller event: true when it was one
+void keyDown(wr::NavKey key);
+void keyUp(wr::NavKey key);
+void keyText(const std::string& utf8);
+void keyTick();  // repeats and long presses, once per M5.update()
 
 // pc_platform_script.cpp
 extern uint32_t g_stepAt;

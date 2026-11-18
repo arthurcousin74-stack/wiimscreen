@@ -5,7 +5,13 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+### Added
+- For contributors: key input plumbing for remotes and keyboards (not used by the app yet). The computer builds read
+  the keyboard, media keys and game controllers; simulator scripts can send keys (`key`, `hold`, `text` steps) and
+  `--log-keys` shows them. No change on the Tab5.
+
 ### Changed
+- Computer version and simulator: the screenshot key is now **F12** (it was `S`).
 - For contributors: `src/` is split into folders by role (`app/`, `ui/`, `net/`, `device/`, `storage/`;
   `main.cpp` stays at the root), with includes written from `src/` (`#include "net/wiim_worker.h"`). File names
   and the code (apart from the include lines) are unchanged. No change for the user.

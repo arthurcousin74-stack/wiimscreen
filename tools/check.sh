@@ -7,7 +7,7 @@
 #
 # Gates: native sim preview asan simreal desktop tab5
 #   native   unit tests of lib/core (AddressSanitizer + UBSan built in)      needs: a C++ compiler
-#   sim      simulator build + scripted tour of the screens (fake WiiM)       needs: SDL2 headers (libsdl2-dev)
+#   sim      simulator build + scripted tour of the screens + scripted keys   needs: SDL2 headers (libsdl2-dev)
 #   preview  preview build + golden screens (tools/preview/check_golden.py)   needs: SDL2 headers
 #   asan     simulator tour under AddressSanitizer/UBSan                      needs: SDL2 headers
 #   simreal  "real WiiM" simulator + relay self-test (about 2 min)            needs: SDL2 headers, openssl, python3
@@ -61,7 +61,23 @@ gate_native() {
 gate_sim() {
     need sim "SDL2 headers missing (Debian/Ubuntu: sudo apt install libsdl2-dev; macOS: brew install sdl2)" have_sdl2 || return 2
     pcpio run -e sim &&
-        tmo 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
+        tmo 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt &&
+        sim_keys
+}
+
+# Scripted keys (tools/sim/scripts/keys.txt): the events that --log-keys prints, through takeKey() in loop()
+sim_keys() {
+    local out want
+    out=$(tmo 60 .pio/build/sim/program --headless --quiet --reset --log-keys --state .pio/keys-state \
+        --out .pio/keys-out --script tools/sim/scripts/keys.txt) || { echo "$out"; return 1; }
+    for want in "key=playpause kind=press" "key=ok kind=press" "key=ok kind=long" "key=down kind=press" \
+        "key=down kind=repeat" "key=text kind=press | Miles Davis"; do
+        if ! grep -qxF "[key] $want" <<<"$out"; then
+            echo "check.sh: sim: '[key] $want' missing in the keys.txt run:"
+            echo "$out"
+            return 1
+        fi
+    done
 }
 
 gate_preview() {

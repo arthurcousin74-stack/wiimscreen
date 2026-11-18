@@ -47,7 +47,8 @@ jobs:
       - name: Tests de la logique (PC)
         run: tools/check.sh native
 
-      # Simulator: the real app with a fake WiiM; the tour script fails the build if the app crashes or hangs
+      # Simulator: the real app with a fake WiiM; the tour script fails the build if the app crashes or hangs;
+      # keys.txt checks the scripted keys (the [key] lines of --log-keys)
       - name: Simulateur (tour des écrans, faux WiiM)
         run: |
           tools/check.sh sim
