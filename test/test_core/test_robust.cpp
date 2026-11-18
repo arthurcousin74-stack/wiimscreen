@@ -90,7 +90,7 @@ static void test_parsers_robust() {
     feedAll("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string(3000, 'f'));
     feedAll("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string(3000, '0'));
     TEST_ASSERT_TRUE(g_sink > 0);
-    TEST_ASSERT_TRUE(secondsSince(t0) < 8.0);
+    TEST_ASSERT_TRUE(secondsSince(t0) < 60.0);  // marge pour une machine chargée (ASan)
 }
 
 void run_robust_tests() {

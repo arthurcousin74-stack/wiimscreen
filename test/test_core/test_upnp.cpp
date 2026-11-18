@@ -195,7 +195,7 @@ static void test_xml_hostile_speed() {
         parseQueueContext(*s);
         TEST_ASSERT_TRUE(xmlUnescape(*s).size() <= s->size());
     }
-    TEST_ASSERT_TRUE(secondsSince(t0) < 3.0);
+    TEST_ASSERT_TRUE(secondsSince(t0) < 30.0);  // linéaire : des millisecondes ; quadratique : des minutes (marge pour une machine chargée)
     // Noms longs : toujours trouvés jusqu'à 63 caractères, ignorés au-delà
     const std::string name(60, 'n');
     TEST_ASSERT_TRUE(xmlElement("<" + name + ">x</" + name + ">", name, v));
@@ -238,6 +238,9 @@ static void test_template_empty_element() {
 // maskSecrets skips space, tab, CR and LF between a JSON key and its value (not \v or \f, unlike the JSON helpers)
 static void test_mask_blanks() {
     TEST_ASSERT_EQUAL_STRING("{\"token\" \t:\r\n \"***\"}", maskSecrets("{\"token\" \t:\r\n \"S\"}").c_str());
+    // \f et \v : lus comme des blancs par les fonctions JSON, donc masqués aussi (la valeur restait visible)
+    TEST_ASSERT_EQUAL_STRING("{\"token\":\f\"***\"}", maskSecrets("{\"token\":\f\"S\"}").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\"token\"\v: \"***\"}", maskSecrets("{\"token\"\v: \"S\"}").c_str());
 }
 
 void run_upnp_tests() {

@@ -127,7 +127,14 @@ Stop wiimscreen before you edit the file, then start it again. The names are the
 | File | Role |
 |---|---|
 | `stubs/` | Arduino `String`, FreeRTOS tasks on threads, M5Unified (screen = memory canvas, touch = mouse/touch), Wi-Fi, HTTP, LittleFS, Preferences |
-| `pc_platform.cpp` | Time, threads, settings file, SDL window and input, options, restart |
+| `pc_platform.cpp` | Options, state and output folders, `main()` |
+| `pc_platform_rtos.cpp` | Time, random numbers, FreeRTOS tasks on threads |
+| `pc_platform_prefs.cpp` | Settings file (`settings.txt`), settings of a first start |
+| `pc_platform_devices.cpp` | M5, Serial, ESP and WiFi objects, network address, microphone, battery |
+| `pc_platform_screen.cpp` | SDL window, mouse/touch input, screenshots, screen size |
+| `pc_platform_script.cpp` | `--script` runner |
+| `pc_platform_exit.cpp` | Restart and power off |
+| `pc_internal.h` | What the `pc_platform*.cpp` files share |
 | `pc_http_fs.cpp` | HTTP/1.1 client, LittleFS on a folder |
 | `net_direct.cpp` | TCP sockets, TLS with OpenSSL (system certificates for public servers; the app pins the WiiM certificate), UDP for SSDP |
 | `desktop_services.cpp` | No microphone; settings and update messages |

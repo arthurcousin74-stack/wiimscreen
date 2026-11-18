@@ -1,5 +1,5 @@
 // PC (simulator and desktop): M5Unified for a computer. The display is an M5Canvas in memory (shown in an SDL
-// window by pc_platform.cpp), touch comes from the mouse or touch screen; microphone: silence (sim) or none.
+// window by pc_platform_screen.cpp), touch comes from the mouse or touch screen; microphone: silence (sim) or none.
 #pragma once
 
 #include <M5GFX.h>

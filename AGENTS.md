@@ -41,17 +41,31 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | Path | Role |
 |---|---|
 | `lib/core/src/i18n.*` | Interface language: `wr::L("English", "Français")`, `setLang`, `langFromCode` |
-| `lib/core/src/core.*` | WiiM response parsing, JSON helpers, layout (`computeLayout`), accent color, text wrapping |
+| `lib/core/src/core.h` | Umbrella header: includes the topic headers below (`#include "core.h"` keeps working) |
+| `lib/core/src/wiim_api.*` | WiiM HTTP API answers: `PlayerStatus`, `TrackMeta`, `Preset`, `WiimIdentity`, getPlayerStatus/getMetaInfo/getPresetInfo/getStatusEx parsing, SSDP host, source name, time and quality texts |
+| `lib/core/src/json.*` | JSON helpers: flat lookups (`jsonString`, `jsonInt`) and depth-aware ones (`jsonTop`, `jsonArray`, `jsonText`, `jsonValuesOf`), one escape decoder |
+| `lib/core/src/http.*` | HTTP response parsing and keep-alive framing (`httpFrame`), URL/host checks, certificate fingerprints, `sniffImage` |
+| `lib/core/src/text.*` | `trim`, `hexVal`, UTF-8 helpers, `wrapText`, `htmlEscape`, `normalizeText`, `sharesWord` |
+| `lib/core/src/layout.*` | `Rect`, `Layout`, `computeLayout`, on-screen keyboard (`keyboardLayout`) |
+| `lib/core/src/color.*` | `nameColor`, `accentColor` (HSL) |
+| `lib/core/src/fields.*` | Settings text: preset list (`parsePresets`), backup fields (`encodeFields`/`decodeFields`) |
+| `lib/core/src/deezer.*` | Deezer search/favorites parsing (`DeezerTrack`, albums), profile number, `baselineCoverUrl` |
+| `lib/core/src/catalog.h` | `QobuzAlbum`, shared by the Qobuz and Deezer album parsers |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
-| `lib/core/src/voice.*` | Text normalization, Deezer search/favorites parsing, Deezer profile number, WAV header |
+| `lib/core/src/voice.*` | WAV header for the dictation; still declares the text and Deezer functions through its includes |
 | `lib/core/src/appstate.*` | Main-loop timing decisions without hardware: wrap-safe `expired`, `idleAction` (ambient, dim, screen off, sleep), `musicSettled` |
 | `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
-| `lib/core/src/qobuz.*` | Depth-aware JSON helpers, Qobuz tracks/albums parsing, `GetUserInfo` access parsing |
-| `test/test_core/test_main.cpp` | Unity tests for everything in `lib/core` |
+| `lib/core/src/qobuz.*` | Qobuz tracks/albums parsing, `GetUserInfo` access parsing, Qobuz queue model and album URL/key |
+| `test/test_core/test_<module>.cpp` | Unity tests, one file per `lib/core` module, each with `run_<module>_tests()`; `test_main.cpp` calls them; shared helpers in `test_helpers.h` |
 | `src/main.cpp` | Setup, main loop (touch, drawing, applying WiiM state), ambient view, voice flow, menus |
-| `src/wiim_worker.*` | Background task that owns all WiiM networking: polling, command queue, presets, discovery, play queues (favorites, Qobuz/Deezer search and favorites) |
+| `src/wiim_worker.*` | Background task that owns all WiiM networking: `begin`, request mailbox (`command`, `search`, `playFavorite`…), `run`, polling (`pollOnce`), command queue, `pause`, events, rediscovery, identity |
+| `src/wiim_worker_playqueue.cpp` | UPnP PlayQueue transport (`upnpRequest`, `findPlayQueue`, `browseQueue`, `createQueue`, `playQueueAt`, `deleteQueue`, `sendQueue`), queue diagnostic (`runQueueCheck`) |
+| `src/wiim_worker_search.cpp` | Search through a WiiM queue: `searchGuardBegin`/`End` (mute, shuffle off, restore), `snapshot`, `restoreAfterSearch`, `undoInterruptedSearch`, `runSearch`, `runPlaySearchResult`, `runQobuzFavoriteList` |
+| `src/wiim_worker_services.cpp` | Qobuz (`qobuzAccess`, `qobuzGet`, album search, favorites) and Deezer (public API search, profile favorites, album playback); queue models (`qobuzModel`, `deezerModel`, `scanModels`, `noteModel`) |
+| `src/wiim_worker_favorites.cpp` | Favorites: save/replay of queue copies, Qobuz album tiles, automatic Flow tile, `playAlbumAt` |
+| `src/wiim_worker_internal.h` | Internal to `wiim_worker*.cpp` (namespace `wiimq`): shared PlayQueue helpers, `CapStream`, `errorKey`. Never part of `wiim_worker.h` (the simulator's `fake_wiim.cpp` implements that header) |
 | `src/ui.*` | All drawing (off-screen M5Canvas in PSRAM → display) |
 | `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
 | `src/discovery.*` | SSDP + `getStatusEx` discovery |
@@ -65,13 +79,13 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/version.h`, `src/ca_bundle.h` | Firmware version (CI or `tools/version.py`); embedded Mozilla root certificates |
 | `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
-| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), SDL window/input/options (`pc_platform.cpp`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
+| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, script runner, restart/exit; list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
 | `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
 | `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), `mock_wiim.py` (httpapi + UPnP PlayQueue on port 49152 with the behaviours seen on a real WiiM: shuffle, queues that fill step by step, `--nofill-file`) and `selftest.sh` (search through a queue, restore, album play) |
 
 ## Conventions
 
-- **Pure logic goes in `lib/core`** (no Arduino headers) with a test in `test/test_core/test_main.cpp`.
+- **Pure logic goes in `lib/core`** (no Arduino headers) with a test in the matching `test/test_core/test_<module>.cpp`.
   `src/` stays thin glue around hardware and network.
 - **UI text is in English (default) and French**: write every user-visible string as `wr::L("English", "Français")`
   (`lib/core/src/i18n.h`), both in place, same printf specifiers. `wr::L()` returns `const char*`: wrap in
@@ -143,7 +157,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **VLW fonts have no symbols** such as ▶ ■ ♥: write words ("Lecture :") or draw icons.
 - **Simulator and desktop build**: `src/` must keep compiling there. New hardware or network calls in `main.cpp`
   need a stub in `platform/pc/stubs` (and a desktop/sim implementation) or a fake in `tools/sim`; new `WiimWorker` public methods need a fake in `tools/sim/fake_wiim.cpp`.
-  `simreal` compiles the real `wiim_worker.cpp`, `wiim_client.cpp`, `art.cpp`, `favorites.cpp`: Arduino network
+  `simreal` compiles the real `wiim_worker*.cpp` (keep `wiim_worker.h` unchanged when you move code between them; shared helpers go in `wiim_worker_internal.h`), `wiim_client.cpp`, `art.cpp`, `favorites.cpp`: Arduino network
   APIs they use must exist in `platform/pc/stubs` (WiFiClient, WiFiClientSecure, HTTPClient, LittleFS); `desktop`
   also compiles `discovery.cpp` (WiFiUDP). Fonts do not scale with the screen: check small sizes (800×480).
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
@@ -158,7 +172,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   (only what is still in that state). A queue that stays empty gets at most one other spelling
   (`wr::searchTryNext`; four tries took 43 s). Change this flow with `tools/relay/selftest.sh`: it runs these cases on
   the mock WiiM. When the real WiiM behaves differently from the mock, fix the mock too.
-- **Search guard**: `searchGuardBegin()` / `searchGuardEnd()` in `wiim_worker.cpp` are the only place that mutes,
+- **Search guard**: `searchGuardBegin()` / `searchGuardEnd()` in `wiim_worker_search.cpp` are the only place that mutes,
   turns shuffle off, restores and unmutes around a search through a WiiM queue. No search without a player status;
   a failed restore stops the search queue before the sound comes back; the note is kept until everything is put back.
 - **Favorites are stored without their tracks** when the queue has a `SearchUrl` (the WiiM reads them again);

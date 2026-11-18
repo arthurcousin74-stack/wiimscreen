@@ -205,7 +205,7 @@ To add a board:
 - **Only the WiiM integration**: `wiim_client.*`, `discovery.*`, `wiim_worker.*` and `lib/core` are a small WiiM
   library for ESP32: pinned HTTPS, keep-alive, discovery, background polling, a command queue, and play queues
   (`lib/core/src/upnp.*`).
-- **A different player with an HTTP API**: replace `wiim_client.*` and the parsers in `lib/core/src/core.cpp`.
+- **A different player with an HTTP API**: replace `wiim_client.*` and the parsers in `lib/core/src/wiim_api.cpp`.
 - **A different screen**: refer to [Other ESP32 boards](#other-esp32-boards).
 
 ## Root certificates

@@ -22,7 +22,7 @@ Open an issue with:
 
 1. Read [AGENTS.md](AGENTS.md): commands, layout, conventions and known pitfalls. For the most common changes (a
    setting, a screen, a text), follow the checklists in [docs/DEVELOPERS.md](docs/DEVELOPERS.md#how-to-add).
-2. Put hardware-independent logic in `lib/core/` and add a test in `test/test_core/test_main.cpp`.
+2. Put hardware-independent logic in `lib/core/` and add a test in the matching `test/test_core/test_<module>.cpp`.
 3. Run the checks below (`tools/check.sh` runs them all). For UI changes, attach PNGs of the changed screens to
    your pull request.
 4. Say in the pull request what you verified **on real hardware** and what you did not.

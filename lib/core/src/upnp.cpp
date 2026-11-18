@@ -394,10 +394,10 @@ bool startsWithNoCase(const std::string& s, size_t at, const char* lit) {
     return true;
 }
 
-// Espace, tabulation, retours à la ligne ; pas \v ni \f (skipSpace de json.cpp, std::isspace, les saute aussi) :
-// gardé tel quel, une clé suivie de \v ou \f n'est pas reconnue par maskSecrets
+// Tous les blancs que les fonctions JSON sautent (std::isspace, \v et \f compris) : sinon une valeur que jsonString
+// lirait resterait visible dans maskSecrets
 size_t skipBlank(const std::string& s, size_t i) {
-    while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) ++i;
+    while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
     return i;
 }
 
