@@ -118,7 +118,7 @@ pio run -e desktop && .pio/build/desktop/program
 The setup page of the Tab5 (Wi-Fi access point for a phone) does not exist on a computer. The settings are in
 `~/.config/wiimscreen/settings.txt`: one line per setting, the name, a tab, the value. Examples: `lang` (`en` or
 `fr`), `deezeruser` (Deezer profile number), `qobuzdirect` (`1` for the direct Qobuz search), `rotation`, `sleep`.
-Stop wiimscreen before you edit the file, then start it again. The names are the keys used in `src/settings.cpp`.
+Stop wiimscreen before you edit the file, then start it again. The names are the keys used in `src/storage/settings.cpp`.
 
 ## How it works
 

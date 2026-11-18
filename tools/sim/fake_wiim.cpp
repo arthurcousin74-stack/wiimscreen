@@ -1,4 +1,4 @@
-// Simulator: a fake WiiM behind the real WiimWorker interface (src/wiim_worker.h).
+// Simulator: a fake WiiM behind the real WiimWorker interface (src/net/wiim_worker.h).
 //
 // main.cpp talks to it exactly as to the real background task: commands, reports, events. The fake keeps a small
 // music catalog, plays it in "real time" (position, next track at the end), answers presets, Qobuz/Deezer favorites,
@@ -8,12 +8,12 @@
 #include <mutex>
 #include <thread>
 
-#include "favorites.h"
+#include "storage/favorites.h"
 #include "i18n.h"
-#include "log.h"
+#include "app/log.h"
 #include "pc.h"
 #include "voice.h"
-#include "wiim_worker.h"
+#include "net/wiim_worker.h"
 
 namespace {
 

@@ -60,37 +60,59 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/qobuz.*` | Qobuz tracks/albums parsing, `GetUserInfo` access parsing, Qobuz queue model and album URL/key |
 | `test/test_core/test_<module>.cpp` | Unity tests, one file per `lib/core` module, each with `run_<module>_tests()`; `test_main.cpp` calls them; shared helpers in `test_helpers.h` |
 | `src/main.cpp` | Setup, main loop (tap dispatch per screen, drawing, applying WiiM reports and events), ambient view, menus; defines all the app state objects |
-| `src/app_internal.h` | Internal to `main.cpp` and `app_*.cpp` only (namespace `app`): `enum class Screen` (`g_view.screen`), the app state grouped in structs (`g_pending`, `g_search`, `g_voice`, `g_tiles`, `g_img`…, one comment each), shared constants and the functions one file calls in another |
-| `src/app_search.cpp` | Search keyboard and results list (`openSearch`, `runSearchQuery`, `onSearchKey`, `renderResultsList`, `onSearchDone`), album hearts, "Qobuz/Deezer favorites" lists (`openFavoriteList`) |
-| `src/app_voice.cpp` | Dictation in the search field: microphone, ducking, `sttTask` (OpenAI transcription in its own task), `serviceTranscription` |
-| `src/app_tiles.cpp` | Preset and favorite tiles (`refreshTiles`, `onPresets`, `currentFavorite`, `favoriteState`), image downloads for the cover, tiles and result rows (`checkImages`, `retryImages`, `knownImage`) |
-| `src/wiim_worker.*` | Background task that owns all WiiM networking: `begin`, request mailbox (`command`, `search`, `playFavorite`…), `run`, polling (`pollOnce`), command queue, `pause`, events, rediscovery, identity |
-| `src/wiim_worker_playqueue.cpp` | UPnP PlayQueue transport (`upnpRequest`, `findPlayQueue`, `browseQueue`, `createQueue`, `playQueueAt`, `deleteQueue`, `sendQueue`), queue diagnostic (`runQueueCheck`) |
-| `src/wiim_worker_search.cpp` | Search through a WiiM queue: `searchGuardBegin`/`End` (mute, shuffle off, restore), `snapshot`, `restoreAfterSearch`, `undoInterruptedSearch`, `runSearch`, `runPlaySearchResult`, `runQobuzFavoriteList` |
-| `src/wiim_worker_services.cpp` | Qobuz (`qobuzAccess`, `qobuzGet`, album search, favorites) and Deezer (public API search, profile favorites, album playback); queue models (`qobuzModel`, `deezerModel`, `scanModels`, `noteModel`) |
-| `src/wiim_worker_favorites.cpp` | Favorites: save/replay of queue copies, Qobuz album tiles, automatic Flow tile, `playAlbumAt` |
-| `src/wiim_worker_internal.h` | Internal to `wiim_worker*.cpp` (namespace `wiimq`): shared PlayQueue helpers, `CapStream`, `errorKey`. Never part of `wiim_worker.h` (the simulator's `fake_wiim.cpp` implements that header) |
-| `src/ui.h` / `src/ui.cpp` | Class `Ui` (public interface) / Controls view and ambient view: drawing, partial redraws (`updateProgress`, `updateTransport`, `showLevels`), hit tests |
-| `src/ui_core.cpp` | Canvases (off-screen M5Canvas in PSRAM → display), `present`/`presentRect`, background gradient, cover decoding, `beginScreen`, fonts (VLW arrays included only here) and `useFont` |
-| `src/ui_widgets.cpp` | Shared icons (heart, mic, home, gear, search) and the navigation rail with its hit tests |
-| `src/ui_search.cpp` | Search keyboard, field, source chips, results list; `pressKey`, `updateSearchField`, `updateResultCover`; hit tests |
-| `src/ui_screens.cpp` | Full-page screens: Settings menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
-| `src/ui_internal.h` | Internal to `ui*.cpp` only: colours, font pointers, `useFont`, `mix` (never include it elsewhere; do not widen `ui.h`) |
-| `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
-| `src/discovery.*` | SSDP + `getStatusEx` discovery |
-| `src/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
-| `src/voice_service.*` | OpenAI transcription (dictation in the search field) |
-| `src/portal.*` / `src/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
-| `src/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
-| `src/settings.*` | NVS-backed settings (+ LittleFS backup copy); one table `kFields` lists every setting for both |
-| `src/log.*` | Journal: last 40 events in RAM, also on the serial port (`logEvent`) |
-| `src/sound.*` | Taps and beeps on the speaker |
-| `src/version.h`, `src/ca_bundle.h` | Firmware version (CI or `tools/version.py`); embedded Mozilla root certificates |
-| `src/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
+| `src/app/app_internal.h` | Internal to `main.cpp` and `app_*.cpp` only (namespace `app`): `enum class Screen` (`g_view.screen`), the app state grouped in structs (`g_pending`, `g_search`, `g_voice`, `g_tiles`, `g_img`…, one comment each), shared constants and the functions one file calls in another |
+| `src/app/app_search.cpp` | Search keyboard and results list (`openSearch`, `runSearchQuery`, `onSearchKey`, `renderResultsList`, `onSearchDone`), album hearts, "Qobuz/Deezer favorites" lists (`openFavoriteList`) |
+| `src/app/app_voice.cpp` | Dictation in the search field: microphone, ducking, `sttTask` (OpenAI transcription in its own task), `serviceTranscription` |
+| `src/app/app_tiles.cpp` | Preset and favorite tiles (`refreshTiles`, `onPresets`, `currentFavorite`, `favoriteState`), image downloads for the cover, tiles and result rows (`checkImages`, `retryImages`, `knownImage`) |
+| `src/app/log.*` | Journal: last 40 events in RAM, also on the serial port (`logEvent`) |
+| `src/app/version.h` | Firmware version (CI or `tools/version.py`) |
+| `src/ui/ui.h` / `src/ui/ui.cpp` | Class `Ui` (public interface) / Controls view and ambient view: drawing, partial redraws (`updateProgress`, `updateTransport`, `showLevels`), hit tests |
+| `src/ui/ui_core.cpp` | Canvases (off-screen M5Canvas in PSRAM → display), `present`/`presentRect`, background gradient, cover decoding, `beginScreen`, fonts (VLW arrays included only here) and `useFont` |
+| `src/ui/ui_widgets.cpp` | Shared icons (heart, mic, home, gear, search) and the navigation rail with its hit tests |
+| `src/ui/ui_search.cpp` | Search keyboard, field, source chips, results list; `pressKey`, `updateSearchField`, `updateResultCover`; hit tests |
+| `src/ui/ui_screens.cpp` | Full-page screens: Settings menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
+| `src/ui/ui_internal.h` | Internal to `ui*.cpp` only: colours, font pointers, `useFont`, `mix` (never include it elsewhere; do not widen `ui.h`) |
+| `src/ui/fonts/` | Generated VLW fonts (`tools/make_vlw.py`), included only by `ui_core.cpp` |
+| `src/net/wiim_worker.*` | Background task that owns all WiiM networking: `begin`, request mailbox (`command`, `search`, `playFavorite`…), `run`, polling (`pollOnce`), command queue, `pause`, events, rediscovery, identity |
+| `src/net/wiim_worker_playqueue.cpp` | UPnP PlayQueue transport (`upnpRequest`, `findPlayQueue`, `browseQueue`, `createQueue`, `playQueueAt`, `deleteQueue`, `sendQueue`), queue diagnostic (`runQueueCheck`) |
+| `src/net/wiim_worker_search.cpp` | Search through a WiiM queue: `searchGuardBegin`/`End` (mute, shuffle off, restore), `snapshot`, `restoreAfterSearch`, `undoInterruptedSearch`, `runSearch`, `runPlaySearchResult`, `runQobuzFavoriteList` |
+| `src/net/wiim_worker_services.cpp` | Qobuz (`qobuzAccess`, `qobuzGet`, album search, favorites) and Deezer (public API search, profile favorites, album playback); queue models (`qobuzModel`, `deezerModel`, `scanModels`, `noteModel`) |
+| `src/net/wiim_worker_favorites.cpp` | Favorites: save/replay of queue copies, Qobuz album tiles, automatic Flow tile, `playAlbumAt` |
+| `src/net/wiim_worker_internal.h` | Internal to `wiim_worker*.cpp` (namespace `wiimq`): shared PlayQueue helpers, `CapStream`, `errorKey`. Never part of `wiim_worker.h` (the simulator's `fake_wiim.cpp` implements that header) |
+| `src/net/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
+| `src/net/discovery.*` | SSDP + `getStatusEx` discovery |
+| `src/net/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
+| `src/net/voice_service.*` | OpenAI transcription (dictation in the search field) |
+| `src/net/ca_bundle.h` | Embedded Mozilla root certificates |
+| `src/device/portal.*` / `src/device/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
+| `src/device/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
+| `src/device/sound.*` | Taps and beeps on the speaker |
+| `src/storage/settings.*` | NVS-backed settings (+ LittleFS backup copy); one table `kFields` lists every setting for both |
+| `src/storage/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
 | `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, script runner, restart/exit; list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
 | `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
 | `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), `mock_wiim.py` (httpapi + UPnP PlayQueue on port 49152 with the behaviours seen on a real WiiM: shuffle, queues that fill step by step, `--nofill-file`) and `selftest.sh` (search through a queue, restore, album play) |
+
+### `src/` folders
+
+`src/main.cpp` (entry point: `setup()`/`loop()`) stays at the root; everything else is in one folder by role:
+
+| Folder | What goes there |
+|---|---|
+| `src/app/` | App glue split out of `main.cpp` (`app_*.cpp`, `app_internal.h`), the Journal (`log.*`), `version.h` |
+| `src/ui/` | Drawing and hit tests (`ui*.cpp`, `ui.h`, `ui_internal.h`) and the generated `fonts/` |
+| `src/net/` | Everything that talks to the network: the WiiM worker and client, discovery, cover downloads, OpenAI transcription, the root certificates |
+| `src/device/` | Tab5 device services: setup portal, OTA page (and their shared CSS), speaker sounds |
+| `src/storage/` | What persists on the device: settings (NVS + LittleFS backup) and favorites/notes in LittleFS. Used by the worker, the UI and the app, so it belongs to none of them |
+
+- **Include rule**: project headers are included with their path from `src/`, also between files of the same folder:
+  `#include "net/wiim_worker.h"`, `#include "ui/ui_internal.h"`. Every build has `src/` on its include path
+  (PlatformIO adds it for `tab5`; the PC envs pass `-Isrc`). Never add a `-Isrc/<folder>` flag. `lib/core` headers
+  stay bare (`#include "core.h"`).
+- File names keep their prefixes (`ui_`, `wiim_worker_`, `app_`): object names stay unique and old names stay
+  greppable. A new file goes in the folder of its role; the PC envs list their sources by path in
+  `build_src_filter` (`platformio.ini`): add the new file there too when a PC build needs it.
 
 ## Conventions
 
@@ -102,7 +124,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   ("en"/"fr", setup page), applied at boot with `wr::setLang`; the keyboard is QWERTY in English, AZERTY in French.
   **The Journal (`logEvent`) stays in French**: the hardware checklist quotes its lines.
 - **Self-tests never match French Journal sentences.** A line that a test checks is written with
-  `logTagged("search.restore", "paused=%d create=%d | <French sentence>", ...)` (`src/log.h`): the Journal screen
+  `logTagged("search.restore", "paused=%d create=%d | <French sentence>", ...)` (`src/app/log.h`): the Journal screen
   shows only the sentence; the serial port / terminal shows `[tag] key=value ... | sentence`, and
   `tools/relay/selftest.sh` and `platform/pc/selftest.sh` grep the tag and the values. Rewording a sentence is safe;
   renaming a tag or a key means updating those scripts. Tag a new line only when a test needs it (lower-case,
@@ -159,16 +181,16 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   The waiting rings animate with `updateTransport()` only.
 - **Settings survive a full USB flash**: the merged image written at `0x0` pads over the NVS (0x9000), so
   `setup()` keeps a copy in LittleFS (`fav::saveSettingsBackup`, `settingsToBackup`) and restores it when the NVS
-  is empty. A new setting is one line in `kFields` (`src/settings.cpp`), which drives the NVS and the backup copy;
+  is empty. A new setting is one line in `kFields` (`src/storage/settings.cpp`), which drives the NVS and the backup copy;
   a `Settings` member without its line fails the build (`static_assert` with `wr::aggregateFieldCount`, so keep
   `Settings` a plain struct). Never change an existing key: devices and backup files already use it.
 - **Long worker jobs** (search, favorites, queue scans) wait with `WiimWorker::pause()`, never `vTaskDelay`: it keeps
   executing queued commands (play/pause, volume) so taps are not ignored for several seconds.
-- **OpenAI transcription** runs in its own task (`sttTask`, `src/app_voice.cpp`); the main loop only checks
+- **OpenAI transcription** runs in its own task (`sttTask`, `src/app/app_voice.cpp`); the main loop only checks
   `g_voice.stt.done`.
-- **App state** lives in the structs of `src/app_internal.h` (defined in `main.cpp`, in namespace `app`: the
+- **App state** lives in the structs of `src/app/app_internal.h` (defined in `main.cpp`, in namespace `app`: the
   simulator already has a global `g_state`). Add new state to the struct of its topic, not as a loose global; a
-  new file of the app is `src/app_<topic>.cpp` (the `sim`, `simreal` and `desktop` filters take `+<app*.cpp>`).
+  new file of the app is `src/app/app_<topic>.cpp` (the `sim`, `simreal` and `desktop` filters take `+<app/app*.cpp>`).
 - **Current screen**: `g_view.screen` (`enum class Screen`); `modalOpen()` is `g_view.screen != Screen::Controls`.
   The ambient view (`g_view.ambient`) and dictation (`g_voice.listening`) are separate flags on purpose: the
   comments in `app_internal.h` and `main.cpp` say why.

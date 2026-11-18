@@ -1,4 +1,4 @@
-// Aperçu PC : le strict nécessaire d'Arduino pour compiler src/ui.cpp hors ESP32.
+// Aperçu PC : le strict nécessaire d'Arduino pour compiler src/ui/ui.cpp hors ESP32.
 #pragma once
 
 #include <cstdint>

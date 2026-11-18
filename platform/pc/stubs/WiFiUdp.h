@@ -1,4 +1,4 @@
-// PC: UDP for the SSDP discovery of src/discovery.cpp (desktop build), on POSIX sockets.
+// PC: UDP for the SSDP discovery of src/net/discovery.cpp (desktop build), on POSIX sockets.
 #pragma once
 #include <string>
 

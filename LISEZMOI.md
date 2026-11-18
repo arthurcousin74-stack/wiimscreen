@@ -143,7 +143,7 @@ pio run -e tab5 -t upload
 
 ### Aperçu de l'interface sur PC
 
-Pour retoucher l'interface sans l'appareil : le vrai `src/ui.cpp` est compilé pour le PC (M5GFX + SDL2) et les écrans sont enregistrés en PNG.
+Pour retoucher l'interface sans l'appareil : le vrai `src/ui/ui.cpp` est compilé pour le PC (M5GFX + SDL2) et les écrans sont enregistrés en PNG.
 
 ```bash
 sudo apt install libsdl2-dev          # Linux ; macOS : brew install sdl2
@@ -154,31 +154,39 @@ python tools/preview/topng.py apercu/*.ppm
 ```
 
 ```
-src/main.cpp         démarrage, boucle, appuis, vue ambiance, rétroéclairage
-src/app_*.cpp        recherche, dictée, tuiles et images ; état partagé : app_internal.h
-src/ui.*             dessin (canevas hors écran), couleur d'accent, mise en page
-src/art.*            téléchargement des images (tâche de fond, HTTPS vérifié)
-src/wiim_client.*    API WiiM, TLS avec épinglage
-src/portal.*         portail de configuration (point d'accès + DNS + formulaire)
-src/settings.*       réglages en NVS
-src/sound.*          sons (M5.Speaker) ; le bus audio est partagé avec le micro
-src/voice_service.*  transcription OpenAI de la dictée (HTTPS vérifié)
-src/ota.*            mise à jour par le Wi-Fi (page web + code affiché à l'écran)
-src/discovery.*      recherche des WiiM sur le Wi-Fi (SSDP + getStatusEx)
-src/fonts/           polices VLW générées (tools/make_vlw.py)
-lib/core/            logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
-                     spectre (FFT), lissage du visualiseur, détection de mouvement,
-                     textes et recherche Deezer, files du WiiM (UPnP), Qobuz
-certs/               certificats racines Mozilla (images en HTTPS)
-tools/preview/       aperçu de l'interface sur PC
+src/main.cpp                 démarrage, boucle, appuis, vue ambiance, rétroéclairage
+src/app/                     colle de l'application
+  app_*.cpp                  recherche, dictée, tuiles et images ; état partagé : app_internal.h
+  log.*, version.h           journal, version du firmware
+src/ui/                      interface
+  ui*.cpp, ui.h              dessin (canevas hors écran), couleur d'accent, mise en page
+  fonts/                     polices VLW générées (tools/make_vlw.py)
+src/net/                     réseau
+  wiim_client.*              API WiiM, TLS avec épinglage
+  wiim_worker*               tâche de fond : interrogation, commandes, files, recherche
+  art.*                      téléchargement des images (tâche de fond, HTTPS vérifié)
+  voice_service.*            transcription OpenAI de la dictée (HTTPS vérifié)
+  discovery.*                recherche des WiiM sur le Wi-Fi (SSDP + getStatusEx)
+src/device/                  services de l'appareil
+  portal.*                   portail de configuration (point d'accès + DNS + formulaire)
+  ota.*                      mise à jour par le Wi-Fi (page web + code affiché à l'écran)
+  sound.*                    sons (M5.Speaker) ; le bus audio est partagé avec le micro
+src/storage/                 stockage sur l'appareil
+  settings.*                 réglages en NVS (+ copie de secours en LittleFS)
+  favorites.*                favoris (copies de files du WiiM) en LittleFS
+lib/core/                    logique pure testée : réponses du WiiM, mise en page, couleur d'accent,
+                             spectre (FFT), lissage du visualiseur, détection de mouvement,
+                             textes et recherche Deezer, files du WiiM (UPnP), Qobuz
+certs/                       certificats racines Mozilla (images en HTTPS)
+tools/preview/               aperçu de l'interface sur PC
 ```
 
 Régénérer les polices :
 ```bash
-python tools/make_vlw.py fonts/DejaVuSans.ttf 24 font_ui_24 src/fonts/font_ui_24.h
-python tools/make_vlw.py fonts/DejaVuSans.ttf 28 font_ui_28 src/fonts/font_ui_28.h
-python tools/make_vlw.py fonts/DejaVuSans.ttf 40 font_ui_40 src/fonts/font_ui_40.h
-python tools/make_vlw.py fonts/DejaVuSans.ttf 56 font_ui_56 src/fonts/font_ui_56.h
+python tools/make_vlw.py fonts/DejaVuSans.ttf 24 font_ui_24 src/ui/fonts/font_ui_24.h
+python tools/make_vlw.py fonts/DejaVuSans.ttf 28 font_ui_28 src/ui/fonts/font_ui_28.h
+python tools/make_vlw.py fonts/DejaVuSans.ttf 40 font_ui_40 src/ui/fonts/font_ui_40.h
+python tools/make_vlw.py fonts/DejaVuSans.ttf 56 font_ui_56 src/ui/fonts/font_ui_56.h
 ```
 
 Mettre à jour les certificats racines (une fois par an environ) :

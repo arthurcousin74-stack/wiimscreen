@@ -17,8 +17,8 @@ printf 'wait 3000\ntap 932 348\nwait 2000\nquit\n' > "$T/script.txt"
 timeout 60 .pio/build/desktop/program --headless --state "$T/state" --out "$T" --wiim 127.0.0.1:4444 \
     --script "$T/script.txt" > "$T/app.log" 2>&1
 fail() { echo "SELFTEST FAILED: $1"; cat "$T/app.log"; echo "SELFTEST FAILED: $1"; exit 1; }
-# Journal assertions match tagged lines only (src/log.h): "<time>  [tag] key=value ... | <French sentence>"
-HINT="a Journal tag changed or a line is no longer logged: see src/log.h"
+# Journal assertions match tagged lines only (src/app/log.h): "<time>  [tag] key=value ... | <French sentence>"
+HINT="a Journal tag changed or a line is no longer logged: see src/app/log.h"
 has() { grep -q -- "\\[$1\\] $2" "$T/app.log" || fail "$3: no Journal line \"[$1] $2\" ($HINT)"; }
 has wiim.presets "result=ok count=2 " "presets"
 has wiim.status "result=ok " "status"

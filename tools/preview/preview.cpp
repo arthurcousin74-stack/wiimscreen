@@ -1,4 +1,4 @@
-// Aperçu de l'interface sur PC : dessine les écrans avec le vrai src/ui.cpp et
+// Aperçu de l'interface sur PC : dessine les écrans avec le vrai src/ui/ui.cpp et
 // les enregistre en PNG.
 //
 //   pio run -e preview
@@ -17,8 +17,8 @@
 #include <vector>
 
 #include "M5Unified.h"
-#include "art.h"
-#include "ui.h"
+#include "net/art.h"
+#include "ui/ui.h"
 #include "i18n.h"
 
 PreviewM5 M5;

@@ -24,7 +24,7 @@ std::vector<std::pair<std::string, std::string>> decodeFields(const std::string&
 // ------------------------------------------------------------ réglages décrits par un tableau
 //
 // Un tableau de SettingField (une ligne par réglage) donne la clé, la sorte et le membre de la structure des
-// réglages. src/settings.cpp s'en sert pour la NVS et pour la copie de secours (encodeSettings/decodeSettings,
+// réglages. src/storage/settings.cpp s'en sert pour la NVS et pour la copie de secours (encodeSettings/decodeSettings,
 // dans l'ordre du tableau) ; aggregateFieldCount() vérifie à la compilation que chaque membre a sa ligne.
 // S : la structure des réglages ; Str : son type de texte (String d'Arduino, std::string dans les tests).
 

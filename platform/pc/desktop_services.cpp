@@ -4,11 +4,11 @@
 // - Sound: platform/pc/pc_sound.cpp (silent). - Dictation: no microphone support yet (the microphone button is not shown without
 //   an OpenAI key; with one, « Micro indisponible »).
 #include "M5Unified.h"
-#include "ota.h"
+#include "device/ota.h"
 #include "pc.h"
-#include "portal.h"
+#include "device/portal.h"
 #include "i18n.h"
-#include "voice_service.h"
+#include "net/voice_service.h"
 
 
 static void waitForTap(uint32_t afterMs) {

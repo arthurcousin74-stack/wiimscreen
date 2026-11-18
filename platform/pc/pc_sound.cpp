@@ -1,5 +1,5 @@
 // PC (simulator and desktop): no sound yet (taps and beeps are silent).
-#include "sound.h"
+#include "device/sound.h"
 
 namespace sound {
 void begin(int) {}

@@ -5,11 +5,11 @@
 
 #include "M5Unified.h"
 #include "i18n.h"
-#include "ota.h"
-#include "portal.h"
+#include "device/ota.h"
+#include "device/portal.h"
 #include "pc.h"
-#include "version.h"
-#include "voice_service.h"
+#include "app/version.h"
+#include "net/voice_service.h"
 
 
 // ------------------------------------------------------------------ setup portal and update page

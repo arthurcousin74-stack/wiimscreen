@@ -22,10 +22,10 @@ a suggestion from the maintainers, not a requirement.
 ## Code
 
 - [lib/core](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/lib/core/src): hardware-free, unit-tested logic — WiiM response parsing, screen layout, accent color from album art, FFT spectrum, motion detection, UPnP PlayQueue and Qobuz/Deezer parsing, OTA image filtering
-- [src/wiim_client.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/wiim_client.cpp): HTTPS client for the WiiM with TLS certificate pinning and keep-alive
-- [src/wiim_worker.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/wiim_worker.cpp): background FreeRTOS task owning all WiiM networking (polling, command queue, presets, rediscovery)
-- [src/discovery.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/discovery.cpp): find WiiM players on the LAN (SSDP M-SEARCH + getStatusEx)
-- [src/ui.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/ui.cpp): all drawing with M5GFX on an off-screen PSRAM canvas
+- [src/net/wiim_client.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/net/wiim_client.cpp): HTTPS client for the WiiM with TLS certificate pinning and keep-alive
+- [src/net/wiim_worker.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/net/wiim_worker.cpp): background FreeRTOS task owning all WiiM networking (polling, command queue, presets, rediscovery)
+- [src/net/discovery.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/net/discovery.cpp): find WiiM players on the LAN (SSDP M-SEARCH + getStatusEx)
+- [src/ui/ui.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/ui/ui.cpp): all drawing with M5GFX on an off-screen PSRAM canvas
 - [src/main.cpp](https://github.com/arthurcousin74-stack/wiimscreen/blob/main/src/main.cpp): main loop, touch, ambient view, voice flow, menus
 - [tools/preview](https://github.com/arthurcousin74-stack/wiimscreen/tree/main/tools/preview): render the real UI to PNG on a PC (M5GFX + SDL2)
 

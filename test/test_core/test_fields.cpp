@@ -47,7 +47,7 @@ static void test_fields() {
     TEST_ASSERT_TRUE(decodeFields("").empty());
 }
 
-// Réglages décrits par un tableau (même usage que src/settings.cpp, avec std::string au lieu de String)
+// Réglages décrits par un tableau (même usage que src/storage/settings.cpp, avec std::string au lieu de String)
 struct FakeSettings {
     std::string name;
     std::string model = "modele-par-defaut";
@@ -66,7 +66,7 @@ static constexpr FakeField kFake[] = {
     FakeField::number("level", &FakeSettings::level, 1, 20),
     FakeField::number("minutes", &FakeSettings::minutes, 0, 240, false),
 };
-// Le contrôle de src/settings.cpp : un membre ajouté sans sa ligne change le compte
+// Le contrôle de src/storage/settings.cpp : un membre ajouté sans sa ligne change le compte
 static_assert(aggregateFieldCount<FakeSettings>() == sizeof(kFake) / sizeof(kFake[0]) + 1, "FakeSettings");
 struct FakeSettingsGrown {  // FakeSettings avec un réglage de plus, oublié dans le tableau
     std::string name;

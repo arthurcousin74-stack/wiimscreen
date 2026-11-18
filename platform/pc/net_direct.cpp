@@ -3,7 +3,7 @@
 // WiFiClient = a TCP socket; WiFiClientSecure = TLS with OpenSSL: public servers (Qobuz, Deezer, covers, OpenAI)
 // are checked against the system's certificate store and host name; the WiiM has a self-signed certificate, so
 // wiim_client.cpp calls setInsecure() and checks the SHA-256 fingerprint itself (pinning, as on the Tab5).
-// WiFiUDP = a UDP socket for the SSDP discovery in src/discovery.cpp.
+// WiFiUDP = a UDP socket for the SSDP discovery in src/net/discovery.cpp.
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>

@@ -2,7 +2,7 @@
 
 Two builds: `sim` (fake WiiM, works anywhere) and `simreal` (your real WiiM through a relay, see below).
 
-The real application (`src/main.cpp`, `src/app_*.cpp`, `src/ui*.cpp`, `src/log.cpp`, `src/settings.cpp` and `lib/core`) running on
+The real application (`src/main.cpp`, `src/app/app_*.cpp`, `src/ui/ui*.cpp`, `src/app/log.cpp`, `src/storage/settings.cpp` and `lib/core`) running on
 a PC, with a **fake WiiM**. The window is the Tab5 screen; the mouse is the finger.
 
 ```bash
@@ -44,7 +44,7 @@ CI runs `tools/sim/scripts/tour.txt` on every push (artifact `sim-screens`): a c
 
 ## Real WiiM mode (relay)
 
-`pio run -e simreal` builds the simulator with the **real network code of the Tab5** (`src/wiim_worker.cpp`,
+`pio run -e simreal` builds the simulator with the **real network code of the Tab5** (`src/net/wiim_worker.cpp`,
 `wiim_client.cpp`, `art.cpp`, `favorites.cpp`): polling, commands, presets, Qobuz/Deezer search and favorites,
 covers, certificate pinning. Only the lowest layer changes: each connection goes through the relay
 (`tools/relay/wiim_relay.py`), which opens it on your home network and does the TLS. Favorites are files in

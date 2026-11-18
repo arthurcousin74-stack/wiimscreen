@@ -21,7 +21,7 @@
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
-#include "discovery.h"
+#include "net/discovery.h"
 #include "pc.h"
 
 // ------------------------------------------------------------------ connection to the relay
