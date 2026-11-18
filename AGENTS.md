@@ -66,7 +66,12 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/wiim_worker_services.cpp` | Qobuz (`qobuzAccess`, `qobuzGet`, album search, favorites) and Deezer (public API search, profile favorites, album playback); queue models (`qobuzModel`, `deezerModel`, `scanModels`, `noteModel`) |
 | `src/wiim_worker_favorites.cpp` | Favorites: save/replay of queue copies, Qobuz album tiles, automatic Flow tile, `playAlbumAt` |
 | `src/wiim_worker_internal.h` | Internal to `wiim_worker*.cpp` (namespace `wiimq`): shared PlayQueue helpers, `CapStream`, `errorKey`. Never part of `wiim_worker.h` (the simulator's `fake_wiim.cpp` implements that header) |
-| `src/ui.*` | All drawing (off-screen M5Canvas in PSRAM → display) |
+| `src/ui.h` / `src/ui.cpp` | Class `Ui` (public interface) / Controls view and ambient view: drawing, partial redraws (`updateProgress`, `updateTransport`, `showLevels`), hit tests |
+| `src/ui_core.cpp` | Canvases (off-screen M5Canvas in PSRAM → display), `present`/`presentRect`, background gradient, cover decoding, `beginScreen`, fonts (VLW arrays included only here) and `useFont` |
+| `src/ui_widgets.cpp` | Shared icons (heart, mic, home, gear, search) and the navigation rail with its hit tests |
+| `src/ui_search.cpp` | Search keyboard, field, source chips, results list; `pressKey`, `updateSearchField`, `updateResultCover`; hit tests |
+| `src/ui_screens.cpp` | Full-page screens: Settings menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
+| `src/ui_internal.h` | Internal to `ui*.cpp` only: colours, font pointers, `useFont`, `mix` (never include it elsewhere; do not widen `ui.h`) |
 | `src/wiim_client.*` | HTTPS client with certificate pinning, WiiM commands |
 | `src/discovery.*` | SSDP + `getStatusEx` discovery |
 | `src/art.*` | Background image downloader (FreeRTOS task, CA-verified HTTPS) |
@@ -141,9 +146,9 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Deep sleep cannot wake on touch on the Tab5**: the touch INT is GPIO23 and only GPIO0–15 wake the ESP32-P4 from
   deep sleep (M5Unified defines no Tab5 wake pin). `goToSleep()` uses `M5.Power.powerOff()`: PWROFF pulse (true off
   on battery, power button turns it on), else deep sleep with no wake source. Wake behaviour on USB: not verified.
-- Navigation bar: `Layout::rail/navHome/navSettings/content`; screens that show it call `Ui::navRail()` and lay
+- Navigation bar: `Layout::rail/navHome/navSettings/content`; each full screen starts with `beginScreen(View)`; screens that show the bar call `Ui::navRail()` and lay
   out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
-- **Fonts**: always `useFont(C, kX)` in `ui.cpp`, never `C.loadFont()` directly: M5GFX re-parses the VLW header on
+- **Fonts**: always `useFont(C, kX)` in the `ui*.cpp` files (declared in `ui_internal.h`, defined once in `ui_core.cpp`, the only file that includes the font headers), never `C.loadFont()` directly: M5GFX re-parses the VLW header on
   every load (the search keyboard loaded 43 fonts per frame); `useFont` skips reloading the same font.
 - **Partial redraws** keep taps responsive: a full frame pushes ~1.8 MB. `pressKey()`, `updateSearchField()`,
   `updateTransport()` and `updateProgress()` redraw one area over `bg_` (clip) and send it with `presentRect()`.

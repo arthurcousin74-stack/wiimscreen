@@ -51,6 +51,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
   certificate is kept at the first contact). It does not follow a WiiM to a new address before that first contact.
 - CI: actions pinned to commits, Python packages to versions. SECURITY.md states the limits of the unsigned update.
 
+### Changed (no change of behaviour)
+- Large files split so that several people can work at the same time: `ui.cpp` (5 files), `wiim_worker.cpp`
+  (5 files), `lib/core/src/core.cpp` (8 topic files), `platform/pc/pc_platform.cpp` (7 files), and the unit tests
+  (one file per module). The reference screens and the self-tests are identical before and after.
+
 ### Tests
 - Reference screens: CI compares 140 rendered screens (English and French, 1280×720 and 800×480, landscape and
   portrait) with `tools/preview/golden.sha256`. `tools/check.sh` runs every CI gate on a computer.
