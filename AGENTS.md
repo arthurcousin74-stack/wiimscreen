@@ -235,10 +235,14 @@ tile, settings menu layout (preview). Qobuz favorite albums: refused by Qobuz (4
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
 navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM
 (`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates, the Favoris Qobuz list.
+**Seen working on a real Tab5 + WiiM Pro (user report, 2026-11-18, build of v0.2.0-beta):** the WiiM picker with one WiiM, replay of a favorite tile saved
+before and after the update (saved without its tracks), the music put back after a Qobuz search left without a choice (playing, and
+paused), a search result played inside its album.
+**A WiiM that fills no queue** (nothing starts, WiiM Home app says "no internet" while `getStatusEx` reports `internet=1`): seen
+2026-11-17/18, cured by a power cycle of the WiiM; not a wiimscreen fault.
 **Simulator `simreal` with a real WiiM (user report, 2026-11-16):** relay (`--wiim`, WSL NAT mode) and the WiiM status shown.
 
-**Not yet confirmed on hardware:** favorite replay, Deezer search screen and playback at a track, restoring the music
-after a Qobuz search, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,
+**Not yet confirmed on hardware:** Deezer search screen and playback at a track, queues over 200 tracks, microphones (visualizer, voice search), speaker volume levels, choice between several WiiMs,
 the restart into setup mode, the partial-redraw speed-up, factory reset, taps handled during long worker jobs,
 background transcription. Prefer small, testable changes and note what was verified
 on real hardware in commit messages.

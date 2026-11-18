@@ -5,6 +5,8 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+## [0.2.0-beta] — 2026-11-18 — computer version, safer search, code split for contributors
+
 ### Added
 - **Computer version (experimental)**: `pio run -e desktop` runs the same app on a Raspberry Pi, Linux or macOS,
   directly on the network (sockets, OpenSSL, SSDP discovery, certificate pinning as on the Tab5). Window or full
