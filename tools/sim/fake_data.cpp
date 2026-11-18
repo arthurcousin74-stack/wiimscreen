@@ -4,9 +4,9 @@
 #include <mutex>
 
 #include "M5Unified.h"
-#include "art.h"
-#include "discovery.h"
-#include "favorites.h"
+#include "net/art.h"
+#include "net/discovery.h"
+#include "storage/favorites.h"
 #include "pc.h"
 
 // ------------------------------------------------------------------ discovery: two WiiMs on the network

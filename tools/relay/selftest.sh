@@ -34,9 +34,9 @@ run() {
     timeout 90 .pio/build/simreal/program --headless --relay 127.0.0.1:8799 --state "$T/state" --out "$T" \
         --script "$T/script.txt" > "$LOG" 2>&1 || fail "simulator run $N"
 }
-# Journal assertions match tagged lines only (src/log.h): "<time>  [tag] key=value ... | <French sentence>".
+# Journal assertions match tagged lines only (src/app/log.h): "<time>  [tag] key=value ... | <French sentence>".
 # The French sentence is never matched, so rewording it is harmless.
-HINT="a Journal tag changed or a line is no longer logged: see src/log.h"
+HINT="a Journal tag changed or a line is no longer logged: see src/app/log.h"
 # tagged <tag> [key=value regex]: grep pattern of a tagged Journal line
 tagged() { printf '\\[%s\\] %s' "$1" "${2:-}"; }
 # has <tag> <key=value regex> <what>: a tagged line in the Journal of the last run

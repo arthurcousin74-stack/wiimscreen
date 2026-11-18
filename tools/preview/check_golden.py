@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Golden screens: render every preview screen and compare it with the committed reference hashes.
 
-A change in src/ui.cpp (or in lib/core layout code) that changes even one pixel of a screen makes this check fail.
+A change in src/ui/ui.cpp (or in lib/core layout code) that changes even one pixel of a screen makes this check fail.
 That lets a refactor prove "nothing changed", and makes every visual change visible in the pull request
 (the manifest diff names the screens that changed).
 
