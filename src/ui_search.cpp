@@ -5,9 +5,7 @@
 // Clavier de recherche : champ de texte, état, touches
 void Ui::renderSearch(const std::string& query, const String& status, bool busy, int pressedKey, int source,
                       bool sources, int mic, float level) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     background();
     navRail(2);
     searchField(query, status, busy, source, sources, mic, level);
@@ -175,9 +173,7 @@ int Ui::hitKey(int x, int y) const {
 void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
                        const String& status, int pressed, const std::vector<int>& hearts,
                        const std::vector<const ArtImage*>& covers) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     background();
     navRail(2);

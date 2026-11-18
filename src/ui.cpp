@@ -405,9 +405,7 @@ void Ui::toast(const String& msg) {
 // ---------------------------------------------------------------------- vues
 
 void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
-    ambientShown_ = false;
-    view_ = View::Controls;
-    railShown_ = true;
+    beginScreen(View::Controls);
     progDuration_ = st.player.durationMs;
     background();
     roundedPush(art_, layout_.art.x, layout_.art.y, sc(16), true, 0);
@@ -497,6 +495,7 @@ bool Ui::updateTransport(const UiState& st, int pressed) {
 }
 
 void Ui::renderAmbient(const UiState& st) {
+    beginScreen(View::Ambient);
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     background();
@@ -580,9 +579,6 @@ void Ui::renderAmbient(const UiState& st) {
         homeIcon(homeRect_.x + d / 2, homeRect_.y + d / 2, d / 4, kText, kCard);
     }
     if (visEnabled_) drawBars();
-    ambientShown_ = true;
-    view_ = View::Ambient;
-    railShown_ = false;
     present();
 }
 
@@ -611,7 +607,7 @@ void Ui::drawBars() {
 void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& peaks) {
     visLevels_ = levels;
     visPeaks_ = peaks;
-    if (!ambientShown_ || visRect_.w == 0) return;
+    if (view_ != View::Ambient || visRect_.w == 0) return;
     const wr::Rect& r = visRect_;
     canvas_.setClipRect(r.x, r.y, r.w, r.h);
     bg_.pushSprite(&canvas_, 0, 0);

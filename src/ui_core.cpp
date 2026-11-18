@@ -51,6 +51,11 @@ void Ui::relayout() {
     }
 }
 
+void Ui::beginScreen(View view) {
+    view_ = view;
+    railShown_ = false;
+}
+
 void Ui::presentRect(const wr::Rect& r) {
     D.startWrite();
     D.setClipRect(r.x, r.y, r.w, r.h);

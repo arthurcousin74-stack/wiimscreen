@@ -24,9 +24,7 @@ static void menuButton(M5Canvas& C, const wr::Rect& r, const char* title, const 
 }
 
 void Ui::renderMenu(const char* version) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     background();
     navRail(1);
@@ -83,9 +81,7 @@ void Ui::renderMenu(const char* version) {
 
 // Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin
 void Ui::renderLog(const std::vector<String>& lines, const char* version) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     C.fillScreen(kBg);
     navRail(1);
@@ -134,9 +130,7 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
 
 // Test tactile : quadrillage, rond sous le doigt, coordonnées, nombre d'appuis
 void Ui::renderTouchTest(int x, int y, int count) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     C.fillScreen(kBg);
     const int W = C.width(), H = C.height();
@@ -172,9 +166,7 @@ void Ui::renderTouchTest(int x, int y, int count) {
 }
 
 void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& devices) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
     background();
@@ -252,9 +244,7 @@ Ui::MenuChoice Ui::hitMenu(int x, int y) const {
 }
 
 void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     background();
     const int W = C.width(), H = C.height(), m = sc(40);
@@ -328,9 +318,7 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
 
 
 void Ui::showInfo(const char* title, const String& body, const char* footer) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;
@@ -355,9 +343,7 @@ void Ui::showInfo(const char* title, const String& body, const char* footer) {
 }
 
 void Ui::showPortal(const String& apName, const String& apPass, const String& url, const String& reason) {
-    ambientShown_ = false;
-    view_ = View::Other;
-    railShown_ = false;
+    beginScreen(View::Other);
     auto& C = canvas_;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     accent_ = kAccent;
