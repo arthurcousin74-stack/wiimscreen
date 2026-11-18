@@ -35,7 +35,7 @@ Bookworm (64-bit), on any HDMI screen or the official 7" touch display (800×480
    ```
 
    ```bash
-   cd ~ && git clone https://github.com/arthurcousin74-stack/wiimscreen.git && cd wiimscreen
+   cd ~ && git clone https://github.com/couzinc/wiimscreen.git && cd wiimscreen
    ```
 
 3. Build (the first build takes several minutes on a Pi):

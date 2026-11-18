@@ -10,7 +10,7 @@ step. Keep this style when you change it. Technical details go in docs/DEVELOPER
 Open source · runs on ESP32 · tested on the M5Stack Tab5
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Firmware build](https://github.com/arthurcousin74-stack/wiimscreen/actions/workflows/firmware.yml/badge.svg)](https://github.com/arthurcousin74-stack/wiimscreen/actions/workflows/firmware.yml)
+[![Firmware build](https://github.com/couzinc/wiimscreen/actions/workflows/firmware.yml/badge.svg)](https://github.com/couzinc/wiimscreen/actions/workflows/firmware.yml)
 ![Tested on: M5Stack Tab5](https://img.shields.io/badge/tested%20on-M5Stack%20Tab5-black)
 
 *Version française : [LISEZMOI.md](LISEZMOI.md)*

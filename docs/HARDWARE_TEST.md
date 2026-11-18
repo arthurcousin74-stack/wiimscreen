@@ -142,7 +142,7 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 A Claude Code session on a computer on the same network can do this part. Copy this prompt into it:
 
 > Goal: a 24-hour test of the wiimscreen firmware, and a prototype of better WiiM status reading. Repo
-> github.com/arthurcousin74-stack/wiimscreen, branch `claude/gifted-cannon-ayyn0z` — pull it first; read
+> github.com/couzinc/wiimscreen, branch `claude/gifted-cannon-ayyn0z` — pull it first; read
 > AGENTS.md, docs/WIIM_API_NOTES.md and docs/HARDWARE_TEST.md.
 >
 > 1. The Tab5 is on USB. Record its serial output (115200 baud, the Journal goes there too) for 24 hours to a file,
