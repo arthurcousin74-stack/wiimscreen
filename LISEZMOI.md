@@ -155,6 +155,7 @@ python tools/preview/topng.py apercu/*.ppm
 
 ```
 src/main.cpp         démarrage, boucle, appuis, vue ambiance, rétroéclairage
+src/app_*.cpp        recherche, dictée, tuiles et images ; état partagé : app_internal.h
 src/ui.*             dessin (canevas hors écran), couleur d'accent, mise en page
 src/art.*            téléchargement des images (tâche de fond, HTTPS vérifié)
 src/wiim_client.*    API WiiM, TLS avec épinglage

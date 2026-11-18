@@ -6,7 +6,9 @@
 
 #include "core.h"
 
-// Réglages persistants (mémoire NVS de l'ESP32, conservés lors des mises à jour du firmware)
+// Réglages persistants (mémoire NVS de l'ESP32, conservés lors des mises à jour du firmware). Nouveau réglage :
+// une ligne dans kFields (src/settings.cpp), qui sert à la NVS et à la copie de secours ; sinon, pas de compilation.
+// Structure simple (agrégat) : pas de constructeur, pour que ce contrôle puisse compter les membres.
 struct Settings {
     String ssid;
     String pass;

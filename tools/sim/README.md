@@ -2,7 +2,7 @@
 
 Two builds: `sim` (fake WiiM, works anywhere) and `simreal` (your real WiiM through a relay, see below).
 
-The real application (`src/main.cpp`, `src/ui.cpp`, `src/log.cpp`, `src/settings.cpp` and `lib/core`) running on
+The real application (`src/main.cpp`, `src/app_*.cpp`, `src/ui*.cpp`, `src/log.cpp`, `src/settings.cpp` and `lib/core`) running on
 a PC, with a **fake WiiM**. The window is the Tab5 screen; the mouse is the finger.
 
 ```bash

@@ -11,7 +11,7 @@ problems, refer to [AGENTS.md](../AGENTS.md).
  ESP32 board (tested: M5Stack Tab5)                            WiiM streamer
 ┌──────────────────────────────────────────────┐   HTTPS      ┌──────────────┐
 │ main.cpp      loop: touch, drawing, menus,   │  ─────────▶  │ httpapi.asp  │
-│               ambient view, voice, OTA       │  pinned TLS  │ getPlayer-   │
+│  + app_*.cpp  ambient, search, voice, tiles  │  pinned TLS  │ getPlayer-   │
 │ wiim_worker   background task: polling,      │  keep-alive  │ Status, get- │
 │               commands, queues, search       │              │ MetaInfo…    │
 │ wiim_client   TLS client, WiiM commands      │  UPnP SOAP   │ PlayQueue    │
@@ -125,39 +125,46 @@ test finds.
 
 ### A setting
 
-- [ ] `src/settings.h`: add the field to `struct Settings`, with its default value.
-- [ ] `src/settings.cpp`: read it in `loadSettings()` and write it in `saveSettings()`. Use the same NVS key in the
-      two functions. An NVS key has a maximum of 15 characters.
-- [ ] `src/settings.cpp`: add it to `settingsToBackup()` **and** to `settingsFromBackup()`, with the same key.
+- [ ] `src/settings.h`: add the field to `struct Settings`, with its default value. Do not add a constructor:
+      `Settings` must stay a plain struct.
+- [ ] `src/settings.cpp`: add one line to the table `kFields`: `Field::text(…)`, `Field::flag(…)` or
+      `Field::number(…)` with the key and the member. This line gives the NVS read and write and the backup copy.
+      An NVS key has a maximum of 15 characters. Do not change the key of an existing setting.
 - [ ] `src/portal.cpp`: add the input to the form in `formPage()`, and read it in the `server.on("/save", …)`
       handler. A checkbox that is not checked is not in the form data: use `server.hasArg(…)`, as for `qobuzdirect`.
 - [ ] Labels of the setup page: `wr::L("English", "Français")`.
 - [ ] `README.md` (Simplified Technical English) and `LISEZMOI.md`: tell the user what the setting does.
 - [ ] A secret (password, key, token): never write it to the Journal or the serial port.
 
-**Trap:** a field that is not in **both** `settingsToBackup()` and `settingsFromBackup()` operates correctly until a
-full USB flash. The merged image erases the NVS, `setup()` restores the settings from the LittleFS copy, and the
-field goes back to its default value. No test and no simulator run shows this.
+**Trap:** a field that is not in `kFields` is not saved, and it goes back to its default value after a full USB flash.
+The build finds this: a `static_assert` in `src/settings.cpp` counts the members of `Settings`
+(`wr::aggregateFieldCount`). If you add a member that the settings code computes (as `presets`), change the
+`+ 1` in this `static_assert` and tell why in a comment.
 
 ### A screen
 
 - [ ] `src/ui.h` / `src/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
       and call `navRail(n)` if the navigation bar shows on the screen (`hitHome()`, `hitSettings()` and
       `hitSearch()` match only while the bar is shown). Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
-- [ ] `src/main.cpp`: add a `static bool g_xxxOpen` flag next to `g_menuOpen` and `g_logOpen`.
-- [ ] `src/main.cpp`: add the flag to `modalOpen()`.
-- [ ] `src/main.cpp`: in `loop()`, add a branch `if (g_xxxOpen) { … }` before the controls view, as for
-      `g_logOpen`. It handles the taps (close, `hitHome()`, `hitSettings()`, `hitSearch()`), then calls
-      `serviceWiim()`, `delay(5)` and `return`. To close the screen: set the flag to false, set `g_lastTouch`,
-      call `show()`.
+- [ ] `src/app_internal.h`: add a value `Xxx` to `enum class Screen`. `modalOpen()` then knows the screen: it is
+      true for all values other than `Screen::Controls`. Put the state of the screen in a struct with a one-line
+      comment, as the other structs in this file, and define the object in `src/main.cpp`.
+- [ ] To open the screen: set `g_view.screen = Screen::Xxx`, then draw it (`g_ui.renderXxx(…)`).
+- [ ] `src/main.cpp`: in `loop()`, add a branch `if (g_view.screen == Screen::Xxx) { … }` before the controls
+      view, as for `Screen::Log`. It handles the taps (close, `hitHome()`, `hitSettings()`, `hitSearch()`), then
+      calls `serviceWiim()`, `delay(5)` and `return`. To close the screen: set `g_view.screen = Screen::Controls`,
+      set `g_idle.lastTouch`, call `show()`.
+- [ ] A large screen: put its functions in a new file `src/app_xxx.cpp` (namespace `app`, includes
+      `app_internal.h`), and declare there the functions that `main.cpp` calls. The `sim`, `simreal` and `desktop`
+      builds take `+<app*.cpp>`.
 - [ ] `tools/preview/preview.cpp`: draw the screen and `save()` it, in landscape and, if it is different, in
       portrait. Then run `python3 tools/preview/check_golden.py --update` and commit `tools/preview/golden.sha256`.
 - [ ] Look at the screen in English and French, at 1280×720 and 800×480 (`.pio/golden-out/`). Optional: add taps
       and a `shot` to `tools/sim/scripts/tour.txt`.
 
-**Traps:** a flag that is not in `modalOpen()` lets `renderNow()` and the 1 Hz progress tick draw the controls view
-over your screen. A branch that does not call `serviceWiim()` stops the WiiM state while the screen is open: the
-reports and the results of the worker are not applied.
+**Traps:** a separate `bool` flag for a screen (not a `Screen` value) is not in `modalOpen()`: `renderNow()` and the
+1 Hz progress tick then draw the controls view over your screen. A branch that does not call `serviceWiim()` stops
+the WiiM state while the screen is open: the reports and the results of the worker are not applied.
 
 ### A text on the screen, or a Journal line
 
@@ -181,8 +188,8 @@ We tested only the Tab5. Other ESP32 boards need a small quantity of new code.
 - **Code that you can use as is**: `lib/core` (plain C++17, no Arduino headers), `wiim_worker`, `wiim_client`,
   `discovery`, `art`, `voice_service`, `portal`, `ota` and `settings`. These files use the Arduino-ESP32 3.x Wi-Fi,
   TLS, WebServer and NVS functions.
-- **Screen and input**: `ui.cpp` uses M5GFX to draw. `main.cpp` uses M5Unified for the touchscreen, the IMU, the
-  microphone and the speaker. Boards that M5Unified and M5GFX support (for example the M5Stack CoreS3) are the
+- **Screen and input**: `ui.cpp` uses M5GFX to draw. `main.cpp` and `app_voice.cpp` use M5Unified for the
+  touchscreen, the IMU, the microphone and the speaker. Boards that M5Unified and M5GFX support (for example the M5Stack CoreS3) are the
   easiest to port. For other boards, write a display configuration (LovyanGFX or M5GFX `LGFX` class).
 - **Layout**: `computeLayout()` fits all screen sizes. Its tests check 1280×720, 720×1280 and 960×540. Add the size
   of your screen to these tests.

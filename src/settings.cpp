@@ -19,28 +19,50 @@ bool Settings::autoPresets() const { return presetsTextIsAuto(presetsText); }
 
 static const char* kNamespace = "wiimremote";
 
+// Tous les réglages enregistrés, une ligne chacun, dans l'ordre de la NVS et de la copie de secours (LittleFS).
+// La clé sert aux deux (NVS : 15 caractères au plus) : ne jamais la changer, des appareils et des copies l'ont
+// déjà écrite. Valeur par défaut : celle de struct Settings. Un membre de Settings sans sa ligne ne compile pas.
+using Field = wr::SettingField<Settings, String>;
+static constexpr Field kFields[] = {
+    Field::text("ssid", &Settings::ssid),
+    Field::text("pass", &Settings::pass),
+    Field::text("host", &Settings::host),
+    Field::text("wiimuuid", &Settings::wiimUuid),
+    Field::text("wiimname", &Settings::wiimName),
+    Field::flag("https", &Settings::https),
+    Field::text("fp", &Settings::fingerprint),
+    Field::text("presets", &Settings::presetsText),
+    Field::number("rotation", &Settings::rotation, 0, 3),
+    Field::number("volstep", &Settings::volStep, 1, 20),
+    Field::number("beep", &Settings::beep, 0, 3),
+    Field::flag("visu2", &Settings::visualizer),  // expérimental : désactivé par défaut
+    Field::flag("motion", &Settings::motionWake),
+    Field::number("sleep", &Settings::sleepMin, 0, 240, false),  // bornes : copie de secours seulement (historique)
+    Field::text("oaikey", &Settings::openaiKey),
+    Field::text("sttmodel", &Settings::sttModel, true),  // vide dans la copie de secours : modèle par défaut
+    Field::text("deezeruser", &Settings::deezerUser),
+    Field::text("lang", &Settings::lang),
+    Field::flag("qobuzdirect", &Settings::qobuzDirect),
+};
+// + 1 : Settings::presets, déduit de presetsText
+static_assert(wr::aggregateFieldCount<Settings>() == sizeof(kFields) / sizeof(kFields[0]) + 1,
+              "un membre de Settings n'a pas sa ligne dans kFields (src/settings.cpp)");
+
 bool loadSettings(Settings& s) {
+    const Settings d;  // valeurs par défaut
     Preferences p;
     p.begin(kNamespace, true);
-    s.ssid = p.getString("ssid", "");
-    s.pass = p.getString("pass", "");
-    s.host = p.getString("host", "");
-    s.wiimUuid = p.getString("wiimuuid", "");
-    s.wiimName = p.getString("wiimname", "");
-    s.https = p.getBool("https", true);
-    s.fingerprint = p.getString("fp", "");
-    s.presetsText = p.getString("presets", "");
-    s.rotation = constrain(p.getInt("rotation", 1), 0, 3);
-    s.volStep = constrain(p.getInt("volstep", 5), 1, 20);
-    s.beep = constrain(p.getInt("beep", 2), 0, 3);
-    s.visualizer = p.getBool("visu2", false);  // expérimental : désactivé par défaut
-    s.motionWake = p.getBool("motion", true);
-    s.sleepMin = p.getInt("sleep", 0);
-    s.openaiKey = p.getString("oaikey", "");
-    s.sttModel = p.getString("sttmodel", "gpt-4o-mini-transcribe");
-    s.deezerUser = p.getString("deezeruser", "");
-    s.lang = p.getString("lang", "en");
-    s.qobuzDirect = p.getBool("qobuzdirect", false);
+    for (const Field& f : kFields) {
+        switch (f.kind) {
+            case wr::FieldKind::Text: s.*f.textMember = p.getString(f.key, d.*f.textMember); break;
+            case wr::FieldKind::Flag: s.*f.flagMember = p.getBool(f.key, d.*f.flagMember); break;
+            case wr::FieldKind::Number: {
+                const int v = p.getInt(f.key, d.*f.numberMember);
+                s.*f.numberMember = f.clampNvs ? constrain(v, f.lo, f.hi) : v;
+                break;
+            }
+        }
+    }
     p.end();
 
     std::string err;
@@ -52,43 +74,11 @@ bool loadSettings(Settings& s) {
     return true;
 }
 
-std::string settingsToBackup(const Settings& s) {
-    std::vector<std::pair<std::string, std::string>> f = {
-        {"ssid", s.ssid.c_str()},         {"pass", s.pass.c_str()},       {"host", s.host.c_str()},
-        {"wiimuuid", s.wiimUuid.c_str()}, {"wiimname", s.wiimName.c_str()}, {"https", s.https ? "1" : "0"},
-        {"fp", s.fingerprint.c_str()},    {"presets", s.presetsText.c_str()}, {"rotation", std::to_string(s.rotation)},
-        {"volstep", std::to_string(s.volStep)}, {"beep", std::to_string(s.beep)}, {"visu2", s.visualizer ? "1" : "0"},
-        {"motion", s.motionWake ? "1" : "0"},   {"sleep", std::to_string(s.sleepMin)},
-        {"oaikey", s.openaiKey.c_str()},  {"sttmodel", s.sttModel.c_str()}, {"deezeruser", s.deezerUser.c_str()},
-        {"lang", s.lang.c_str()},         {"qobuzdirect", s.qobuzDirect ? "1" : "0"}};
-    return wr::encodeFields(f);
-}
+std::string settingsToBackup(const Settings& s) { return wr::encodeSettings(s, kFields); }
 
 bool settingsFromBackup(const std::string& text, Settings& s) {
     Settings r = s;
-    for (auto& kv : wr::decodeFields(text)) {
-        const std::string& k = kv.first;
-        const String v = kv.second.c_str();
-        if (k == "ssid") r.ssid = v;
-        else if (k == "pass") r.pass = v;
-        else if (k == "host") r.host = v;
-        else if (k == "wiimuuid") r.wiimUuid = v;
-        else if (k == "wiimname") r.wiimName = v;
-        else if (k == "https") r.https = v != "0";
-        else if (k == "fp") r.fingerprint = v;
-        else if (k == "presets") r.presetsText = v;
-        else if (k == "rotation") r.rotation = constrain(v.toInt(), 0, 3);
-        else if (k == "volstep") r.volStep = constrain(v.toInt(), 1, 20);
-        else if (k == "beep") r.beep = constrain(v.toInt(), 0, 3);
-        else if (k == "visu2") r.visualizer = v == "1";
-        else if (k == "motion") r.motionWake = v != "0";
-        else if (k == "sleep") r.sleepMin = constrain(v.toInt(), 0, 240);
-        else if (k == "oaikey") r.openaiKey = v;
-        else if (k == "sttmodel") r.sttModel = v.length() ? v : String("gpt-4o-mini-transcribe");
-        else if (k == "deezeruser") r.deezerUser = v;
-        else if (k == "lang") r.lang = v;
-        else if (k == "qobuzdirect") r.qobuzDirect = v == "1";
-    }
+    wr::decodeSettings(text, r, Settings(), kFields);
     if (!r.configured()) return false;
     s = r;
     return true;
@@ -97,25 +87,13 @@ bool settingsFromBackup(const std::string& text, Settings& s) {
 void saveSettings(const Settings& s) {
     Preferences p;
     p.begin(kNamespace, false);
-    p.putString("ssid", s.ssid);
-    p.putString("pass", s.pass);
-    p.putString("host", s.host);
-    p.putString("wiimuuid", s.wiimUuid);
-    p.putString("wiimname", s.wiimName);
-    p.putBool("https", s.https);
-    p.putString("fp", s.fingerprint);
-    p.putString("presets", s.presetsText);
-    p.putInt("rotation", s.rotation);
-    p.putInt("volstep", s.volStep);
-    p.putInt("beep", s.beep);
-    p.putBool("visu2", s.visualizer);
-    p.putBool("motion", s.motionWake);
-    p.putInt("sleep", s.sleepMin);
-    p.putString("oaikey", s.openaiKey);
-    p.putString("sttmodel", s.sttModel);
-    p.putString("deezeruser", s.deezerUser);
-    p.putString("lang", s.lang);
-    p.putBool("qobuzdirect", s.qobuzDirect);
+    for (const Field& f : kFields) {
+        switch (f.kind) {
+            case wr::FieldKind::Text: p.putString(f.key, s.*f.textMember); break;
+            case wr::FieldKind::Flag: p.putBool(f.key, s.*f.flagMember); break;
+            case wr::FieldKind::Number: p.putInt(f.key, s.*f.numberMember); break;
+        }
+    }
     p.end();
 }
 

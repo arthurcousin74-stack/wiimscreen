@@ -19,6 +19,19 @@ using namespace wr;
 // (avec ASan/UBSan dans [env:native], cela garde contre les plantages et les boucles sans fin)
 static size_t g_sink = 0;
 
+// Réglages décrits par un tableau (lib/core/src/fields.h) : copie de secours relue depuis n'importe quel texte
+struct RobustSettings {
+    std::string text;
+    bool flag = true;
+    int number = 0;
+};
+using RobustField = SettingField<RobustSettings, std::string>;
+static constexpr RobustField kRobust[] = {
+    RobustField::text("t", &RobustSettings::text, true),
+    RobustField::flag("f", &RobustSettings::flag),
+    RobustField::number("n", &RobustSettings::number, -9, 9),
+};
+
 static void feedAll(const std::string& s) {
     std::vector<Preset> presets;
     std::string err, v, ip;
@@ -56,6 +69,9 @@ static void feedAll(const std::string& s) {
     g_sink += cleanTranscript(s).size();
     SearchUndo undo;
     g_sink += parseSearchUndo(s, undo) + searchUndoText(undo).size();
+    RobustSettings rs;
+    decodeSettings(s, rs, RobustSettings(), kRobust);
+    g_sink += rs.text.size() + rs.flag + rs.number + parseFlag(s.c_str(), false) + parseNumber(s.c_str(), -5, 5);
 }
 
 static void test_parsers_robust() {

@@ -13,6 +13,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ### Changed
 - The computer layer of the simulator moved to `platform/pc/` (shared with the desktop build).
+- For contributors: the state of `src/main.cpp` is grouped in named structs in `src/app_internal.h`, one
+  `enum class Screen` gives the current screen, and search, dictation and tiles moved to `src/app_search.cpp`,
+  `src/app_voice.cpp` and `src/app_tiles.cpp`. No change for the user.
+- For contributors: one table (`kFields` in `src/settings.cpp`) lists every setting for the NVS and for the backup
+  copy; a setting without its line stops the build. Stored settings and backup files stay the same.
 
 ### Fixed
 - Search through the WiiM with shuffle on: the results were listed in a shuffled order and a tap could start another
