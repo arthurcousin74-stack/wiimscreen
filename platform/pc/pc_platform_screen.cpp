@@ -1,6 +1,7 @@
 // Computer layer: the SDL window that shows the display canvas, mouse/touch input as the touch screen,
-// screenshots (.ppm), window scale / fullscreen / screen size. M5.update() (called by the app in every loop and
-// every waiting screen) reads the input, runs the next --script steps and shows the canvas.
+// screenshots (.ppm, F12 key; the other keys go to pc_platform_keys.cpp), window scale / fullscreen / screen size.
+// M5.update() (called by the app in every loop and every waiting screen) reads the input, runs the next --script
+// steps, ticks the key repeats and shows the canvas.
 // See pc_internal.h for the other pc_platform*.cpp files.
 #include <SDL2/SDL.h>
 #include <unistd.h>
@@ -93,13 +94,18 @@ void SimM5::update() {
                 g_releaseQueued = true;
             } else if (e.type == SDL_MOUSEMOTION && g_mouseDown) {
                 g_mouseX = e.motion.x, g_mouseY = e.motion.y;
-            } else if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_s) {
-                static int n = 0;
-                shot("capture-" + std::to_string(++n));
+            } else if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F12) {
+                if (!e.key.repeat) {
+                    static int n = 0;
+                    shot("capture-" + std::to_string(++n));
+                }
+            } else {
+                keyEvent(e);  // keys, text, controllers (pc_platform_keys.cpp)
             }
         }
     }
     runScript();
+    keyTick();
     auto& d = Touch.detail;
     // One change per frame: a quick click is pressed on one frame and released on the next
     const bool was = d.pressed;

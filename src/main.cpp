@@ -42,6 +42,7 @@
 #include "device/portal.h"
 #include "storage/settings.h"
 #include "device/sound.h"
+#include "device/key_input.h"
 #include "ui/ui.h"
 #include "app/version.h"
 #include "voice.h"
@@ -825,6 +826,9 @@ void setup() {
 void loop() {
     M5.update();
     auto t = M5.Touch.getDetail();
+    // Touches (télécommande, clavier) : vidées ici, pas encore utilisées (étape D-pad à venir). Rien sur le Tab5.
+    wr::KeyEvent keyEv;
+    while (takeKey(keyEv)) { /* consumed by the D-pad step */ }
     const uint32_t now = millis();
     logMemory();
     // Images arrivées (tous les écrans : la file de l'ArtFetcher est bornée, un résultat non lu serait perdu)

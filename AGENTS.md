@@ -54,6 +54,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | WAV header for the dictation; still declares the text and Deezer functions through its includes |
 | `lib/core/src/appstate.*` | Main-loop timing decisions without hardware: wrap-safe `expired`, `idleAction` (ambient, dim, screen off, sleep), `musicSettled` |
+| `lib/core/src/keys.*` | Key input without hardware: `NavKey`, `KeyEvent`, `KeyTracker` (raw down/up → press, long press on OK, repeat on arrows/Backspace; wrap-safe), key names for scripts |
 | `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
 | `lib/core/src/firmware.*` | OTA stream filter (accepts app-only or merged images) |
 | `lib/core/src/upnp.*` | XML/SOAP helpers, UPnP description/SCPD parsing, WiiM PlayQueue `QueueContext` parsing, secret masking |
@@ -87,10 +88,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/device/portal.*` / `src/device/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/device/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/device/sound.*` | Taps and beeps on the speaker |
+| `src/device/key_input.*` | `takeKey()`: key events for the app (`loop()` drains them; not used yet). `key_input.cpp` = Tab5, none; PC: `platform/pc/pc_platform_keys.cpp` |
 | `src/storage/settings.*` | NVS-backed settings (+ LittleFS backup copy); one table `kFields` lists every setting for both |
 | `src/storage/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
-| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, script runner, restart/exit; list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
+| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, keys (keyboard, controllers → `takeKey()`), script runner, restart/exit; list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
 | `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
 | `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), `mock_wiim.py` (httpapi + UPnP PlayQueue on port 49152 with the behaviours seen on a real WiiM: shuffle, queues that fill step by step, `--nofill-file`) and `selftest.sh` (search through a queue, restore, album play) |
 
@@ -103,7 +105,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/app/` | App glue split out of `main.cpp` (`app_*.cpp`, `app_internal.h`), the Journal (`log.*`), `version.h` |
 | `src/ui/` | Drawing and hit tests (`ui*.cpp`, `ui.h`, `ui_internal.h`) and the generated `fonts/` |
 | `src/net/` | Everything that talks to the network: the WiiM worker and client, discovery, cover downloads, OpenAI transcription, the root certificates |
-| `src/device/` | Tab5 device services: setup portal, OTA page (and their shared CSS), speaker sounds |
+| `src/device/` | Tab5 device services: setup portal, OTA page (and their shared CSS), speaker sounds, key input (none on the Tab5) |
 | `src/storage/` | What persists on the device: settings (NVS + LittleFS backup) and favorites/notes in LittleFS. Used by the worker, the UI and the app, so it belongs to none of them |
 
 - **Include rule**: project headers are included with their path from `src/`, also between files of the same folder:
@@ -133,6 +135,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   fine for new files. Non-ASCII text is written as UTF-8 escapes in C strings when needed.
 - **README.md is written in ASD-STE100 Simplified Technical English** (short sentences, active voice, one
   instruction per numbered step). Keep that style when you edit it.
+- **Keys** (remote, keyboard, controller): a platform feeds raw down/up with `millis()` to one `wr::KeyTracker` (or `post()` when it has no key-up), calls `tick()` every loop, and returns its events from `takeKey()` (`src/device/key_input.h`); the app reads them only in `loop()`. Scripts: `key`, `hold`, `text` steps; `--log-keys` prints `[key] key=… kind=…`.
 - Colors are RGB888 `uint32_t` (an `uint16_t` would be read as RGB565 by M5GFX).
 - UI changes: render them with `tools/preview` and look at the PNGs before committing; `docs/*.png` come from it.
 - Layout dimensions scale with `sc(v) = v * min(width, height) / 540`; `checkLayout` tests guard overlaps and

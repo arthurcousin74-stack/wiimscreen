@@ -20,6 +20,7 @@ int main() {
     run_qobuz_deezer_tests();
     run_decisions_tests();
     run_appstate_tests();
+    run_keys_tests();
     run_audio_tests();
     run_firmware_tests();
     run_robust_tests();

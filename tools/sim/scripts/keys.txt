@@ -1,0 +1,15 @@
+# Scripted keys (steps key, hold, text): the app does not use keys yet; --log-keys prints each event it takes.
+# Run: .pio/build/sim/program --headless --quiet --reset --log-keys --script tools/sim/scripts/keys.txt
+# tools/check.sh (sim gate) checks the [key] lines: short presses, a long OK, repeats on a held arrow, a text.
+wait 1500
+key playpause
+wait 100
+key ok
+wait 100
+hold ok 900
+wait 100
+hold down 700
+wait 100
+text Miles Davis
+wait 300
+quit

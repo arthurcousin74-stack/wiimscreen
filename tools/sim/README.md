@@ -8,12 +8,13 @@ a PC, with a **fake WiiM**. The window is the Tab5 screen; the mouse is the fing
 ```bash
 sudo apt install libsdl2-dev          # macOS: brew install sdl2
 pio run -e sim
-.pio/build/sim/program --scale 0.75   # window at 75 %; S = screenshot in .pio/sim-out/
+.pio/build/sim/program --scale 0.75   # window at 75 %; F12 = screenshot in .pio/sim-out/
 ```
 
 Options: `--reset` (first start again: settings back to the defaults below), `--state <dir>` (default
 `.pio/sim-state`, holds `settings.txt`, the simulated NVS), `--out <dir>` (screenshots, default `.pio/sim-out`),
-`--headless` (no window), `--quiet` (no Journal on the terminal), `--script <file>`.
+`--headless` (no window), `--quiet` (no Journal on the terminal), `--script <file>`, `--log-keys` (show each key
+event that the app takes: `[key] key=ok kind=long`; the app does not use the keys yet, keys in docs/DESKTOP.md).
 
 ## What is real, what is fake
 
@@ -35,12 +36,19 @@ limits, timing of the ESP32-P4, the microphone and the speaker. Test those on th
 One step per line: `wait <ms>`, `tap <x> <y>`, `press <x> <y>`, `move <x> <y>`, `release`, `shot <name>`, `quit`.
 Coordinates are screen pixels (1280×720 in landscape).
 
+Key steps: `key <name>` (press and release), `hold <name> <ms>` (press, wait `<ms>` like `wait`, release),
+`text <text>` (the rest of the line, UTF-8, spaces included). Names: `up`, `down`, `left`, `right`, `ok`, `back`,
+`menu`, `playpause`, `play`, `pause`, `next`, `prev`, `ffwd`, `rewind`, `volup`, `voldown`, `mute`, `search`,
+`backspace`, `enter`. An unknown command or key name, or a step without its value, stops the program before it
+starts (message on the terminal, exit code 1).
+
 ```bash
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
 python tools/preview/topng.py .pio/sim-out/*.ppm
 ```
 
 CI runs `tools/sim/scripts/tour.txt` on every push (artifact `sim-screens`): a crash or a hang fails the build.
+It also runs `tools/sim/scripts/keys.txt` with `--log-keys` and checks the `[key]` lines (`tools/check.sh sim`).
 
 ## Real WiiM mode (relay)
 

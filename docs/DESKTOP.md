@@ -111,7 +111,31 @@ pio run -e desktop && .pio/build/desktop/program
 | `--wiim 192.168.1.50` | Use this WiiM (when discovery does not find it) |
 | `--state <folder>` | Settings and favorites folder (default `~/.config/wiimscreen`) |
 | `--quiet` | No Journal on the terminal |
-| `S` key | Screenshot in `~/.config/wiimscreen/captures` |
+| `--log-keys` | Show each key event on the terminal (`[key] key=ok kind=press`) |
+| `F12` key | Screenshot in `~/.config/wiimscreen/captures` |
+
+### Keys
+
+The app does not use the keys yet (touch and mouse only). The computer layer already reads them and gives them to
+the app (`takeKey()`, `--log-keys` shows them):
+
+| Input | Key |
+|---|---|
+| Arrow keys, D-pad of a game controller, hat of a joystick | up, down, left, right (held: repeat after 0.4 s, 8 per second) |
+| Enter, keypad Enter, Select, controller A | ok (held 0.7 s: long press) |
+| Escape, Android Back, controller B | back |
+| Menu, F1, controller Start | menu |
+| Space, Play media key | playpause |
+| Stop media key | pause |
+| Next, Previous, Fast forward, Rewind media keys | next, prev, ffwd, rewind |
+| Volume up, Volume down, Mute keys | volup, voldown, mute |
+| Search key, F3 | search |
+| Backspace | backspace (held: repeat) |
+| Typed characters | text (UTF-8) |
+
+SDL starts the text input by itself when the window opens on a computer, so typed characters arrive without more
+code. Space gives `playpause` and also the text " ". A controller is read as a controller only (not also as a
+joystick). When the window loses the focus, the held keys are released without an event.
 
 ## Settings
 
@@ -133,6 +157,7 @@ Stop wiimscreen before you edit the file, then start it again. The names are the
 | `pc_platform_devices.cpp` | M5, Serial, ESP and WiFi objects, network address, microphone, battery |
 | `pc_platform_screen.cpp` | SDL window, mouse/touch input, screenshots, screen size |
 | `pc_platform_script.cpp` | `--script` runner |
+| `pc_platform_keys.cpp` | Keys: keyboard, media keys, game controllers, joysticks and script keys → `takeKey()` |
 | `pc_platform_exit.cpp` | Restart and power off |
 | `pc_internal.h` | What the `pc_platform*.cpp` files share |
 | `pc_http_fs.cpp` | HTTP/1.1 client, LittleFS on a folder |

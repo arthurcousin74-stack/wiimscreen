@@ -89,6 +89,7 @@ void run_upnp_tests();
 void run_qobuz_deezer_tests();
 void run_decisions_tests();
 void run_appstate_tests();
+void run_keys_tests();
 void run_audio_tests();
 void run_firmware_tests();
 void run_robust_tests();

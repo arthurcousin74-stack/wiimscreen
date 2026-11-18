@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
         auto next = [&] { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
         if (a == "--headless") headless = true;
         else if (a == "--quiet") g_quiet = true;
+        else if (a == "--log-keys") g_logKeys = true;
         else if (a == "--scale") g_scale = std::max(0.25f, std::strtof(next().c_str(), nullptr));
         else if (a == "--state") g_state = next();
         else if (a == "--out") g_out = next();
@@ -78,7 +79,7 @@ int main(int argc, char** argv) {
         } else {
             fprintf(stderr,
                     "usage: %s [--scale 0.6] [--script fichier] [--headless] [--state dossier] [--out dossier] "
-                    "[--reset] [--quiet] [--relay h\xC3\xB4te:port] [--size 800x480] [--fullscreen] [--wiim adresse]\n",
+                    "[--reset] [--quiet] [--log-keys] [--relay h\xC3\xB4te:port] [--size 800x480] [--fullscreen] [--wiim adresse]\n",
                     argv[0]);
             return a == "--help" ? 0 : 1;
         }
@@ -124,6 +125,7 @@ int main(int argc, char** argv) {
             fprintf(stderr, "SDL : %s\n", SDL_GetError());
             return 1;
         }
+        initKeyInput();
     }
     g_stepAt = millis();
     setup();
