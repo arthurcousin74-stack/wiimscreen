@@ -146,13 +146,24 @@ struct SearchScreen {
 };
 static SearchScreen g_search;
 
-// Écrans affichés par-dessus les commandes, et compteurs des écrans Journal et test tactile
+// Écran affiché. Un seul à la fois : chaque passage d'un écran à l'autre se fait depuis l'écran quitté.
+enum class Screen {
+    Controls,   // commandes (ou vue ambiance, voir OpenScreens::ambient)
+    Menu,       // menu Réglages (barre, ou appui long sur l'en-tête)
+    TouchTest,  // test tactile (menu Réglages)
+    Log,        // Journal (menu Réglages)
+    Search,     // recherche : clavier
+    Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
+};
+
+// Écran affiché, vue ambiance, et compteurs des écrans Journal et test tactile
 struct OpenScreens {
+    Screen screen = Screen::Controls;
+    // Vue ambiance : façon de dessiner les commandes (micro du visualiseur ouvert). Drapeau à part, pas une valeur
+    // de Screen : elle commence seulement sur les commandes, mais une tuile « Favoris » relâchée dans le tour
+    // de boucle où elle commence ouvre la liste par-dessus (Results), et Accueil y ramène ensuite ; exitAmbient()
+    // ferme alors le micro. Une seule valeur perdrait la vue ambiance et laisserait le micro ouvert.
     bool ambient = false;
-    bool menu = false;                             // menu Réglages affiché (appui long)
-    bool touchTest = false;                        // écran de test tactile (menu Réglages)
-    bool log = false;                              // écran Journal (menu Réglages)
-    bool search = false, results = false;          // recherche : clavier, liste de résultats
     uint32_t logFrame = 0;
     int touchCount = 0;
     uint32_t touchFrame = 0;
@@ -312,7 +323,9 @@ static void markPending(int button, Await what, bool viaEvent) {
 
 static void show() { g_draw.dirty = true; }
 
-static bool modalOpen() { return g_voice.listening || g_view.menu || g_view.touchTest || g_view.log || g_view.search || g_view.results; }
+// Écran autre que les commandes. La dictée (g_voice.listening) n'a lieu que sur Search ou Results : elle
+// commence sur le clavier, et seule la fin d'une recherche peut passer de l'un à l'autre pendant l'écoute.
+static bool modalOpen() { return g_view.screen != Screen::Controls; }
 static void openSearch();  // recherche Qobuz, plus bas
 static void onSearchKey(int k);
 static void onSearchDone(const WiimEvent& ev);
@@ -643,7 +656,7 @@ static void checkImages() {
             const std::string url = img.url;
             ArtImage& stored = g_img.results[url];
             stored = std::move(img);
-            if (g_view.results && !g_view.search)
+            if (g_view.screen == Screen::Results)
                 for (size_t i = 0; i < g_search.results.size(); ++i)
                     if (g_search.results[i].art == url) g_ui.updateResultCover((int)i, &stored);
             continue;
@@ -654,7 +667,7 @@ static void checkImages() {
         stored = std::move(img);
         for (size_t i = 0; i < g_tiles.list.size(); ++i)
             if (g_tiles.list[i].picUrl == url) g_ui.setPresetArt((int)i, &stored);
-        if (g_view.results && !g_view.search && g_img.coverRequested.count(url))  // même image dans la liste ouverte
+        if (g_view.screen == Screen::Results && g_img.coverRequested.count(url))  // même image dans la liste ouverte
             for (size_t i = 0; i < g_search.results.size(); ++i)
                 if (g_search.results[i].art == url) g_ui.updateResultCover((int)i, &stored);
         changed = true;
@@ -796,7 +809,7 @@ static void serviceWiim() {
                 if (ev.ok) {
                     sound::confirm();
                     refreshTiles();
-                    if (g_view.results && g_search.resultsKind == SearchKind::QobuzAlbums) renderResultsList();  // cœur plein
+                    if (g_view.screen == Screen::Results && g_search.resultsKind == SearchKind::QobuzAlbums) renderResultsList();  // cœur plein
                     setMessage(String(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + ev.text +
                                    wr::L("\xE2\x80\x9D added to favorites", " \xC2\xBB ajout\xC3\xA9 aux favoris"),
                                5000);
@@ -1087,7 +1100,7 @@ static void serviceTranscription() {
     if (!g_voice.stt.busy || !g_voice.stt.done) return;
     g_voice.stt.busy = false;
     g_voice.stt.done = false;
-    if (!g_view.search) return;  // l'écran a été quitté entre-temps
+    if (g_view.screen != Screen::Search) return;  // l'écran a été quitté entre-temps
     if (!g_voice.stt.ok) {
         logEvent("Transcription : %s", g_voice.stt.err.c_str());
         sound::error();
@@ -1211,7 +1224,7 @@ static void handleTap(int x, int y) {
     if (g_ui.hitSettings(x, y)) {  // Réglages (barre)
         logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
         sound::tap();
-        g_view.menu = true;
+        g_view.screen = Screen::Menu;
         g_ui.renderMenu(FW_VERSION);
         return;
     }
@@ -1380,7 +1393,7 @@ static void openFavoriteList(bool deezer) {
     g_search.resultsKind = deezer ? SearchKind::DeezerFavorites : SearchKind::QobuzFavorites;
     g_search.results.clear();
     g_search.page = 0;
-    g_view.results = true;
+    g_view.screen = Screen::Results;
     g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
                        deezer ? wr::L("Loading your Deezer favorites\xE2\x80\xA6", "Chargement de tes favoris Deezer\xE2\x80\xA6")
                               : wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
@@ -1388,7 +1401,7 @@ static void openFavoriteList(bool deezer) {
 }
 
 static void openSearch() {
-    g_view.search = true;
+    g_view.screen = Screen::Search;
     g_search.deezerOk = g_tiles.favOk && fav::hasDeezerModel();
     if (!g_search.deezerOk && g_search.source == kTabDeezer) g_search.source = kTabQobuz;
     if (!g_settings.qobuzDirect && g_search.source == kTabAlbums) g_search.source = kTabQobuz;
@@ -1512,7 +1525,7 @@ static void onSearchDone(const WiimEvent& ev) {
                                                               : wr::L("No track found for \xE2\x80\x9C",
                                                                       "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB ")) +
                                       ev.name + wr::L("\xE2\x80\x9D", " \xC2\xBB");
-        if (g_view.results) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
+        if (g_view.screen == Screen::Results) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
             g_search.results.clear();
             g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
                                !ev.ok ? String(wr::L("Failed: ", "Impossible : ")) + ev.text
@@ -1525,14 +1538,14 @@ static void onSearchDone(const WiimEvent& ev) {
         g_img.results.clear();  // pochettes de la liste précédente (PSRAM)
         g_img.coverRequested.clear();
         g_search.status = "";
-        if (g_view.search || g_view.results) {  // toujours sur le clavier ou la liste : on montre les résultats
-            g_view.search = false;
-            g_view.results = true;
+        // Toujours sur le clavier ou la liste : on montre les résultats
+        if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) {
+            g_view.screen = Screen::Results;
             renderResultsList(-1, String());
         }
         return;
     }
-    if (g_view.search) renderSearch();
+    if (g_view.screen == Screen::Search) renderSearch();
 }
 
 // Mémoire dans le Journal (au démarrage + toutes les 10 min) : pour repérer une fuite lors d'un essai de longue durée
@@ -1568,19 +1581,19 @@ void loop() {
         if (favorite) setMessage(noAnswer, 5000);
         if (search) {
             g_search.status = noAnswer;
-            if (g_view.search) renderSearch();
-            else if (g_view.results && g_search.results.empty()) g_ui.renderResults(g_search.resultsTitle, g_search.results, 0, noAnswer);
+            if (g_view.screen == Screen::Search) renderSearch();
+            else if (g_view.screen == Screen::Results && g_search.results.empty()) g_ui.renderResults(g_search.resultsTitle, g_search.results, 0, noAnswer);
         }
         show();
     }
 
     // Test tactile : rond sous le doigt tant qu'il touche ; « Fermer » pour sortir
-    if (g_view.touchTest) {
+    if (g_view.screen == Screen::TouchTest) {
         if (t.wasPressed()) {
             ++g_view.touchCount;
             if (g_ui.hitTouchTestClose(t.x, t.y)) {
                 sound::tap();
-                g_view.touchTest = false;
+                g_view.screen = Screen::Controls;
                 g_idle.lastTouch = now;
                 show();
                 delay(5);
@@ -1597,10 +1610,10 @@ void loop() {
     }
 
     // Journal : rafraîchi chaque seconde ; « Fermer » pour sortir
-    if (g_view.log) {
+    if (g_view.screen == Screen::Log) {
         if (t.wasPressed() && (g_ui.hitLogClose(t.x, t.y) || g_ui.hitHome(t.x, t.y))) {
             sound::tap();
-            g_view.log = false;
+            g_view.screen = Screen::Controls;
             g_idle.lastTouch = now;
             show();
         } else if (t.wasPressed() && g_ui.hitLogQueue(t.x, t.y)) {
@@ -1610,13 +1623,11 @@ void loop() {
             g_view.logFrame = 0;
         } else if (t.wasPressed() && g_ui.hitSearch(t.x, t.y)) {
             sound::tap();
-            g_view.log = false;
             g_idle.lastTouch = now;
             openSearch();
         } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
             sound::tap();
-            g_view.log = false;
-            g_view.menu = true;
+            g_view.screen = Screen::Menu;
             g_idle.lastTouch = now;
             g_ui.renderMenu(FW_VERSION);
         } else if (now - g_view.logFrame > 1000) {
@@ -1629,7 +1640,7 @@ void loop() {
     }
 
     // Recherche : clavier, puis résultats (la barre de gauche reste active)
-    if (g_view.search || g_view.results) {
+    if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) {
         if (t.wasPressed()) {
             g_idle.lastTouch = now;
             if (g_idle.brightness != kBrightOn) setBrightness(kBrightOn);
@@ -1641,23 +1652,22 @@ void loop() {
                 } else if (g_ui.hitHome(t.x, t.y) || g_ui.hitSettings(t.x, t.y)) {
                     finishDictation(false);
                 }
-            } else if (g_view.search && g_ui.hitMic(t.x, t.y)) {
+            } else if (g_view.screen == Screen::Search && g_ui.hitMic(t.x, t.y)) {
                 if (!g_jobs.search && !g_voice.stt.busy) startVoice();  // bip, puis écoute jusqu'au bouton rouge
             } else if (g_ui.hitHome(t.x, t.y)) {
                 sound::tap();
-                g_view.search = g_view.results = false;
+                g_view.screen = Screen::Controls;
                 show();
             } else if (g_ui.hitSettings(t.x, t.y)) {
                 sound::tap();
-                g_view.search = g_view.results = false;
-                g_view.menu = true;
+                g_view.screen = Screen::Menu;
                 g_ui.renderMenu(FW_VERSION);
-            } else if (g_view.search && g_ui.hitSource(t.x, t.y) >= 0) {
+            } else if (g_view.screen == Screen::Search && g_ui.hitSource(t.x, t.y) >= 0) {
                 sound::tap();
                 g_search.source = g_ui.hitSource(t.x, t.y);
                 g_search.status = "";
                 updateSearchField();
-            } else if (g_view.search) {
+            } else if (g_view.screen == Screen::Search) {
                 onSearchKey(g_ui.hitKey(t.x, t.y));
             } else {
                 int r = g_ui.hitResult(t.x, t.y), pg = g_ui.hitResultsPage(t.x, t.y), h = g_ui.hitResultHeart(t.x, t.y);
@@ -1675,7 +1685,7 @@ void loop() {
                                                       : ""))
                                    .c_str(),
                                loadsAlbum(g_search.resultsKind) ? 9000 : 4000);
-                    g_view.results = false;
+                    g_view.screen = Screen::Controls;
                     show();
                 } else if (pg) {
                     sound::tap();
@@ -1683,7 +1693,6 @@ void loop() {
                     renderResultsList();
                 } else if (g_ui.hitResultsEdit(t.x, t.y) || g_ui.hitSearch(t.x, t.y)) {
                     sound::tap();
-                    g_view.results = false;
                     openSearch();
                 }
             }
@@ -1709,15 +1718,14 @@ void loop() {
             logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_view.ambient) exitAmbient();
-        } else if (g_view.menu && g_ui.hitSearch(t.x, t.y)) {
+        } else if (g_view.screen == Screen::Menu && g_ui.hitSearch(t.x, t.y)) {
             sound::tap();
-            g_view.menu = false;
             openSearch();
-        } else if (g_view.menu && g_ui.hitHome(t.x, t.y)) {
+        } else if (g_view.screen == Screen::Menu && g_ui.hitHome(t.x, t.y)) {
             sound::tap();  // Accueil : fermer les réglages
-            g_view.menu = false;
+            g_view.screen = Screen::Controls;
             show();
-        } else if (g_view.menu) {
+        } else if (g_view.screen == Screen::Menu) {
             Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
             if (c != Ui::MenuNone) sound::tap();
             if (c == Ui::MenuConfig) {
@@ -1725,23 +1733,21 @@ void loop() {
 
             } else if (c == Ui::MenuUpdate) {
                 runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
-                g_view.menu = false;
+                g_view.screen = Screen::Controls;
                 show();
             } else if (c == Ui::MenuLog) {
-                g_view.menu = false;
-                g_view.log = true;
+                g_view.screen = Screen::Log;
                 g_view.logFrame = now;
                 g_ui.renderLog(logLines(), FW_VERSION);
             } else if (c == Ui::MenuTouch) {
-                g_view.menu = false;
-                g_view.touchTest = true;
+                g_view.screen = Screen::TouchTest;
                 g_view.touchCount = 0;
                 g_ui.renderTouchTest(-1, -1, 0);
             } else if (c == Ui::MenuSleep) {
-                g_view.menu = false;
+                g_view.screen = Screen::Controls;
                 goToSleep("demand\xC3\xA9" "e depuis R\xC3\xA9glages");
             } else if (c == Ui::MenuClose) {
-                g_view.menu = false;
+                g_view.screen = Screen::Controls;
                 show();
             }
         } else if (g_view.ambient) {
@@ -1763,7 +1769,7 @@ void loop() {
         else if (now - g_header.since > kLongPressMs) {
             sound::confirm();
             g_header.pressed = false;
-            g_view.menu = true;  // Réglages : configuration ou mise à jour
+            g_view.screen = Screen::Menu;  // Réglages : configuration ou mise à jour
             g_ui.renderMenu(FW_VERSION);
         }
     }
