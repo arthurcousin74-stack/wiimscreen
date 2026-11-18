@@ -47,7 +47,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/http.*` | HTTP response parsing and keep-alive framing (`httpFrame`), URL/host checks, certificate fingerprints, `sniffImage` |
 | `lib/core/src/text.*` | `trim`, `hexVal`, UTF-8 helpers, `wrapText`, `htmlEscape`, `normalizeText`, `sharesWord` |
 | `lib/core/src/layout.*` | `Rect`, `Layout`, `computeLayout`, on-screen keyboard (`keyboardLayout`) |
-| `lib/core/src/focus.*` | Tappable elements of a screen: `Act`, `Target` (drawn rect + touch area + flags), `TargetList` (first match in insertion order wins) |
+| `lib/core/src/focus.*` | Tappable elements of a screen: `Act`, `Target` (drawn rect + touch area + flags), `TargetList` (first match in insertion order wins); D-pad moves `nextTarget` (geometry, beam first; edge reached) and `defaultTarget` |
 | `lib/core/src/color.*` | `nameColor`, `accentColor` (HSL) |
 | `lib/core/src/fields.*` | Settings text: preset list (`parsePresets`), backup fields (`encodeFields`/`decodeFields`), settings described by a table (`SettingField`, `encodeSettings`/`decodeSettings`, `aggregateFieldCount`) |
 | `lib/core/src/deezer.*` | Deezer search/favorites parsing (`DeezerTrack`, albums), profile number, `baselineCoverUrl` |

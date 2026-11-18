@@ -92,4 +92,27 @@ private:
     std::vector<Target> items_;
 };
 
+// D-pad moves (geometry of the drawn rectangles, in the spirit of Android's FocusFinder):
+//  - candidates: focusable targets beyond the current one in the pressed direction (their near edge is past the
+//    current near edge and their far edge past the current far edge: the centre is on the pressed side);
+//  - a candidate that overlaps the current one across the move ("in the beam") wins over one that does not, in all
+//    four directions (Android lets an out-of-beam one win Up/Down when it lies entirely nearer: here that sent Up
+//    from the rail's Search button into the content instead of to Home);
+//  - otherwise the lowest score wins: 13 x gap^2 along the move (0 if they overlap) + offset^2 between the centres
+//    across it (Android's weighted distance; "gap + 2 x offset" sent Down from a key two rows down, to the wide
+//    Search key); on a tie, the first in the list.
+// The navigation rail needs no rule of its own: from the content's left edge, Left reaches the rail button nearest
+// across (landscape, rail on the left); in portrait the rail is on top and Up reaches it.
+enum class Dir : uint8_t { Up, Down, Left, Right };
+
+struct NavResult {
+    const Target* target = nullptr;  // where the focus goes
+    bool edge = false;               // nothing in that direction (the app may turn it into a page change)
+};
+
+// current == nullptr: the default target. NoFocus targets are never returned.
+NavResult nextTarget(const TargetList& list, const Target* current, Dir d);
+// The target flagged kTargetDefault, else the first focusable one, else nullptr
+const Target* defaultTarget(const TargetList& list);
+
 }  // namespace wr
