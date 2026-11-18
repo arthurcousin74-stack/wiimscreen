@@ -444,7 +444,7 @@ void WiimWorker::runPlaySearchResult(int index) {
         push(std::move(ev));
         return;
     }
-    std::string control, resp, templ;
+    std::string control, templ;
     int code = -1;
     // La file de la liste a pu disparaître (le WiiM n'en garde que deux ou trois ; la remise de la musique
     // d'avant en recrée une) : file recréée depuis son adresse, lancée au morceau choisi (par son titre)

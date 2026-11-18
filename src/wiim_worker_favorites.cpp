@@ -113,12 +113,10 @@ void WiimWorker::autoFlowTile(const wr::QueueInfo& q, const std::string& current
     push(std::move(ev));
 }
 
-// Morceau Deezer choisi : file de son album (le WiiM lit les pistes par airable), puis lecture à sa place
 // File d'un album (le WiiM lit les pistes depuis `searchUrl`), lancée au morceau `title` (trouvé dans la file
 // relue : l'ordre peut être mélangé) ; le premier morceau si `title` est vide ou introuvable.
 bool WiimWorker::playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
                              const std::string& title, const char* label) {
-    std::string resp;
     const std::string name = std::string("wiimscreen-album-") + std::to_string(++searchCount_ % 2);
     deleteQueue(control, name);
     const int create = createQueue(control, wr::queueFromTemplate(templ, name, url));

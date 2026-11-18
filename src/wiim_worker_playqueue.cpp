@@ -240,7 +240,6 @@ int wiimq::deleteQueue(const std::string& control, const std::string& name) {
 
 // Envoie une file au WiiM puis la lance ; renvoie le code HTTP de PlayQueueWithIndex (-1 si non tenté)
 int wiimq::sendQueue(const std::string& control, const std::string& ctx, const std::string& listName, int& create) {
-    std::string resp;
     create = createQueue(control, ctx);
     if (create != 200) return -1;
     return playQueueAt(control, listName, 1);
