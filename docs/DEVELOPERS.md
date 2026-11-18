@@ -151,6 +151,11 @@ The build finds this: a `static_assert` in `src/storage/settings.cpp` counts the
 - [ ] `src/ui/ui.h` / `src/ui/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
       and call `navRail(n)` if the navigation bar shows on the screen (`hitHome()`, `hitSettings()` and
       `hitSearch()` match only while the bar is shown). Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
+- [ ] In `renderXxx(…)`, register each tappable element: `targets_.add(wr::Act::Xxx, arg, drawnRect, touchRect,
+      flags)` (add a value to `wr::Act` in `lib/core/src/focus.h` if needed). Add them in the order in which
+      `main.cpp` tests the taps: the first match wins. `hitXxx(x, y)` is then a lookup: `targets_.hit(wr::Act::Xxx,
+      x, y)`. Mark one element `wr::kTargetDefault` (first focus) and the bars and whole-screen areas
+      `wr::kTargetNoFocus`.
 - [ ] `src/app/app_internal.h`: add a value `Xxx` to `enum class Screen`. `modalOpen()` then knows the screen: it is
       true for all values other than `Screen::Controls`. Put the state of the screen in a struct with a one-line
       comment, as the other structs in this file, and define the object in `src/main.cpp`.

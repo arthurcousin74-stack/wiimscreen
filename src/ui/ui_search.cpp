@@ -21,6 +21,23 @@ void Ui::renderSearch(const std::string& query, const String& status, bool busy,
     useFont(C, kSmall);
     for (size_t i = 0; i < keys_.size(); ++i)
         if (keys_[i].kind != wr::Key::Char) drawKey((int)i, (int)i == pressedKey);
+    // Touchables (la barre est inscrite par navRail) : micro (sc(8) autour), sources, touches (sc(4) autour : les
+    // espaces entre touches comptent pour la plus proche ; deux voisines agrandies se recouvrent d'un pixel au plus,
+    // la première dans l'ordre de keys() l'emporte, comme avant). updateSearchField() ne change pas cette liste :
+    // ses rectangles ne bougent qu'avec `sources`, que l'application ne change qu'avec un rendu complet.
+    if (voiceOn_ && micRect_.w > 0) {
+        const int pad = sc(8);
+        targets_.add(wr::Act::Mic, 0, micRect_, wr::Rect{micRect_.x - pad, micRect_.y - pad, micRect_.w + 2 * pad, micRect_.h + 2 * pad});
+    }
+    for (int i = 0; i < 3; ++i)
+        if (srcRects_[i].w > 0) targets_.add(wr::Act::Source, i, srcRects_[i]);
+    const int pad = sc(4);
+    for (size_t i = 0; i < keys_.size(); ++i) {
+        const wr::Rect& r = keys_[i].r;
+        // Focus de départ : la première lettre (deuxième rangée)
+        targets_.add(wr::Act::Key, (int)i, r, wr::Rect{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad},
+                     i == 10 ? wr::kTargetDefault : 0);
+    }
     present();
 }
 
@@ -155,18 +172,13 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
 }
 
 int Ui::hitSource(int x, int y) const {
-    for (int i = 0; i < 3; ++i)
-        if (srcRects_[i].contains(x, y)) return i;
-    return -1;
+    const wr::Target* t = targets_.hit(wr::Act::Source, x, y);
+    return t ? t->arg : -1;
 }
 
 int Ui::hitKey(int x, int y) const {
-    const int pad = sc(4);  // les espaces entre touches comptent pour la plus proche
-    for (size_t i = 0; i < keys_.size(); ++i) {
-        const wr::Rect& r = keys_[i].r;
-        if (wr::Rect{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad}.contains(x, y)) return (int)i;
-    }
-    return -1;
+    const wr::Target* t = targets_.hit(wr::Act::Key, x, y);
+    return t ? t->arg : -1;
 }
 
 // Résultats : une ligne par morceau (titre, artiste · album), par pages
@@ -182,13 +194,13 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     // En-tête : « texte » · nombre, bouton Modifier
     const int bh = sc(52), bw = sc(170);
-    resultsEdit_ = wr::Rect{X + W - bw, A.y + m, bw, bh};
-    C.fillRoundRect(resultsEdit_.x, resultsEdit_.y, bw, bh, bh / 2, kCard);
-    searchIcon(resultsEdit_.x + sc(30), resultsEdit_.y + bh / 2, sc(9), kText, kCard);
+    const wr::Rect resultsEdit = wr::Rect{X + W - bw, A.y + m, bw, bh};
+    C.fillRoundRect(resultsEdit.x, resultsEdit.y, bw, bh, bh / 2, kCard);
+    searchIcon(resultsEdit.x + sc(30), resultsEdit.y + bh / 2, sc(9), kText, kCard);
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString(wr::L("Edit", "Modifier"), resultsEdit_.x + bw / 2 + sc(14), resultsEdit_.y + bh / 2 + 1);
+    C.drawString(wr::L("Edit", "Modifier"), resultsEdit.x + bw / 2 + sc(14), resultsEdit.y + bh / 2 + 1);
     useFont(C, kMid);
     C.setTextDatum(textdatum_t::middle_left);
     const std::string head = std::string(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + query + wr::L("\xE2\x80\x9D", " \xC2\xBB");
@@ -208,13 +220,10 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     const int pages = std::max(1, ((int)items.size() + resultsPerPage_ - 1) / resultsPerPage_);
     page = std::max(0, std::min(pages - 1, page));
     resultsFirst_ = page * resultsPerPage_;
-    resultRects_.clear();
-    heartRects_.clear();
     coverRects_.clear();
     for (int k = 0; k < resultsPerPage_ && resultsFirst_ + k < (int)items.size(); ++k) {
         const int i = resultsFirst_ + k;
         const wr::Rect r{X, top + k * (rowH + gap), W, rowH};
-        resultRects_.push_back(r);
         const uint32_t bg = i == pressed ? kCardHi : kCard;
         C.fillRoundRect(r.x, r.y, r.w, r.h, sc(12), bg);
         // Pochette (ou numéro), titre, artiste · album
@@ -236,13 +245,16 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
         if (i < (int)hearts.size()) {  // cœur à droite : vide (ajouter en tuile) ou plein (retirer)
             const int d = r.h - sc(16);
             const wr::Rect h{r.x + r.w - sc(8) - d, r.y + sc(8), d, d};
-            heartRects_.push_back(h);
+            // Cœur (sc(6) autour) avant sa ligne, qui le contient : il l'emporte, comme dans main.cpp
+            const int pad = sc(6);
+            targets_.add(wr::Act::ResultHeart, i, h, wr::Rect{h.x - pad, h.y - pad, h.w + 2 * pad, h.h + 2 * pad});
             const bool on = hearts[i] == 1;
             C.fillCircle(h.x + d / 2, h.y + d / 2, d / 2, on ? accent_ : kCardHi);
             heartIcon(h.x + d / 2, h.y + d / 2, d / 4, on ? kBg : kText);
             if (!on) heartIcon(h.x + d / 2, h.y + d / 2 - 1, d / 4 - sc(4), kCardHi);
             tw -= d + sc(12);
         }
+        targets_.add(wr::Act::ResultRow, i, r, k == 0 ? wr::kTargetDefault : 0);
         const wr::QueueTrack& t = items[i];
         C.setTextDatum(textdatum_t::top_left);
         useFont(C, kSmall);
@@ -255,19 +267,19 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
         if (!under.empty()) C.drawString(wr::wrapText(under, tw, 1, measure)[0].c_str(), tx, r.y + r.h / 2 + sc(4));
     }
     // Pages
-    resultsPrev_ = resultsNext_ = wr::Rect{};
+    wr::Rect resultsPrev, resultsNext;
     if (pages > 1) {
         const int ny = A.bottom() - m - navH, nw = sc(200);
         useFont(C, kSmall);
         C.setTextDatum(textdatum_t::middle_center);
         if (page > 0) {
-            resultsPrev_ = wr::Rect{X, ny, nw, navH};
+            resultsPrev = wr::Rect{X, ny, nw, navH};
             C.fillRoundRect(X, ny, nw, navH, navH / 2, kCard);
             C.setTextColor(kText);
             C.drawString(wr::L("Previous", "Pr\xC3\xA9" "c\xC3\xA9" "dents"), X + nw / 2, ny + navH / 2 + 1);
         }
         if (page < pages - 1) {
-            resultsNext_ = wr::Rect{X + W - nw, ny, nw, navH};
+            resultsNext = wr::Rect{X + W - nw, ny, nw, navH};
             C.fillRoundRect(X + W - nw, ny, nw, navH, navH / 2, kCard);
             C.setTextColor(kText);
             C.drawString(wr::L("Next", "Suivants"), X + W - nw / 2, ny + navH / 2 + 1);
@@ -275,13 +287,17 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
         C.setTextColor(kText2);
         C.drawString((String(page + 1) + " / " + String(pages)).c_str(), X + W / 2, ny + navH / 2 + 1);
     }
+    // Pages, puis Modifier (la barre est inscrite par navRail, les lignes et leurs cœurs plus haut). Sans ligne,
+    // le focus de départ est Modifier.
+    if (resultsPrev.w > 0) targets_.add(wr::Act::ResultsPage, -1, resultsPrev);
+    if (resultsNext.w > 0) targets_.add(wr::Act::ResultsPage, 1, resultsNext);
+    targets_.add(wr::Act::ResultsEdit, 0, resultsEdit, items.empty() ? wr::kTargetDefault : 0);
     present();
 }
 
 int Ui::hitResult(int x, int y) const {
-    for (size_t k = 0; k < resultRects_.size(); ++k)
-        if (resultRects_[k].contains(x, y)) return resultsFirst_ + (int)k;
-    return -1;
+    const wr::Target* t = targets_.hit(wr::Act::ResultRow, x, y);
+    return t ? t->arg : -1;
 }
 
 // Pochette d'une ligne : décodée une fois (cache par adresse), case sombre tant qu'elle n'est pas arrivée
@@ -314,21 +330,19 @@ void Ui::updateResultCover(int index, const ArtImage* img) {
 }
 
 int Ui::hitResultHeart(int x, int y) const {
-    const int pad = sc(6);
-    for (size_t k = 0; k < heartRects_.size(); ++k) {
-        const wr::Rect& h = heartRects_[k];
-        if (wr::Rect{h.x - pad, h.y - pad, h.w + 2 * pad, h.h + 2 * pad}.contains(x, y)) return resultsFirst_ + (int)k;
-    }
-    return -1;
+    const wr::Target* t = targets_.hit(wr::Act::ResultHeart, x, y);
+    return t ? t->arg : -1;
 }
 
 int Ui::hitResultsPage(int x, int y) const {
-    if (resultsPrev_.contains(x, y)) return -1;
-    if (resultsNext_.contains(x, y)) return 1;
-    return 0;
+    const wr::Target* t = targets_.hit(wr::Act::ResultsPage, x, y);
+    return t ? t->arg : 0;
 }
 
-bool Ui::hitMic(int x, int y) const {  // micro de la recherche (le seul)
+// Micro de la recherche (le seul). Garde son propre calcul : micRect_ reste valable après un passage du clavier
+// à la liste des résultats, et main.cpp l'interroge aussi sur cette liste pendant une dictée (une liste qui
+// arriverait pendant l'écoute) ; l'élément Mic n'est inscrit que sur le clavier.
+bool Ui::hitMic(int x, int y) const {
     if (!voiceOn_ || micRect_.w == 0) return false;
     const int pad = sc(8);
     return wr::Rect{micRect_.x - pad, micRect_.y - pad, micRect_.w + 2 * pad, micRect_.h + 2 * pad}.contains(x, y);

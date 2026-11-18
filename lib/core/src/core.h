@@ -12,6 +12,7 @@
 #include "color.h"     // nameColor, accentColor
 #include "deezer.h"    // baselineCoverUrl (and the Deezer parsers)
 #include "fields.h"    // parsePresets, encodeFields, decodeFields
+#include "focus.h"     // Target, TargetList: tappable elements of a screen
 #include "http.h"      // HTTP responses, URLs, hosts, fingerprints, sniffImage
 #include "json.h"      // jsonString, jsonInt, decodeJsonUnicode (and the depth-aware helpers)
 #include "layout.h"    // Rect, Layout, computeLayout, Key, keyboardLayout

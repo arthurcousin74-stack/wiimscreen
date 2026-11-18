@@ -99,12 +99,12 @@ public:
 
     // Test de l'écran tactile : un rond sous le doigt et ses coordonnées (x < 0 : aucun appui)
     void renderTouchTest(int x, int y, int count);
-    bool hitTouchTestClose(int x, int y) const { return touchClose_.contains(x, y); }
+    bool hitTouchTestClose(int x, int y) const { return targets_.hit(wr::Act::TouchClose, x, y) != nullptr; }
 
     // Journal : derniers évènements (appuis, commandes, erreurs) pour le diagnostic
     void renderLog(const std::vector<String>& lines, const char* version);
-    bool hitLogClose(int x, int y) const { return logClose_.contains(x, y); }
-    bool hitLogQueue(int x, int y) const { return logQueue_.contains(x, y); }
+    bool hitLogClose(int x, int y) const { return targets_.hit(wr::Act::LogClose, x, y) != nullptr; }
+    bool hitLogQueue(int x, int y) const { return targets_.hit(wr::Act::LogQueue, x, y) != nullptr; }
 
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
@@ -131,15 +131,22 @@ public:
     int hitResult(int x, int y) const;   // indice global du morceau, ou -1
     int hitResultHeart(int x, int y) const;  // indice global de la ligne dont le cœur est touché, ou -1
     int hitResultsPage(int x, int y) const;  // -1 / +1 : page précédente / suivante, 0 sinon
-    bool hitResultsEdit(int x, int y) const { return resultsEdit_.contains(x, y); }
+    bool hitResultsEdit(int x, int y) const { return targets_.hit(wr::Act::ResultsEdit, x, y) != nullptr; }
 
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
-    bool hitUpdateCancel(int x, int y) const { return cancelRect_.contains(x, y); }
+    bool hitUpdateCancel(int x, int y) const { return targets_.hit(wr::Act::UpdateCancel, x, y) != nullptr; }
 
     // Écrans plein page
     void showInfo(const char* title, const String& body, const char* footer = nullptr);
     void showPortal(const String& apName, const String& apPass, const String& url, const String& reason);
+
+    // Éléments touchables de l'écran affiché (wr::TargetList), inscrits pendant son dessin complet ; les mises à
+    // jour partielles n'y touchent pas. hit() rend le premier qui contient le point : l'ordre d'inscription suit
+    // celui des tests de main.cpp. Les hitXxx() ci-dessus en sont des recherches, sauf hitMic() (voir
+    // ui_search.cpp) et ceux de la vue commandes qui répondent aussi hors de cette vue (voir ui.cpp) : hitPreset,
+    // hitTransport, hitHeader, hitVolume, hitMute, hitProgress, hitStrip, hitDots.
+    const wr::TargetList& targets() const { return targets_; }
 
 private:
     int sc(int v) const { return v * ref_ / 540; }
@@ -174,6 +181,7 @@ private:
     void emptyStrip();         // bande des presets sans preset
     void heartIcon(int cx, int cy, int s, uint32_t color);
     void favButton();
+    void controlsTargets();  // inscrit les éléments touchables de la vue commandes (fin de render())
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change
@@ -196,36 +204,27 @@ private:
     // Dictée de la recherche (micro dans le champ) ; onglet Albums (accès Qobuz direct)
     bool voiceOn_ = false;
     bool albumsOn_ = false;
-    wr::Rect cancelRect_;
-    wr::Rect menuRects_[6];
-    wr::Rect logClose_;
-    wr::Rect logQueue_;  // Journal : bouton « File du WiiM »
     int chipRight_ = 0;  // info() : bord droit des puces (avant la batterie), 0 = largeur du bloc
-    std::vector<wr::Rect> pickRects_;
-    wr::Rect touchClose_;
-    wr::Rect pickRetry_, pickConfig_;
     // Visualiseur
     bool visEnabled_ = false;
     enum class View { Other, Controls, Ambient };
     View view_ = View::Other;  // dernier écran affiché (pour les mises à jour partielles)
-    // Début de chaque écran complet : view_ = view, barre de navigation absente (navRail() la marque affichée)
+    // Début de chaque écran complet : view_ = view, liste des éléments touchables vidée (barre de navigation
+    // comprise : navRail() l'inscrit)
     void beginScreen(View view);
     wr::Rect ambProg_;          // ligne de progression de la vue ambiance
     wr::Rect homeRect_;         // bouton Accueil de la vue ambiance
-    bool railShown_ = false;    // barre de navigation à l'écran
     int favState_ = 0;
     std::vector<wr::Key> keys_;           // clavier affiché
-    std::vector<wr::Rect> resultRects_;   // lignes de résultats affichées
-    std::vector<wr::Rect> heartRects_;    // leurs cœurs (vide sans cœurs)
-    std::vector<wr::Rect> coverRects_;    // leurs pochettes (rectangle vide : numéro à la place)
+    std::vector<wr::Rect> coverRects_;    // pochettes des lignes de résultats (rectangle vide : numéro à la place)
     std::map<std::string, std::unique_ptr<M5Canvas>> coverThumbs_;  // pochettes décodées, par adresse
     void drawResultCover(const wr::Rect& r, const ArtImage* img);
     int resultsFirst_ = 0, resultsPerPage_ = 1;
-    wr::Rect resultsPrev_, resultsNext_, resultsEdit_;
     wr::Rect srcRects_[3];  // choix Qobuz | Deezer | Albums du clavier (indice = source)
     wr::Rect micRect_;      // micro (dictée) du champ de recherche
     wr::Rect searchArea_;   // champ + choix de la source + ligne d'état (redessinés seuls)
     bool keysBusy_ = false;
+    wr::TargetList targets_;  // vidée par beginScreen(), remplie par le rendu complet de chaque écran
     wr::Rect visRect_;
     std::vector<float> visLevels_, visPeaks_;
 };

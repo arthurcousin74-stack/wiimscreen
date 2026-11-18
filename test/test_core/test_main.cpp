@@ -24,5 +24,6 @@ int main() {
     run_audio_tests();
     run_firmware_tests();
     run_robust_tests();
+    run_focus_tests();
     return UNITY_END();
 }

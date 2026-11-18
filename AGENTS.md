@@ -47,6 +47,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/http.*` | HTTP response parsing and keep-alive framing (`httpFrame`), URL/host checks, certificate fingerprints, `sniffImage` |
 | `lib/core/src/text.*` | `trim`, `hexVal`, UTF-8 helpers, `wrapText`, `htmlEscape`, `normalizeText`, `sharesWord` |
 | `lib/core/src/layout.*` | `Rect`, `Layout`, `computeLayout`, on-screen keyboard (`keyboardLayout`) |
+| `lib/core/src/focus.*` | Tappable elements of a screen: `Act`, `Target` (drawn rect + touch area + flags), `TargetList` (first match in insertion order wins); D-pad moves `nextTarget` (geometry, beam first; edge reached) and `defaultTarget` |
 | `lib/core/src/color.*` | `nameColor`, `accentColor` (HSL) |
 | `lib/core/src/fields.*` | Settings text: preset list (`parsePresets`), backup fields (`encodeFields`/`decodeFields`), settings described by a table (`SettingField`, `encodeSettings`/`decodeSettings`, `aggregateFieldCount`) |
 | `lib/core/src/deezer.*` | Deezer search/favorites parsing (`DeezerTrack`, albums), profile number, `baselineCoverUrl` |
@@ -177,6 +178,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   on battery, power button turns it on), else deep sleep with no wake source. Wake behaviour on USB: not verified.
 - Navigation bar: `Layout::rail/navHome/navSettings/content`; each full screen starts with `beginScreen(View)`; screens that show the bar call `Ui::navRail()` and lay
   out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
+- **Every tappable element is registered in `Ui::targets_` while its screen is drawn** (`beginScreen()` clears it;
+  partial redraws never change it); a new button = one `targets_.add(...)`, placed in the order main.cpp tests taps.
 - **Fonts**: always `useFont(C, kX)` in the `ui*.cpp` files (declared in `ui_internal.h`, defined once in `ui_core.cpp`, the only file that includes the font headers), never `C.loadFont()` directly: M5GFX re-parses the VLW header on
   every load (the search keyboard loaded 43 fonts per frame); `useFont` skips reloading the same font.
 - **Partial redraws** keep taps responsive: a full frame pushes ~1.8 MB. `pressKey()`, `updateSearchField()`,

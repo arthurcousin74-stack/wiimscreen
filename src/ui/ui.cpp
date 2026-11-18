@@ -422,15 +422,46 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
     if (presets_.empty()) emptyStrip();
     pageDots();
     toast(st.message);
+    controlsTargets();
     present();
 }
 
-bool Ui::hitFav(int x, int y) const {
-    if (view_ != View::Controls || favState_ <= 0) return false;
-    const wr::Rect& g = layout_.fav;
+static wr::Rect padded(const wr::Rect& r, int pad) { return wr::Rect{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad}; }
+
+// Éléments touchables de la vue commandes, dans l'ordre des tests de main.cpp (le premier qui contient le point
+// l'emporte) : barres (volume, haut-parleur, progression), en-tête, points de page, tuiles puis bande, ♥, lecture.
+// La barre de navigation est déjà inscrite (navRail) : elle ne touche rien d'autre. Chevauchements réels :
+// progression (agrandie de sc(10)) sur les textes et sur le bouton lecture agrandi, points de page (sc(6) de plus)
+// sur le bas des tuiles ; les tuiles sont dans la bande.
+void Ui::controlsTargets() {
+    using wr::Act;
     const int pad = sc(10);
-    return wr::Rect{g.x - pad, g.y - pad, g.w + 2 * pad, g.h + 2 * pad}.contains(x, y);
+    targets_.add(Act::Volume, 0, layout_.volBar, wr::kTargetNoFocus);
+    targets_.add(Act::Mute, 0, layout_.mute);
+    if (progDuration_ > 0 && progHit_.w > 0) targets_.add(Act::Progress, 0, layout_.progress, progHit_, wr::kTargetNoFocus);
+    targets_.add(Act::Header, 0, layout_.art, wr::kTargetNoFocus);
+    targets_.add(Act::Header, 1, layout_.info, wr::kTargetNoFocus);
+    if (pageCount() >= 2) {  // moitié gauche : page précédente, moitié droite : suivante
+        const wr::Rect& d = layout_.dots;
+        const int y = d.y - sc(6), h = d.h + sc(12), half = d.w / 2;
+        targets_.add(Act::Dots, -1, wr::Rect{d.x, y, half, h}, wr::kTargetNoFocus);
+        targets_.add(Act::Dots, 1, wr::Rect{d.x + half, y, d.w - half, h}, wr::kTargetNoFocus);
+    }
+    for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
+        int i = page_ * layout_.perPage + (int)slot;
+        if (i < (int)presets_.size()) targets_.add(Act::Preset, i, layout_.presets[slot]);
+    }
+    if (!presets_.empty()) targets_.add(Act::Strip, 0, layout_.strip, wr::kTargetNoFocus);
+    if (favState_ > 0) targets_.add(Act::Fav, 0, layout_.fav, padded(layout_.fav, pad));
+    for (int i = 0; i < wr::kTransportCount; ++i) {
+        const wr::Rect& r = layout_.transport[i];
+        // Cercles un peu agrandis (le doigt touche souvent à côté), sauf vol−/vol+ : collés au curseur
+        const bool vol = i == wr::kVolDown || i == wr::kVolUp;
+        targets_.add(Act::Transport, i, r, vol ? r : padded(r, pad), i == wr::kPlayPause ? wr::kTargetDefault : 0);
+    }
 }
+
+bool Ui::hitFav(int x, int y) const { return targets_.hit(wr::Act::Fav, x, y) != nullptr; }
 
 // Bande des presets vide : dire pourquoi, et comment la remplir
 void Ui::emptyStrip() {
@@ -578,6 +609,9 @@ void Ui::renderAmbient(const UiState& st) {
         C.fillCircle(homeRect_.x + d / 2, homeRect_.y + d / 2, d / 2, kCard);
         homeIcon(homeRect_.x + d / 2, homeRect_.y + d / 2, d / 4, kText, kCard);
     }
+    // Touchables : le bouton Accueil, puis tout l'écran (un appui n'importe où ramène les commandes)
+    targets_.add(wr::Act::Home, 0, homeRect_, wr::kTargetDefault);
+    targets_.add(wr::Act::AmbientExit, 0, wr::Rect{0, 0, W, H}, wr::kTargetNoFocus);
     if (visEnabled_) drawBars();
     present();
 }
@@ -617,6 +651,11 @@ void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& 
 }
 
 // -------------------------------------------------------------------- zones
+// Les zones de la vue commandes gardent leur propre calcul (mêmes rectangles que controlsTargets()) : elles
+// répondent d'après la mise en page même quand un autre écran est affiché, et main.cpp les interroge dès que
+// g_view.screen vaut Controls, avant que la vue soit redessinée (premier tour de loop() après setup(), quand
+// l'écran montre encore « Connexion… » ou le choix du WiiM). Une recherche dans targets_ n'y répondrait rien.
+// hitVolume, hitProgress et hitDots rendent en plus une position (niveau, instant, moitié).
 
 int Ui::hitPreset(int x, int y) const {
     for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {

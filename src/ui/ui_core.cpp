@@ -39,6 +39,7 @@ void Ui::begin(const Settings& s) {
     art_.setColorDepth(16);
     artBig_.setPsram(true);
     artBig_.setColorDepth(16);
+    targets_.reserve(64);  // une fois : l'écran de recherche en inscrit une cinquantaine, sans allocation par image
     setPresets(s.presets);
 }
 
@@ -53,7 +54,7 @@ void Ui::relayout() {
 
 void Ui::beginScreen(View view) {
     view_ = view;
-    railShown_ = false;
+    targets_.clear();  // l'écran qui commence inscrit ses éléments touchables en se dessinant
 }
 
 void Ui::presentRect(const wr::Rect& r) {
