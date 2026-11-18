@@ -44,30 +44,31 @@ void Ui::renderMenu(const char* version) {
     useFont(C, kBig);
     C.setTextColor(kText);
     C.drawString(wr::L("Settings", "R\xC3\xA9glages"), A.x + W / 2, y0 - sc(20));
-    menuRects_[MenuConfig] = wr::Rect{x, y0, bw, bh};
-    menuRects_[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
-    menuRects_[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
-    menuRects_[MenuLog] = wr::Rect{x, y0 + 3 * (bh + gap), bw, bh};
-    menuButton(C, menuRects_[MenuConfig], wr::L("Setup", "Configuration"),
+    wr::Rect menuRects[6];
+    menuRects[MenuConfig] = wr::Rect{x, y0, bw, bh};
+    menuRects[MenuUpdate] = wr::Rect{x, y0 + bh + gap, bw, bh};
+    menuRects[MenuTouch] = wr::Rect{x, y0 + 2 * (bh + gap), bw, bh};
+    menuRects[MenuLog] = wr::Rect{x, y0 + 3 * (bh + gap), bw, bh};
+    menuButton(C, menuRects[MenuConfig], wr::L("Setup", "Configuration"),
                wr::L("Wi-Fi, WiiM, presets, voice", "Wi-Fi, WiiM, presets, voix"),
                accent_, sc(16));
-    menuButton(C, menuRects_[MenuUpdate], wr::L("Update", "Mise \xC3\xA0 jour"),
+    menuButton(C, menuRects[MenuUpdate], wr::L("Update", "Mise \xC3\xA0 jour"),
                wr::L("Install new firmware over Wi-Fi", "Installer un nouveau firmware par le Wi-Fi"), kText2,
                sc(16));
-    menuButton(C, menuRects_[MenuTouch], wr::L("Touch test", "Test tactile"),
+    menuButton(C, menuRects[MenuTouch], wr::L("Touch test", "Test tactile"),
                wr::L("See where the screen detects your finger", "Voir o\xC3\xB9 l'\xC3\xA9" "cran d\xC3\xA9tecte ton doigt"),
                kText2, sc(16));
-    menuButton(C, menuRects_[MenuLog], wr::L("Log", "Journal"),
+    menuButton(C, menuRects[MenuLog], wr::L("Log", "Journal"),
                wr::L("Recent events, for troubleshooting", "Derniers \xC3\xA9v\xC3\xA9nements, pour le diagnostic"), kText2,
                sc(16));
-    menuRects_[MenuSleep] = wr::Rect{x, y0 + 4 * (bh + gap), bw, bh};
-    menuButton(C, menuRects_[MenuSleep], wr::L("Sleep", "Mise en veille"),
+    menuRects[MenuSleep] = wr::Rect{x, y0 + 4 * (bh + gap), bw, bh};
+    menuButton(C, menuRects[MenuSleep], wr::L("Sleep", "Mise en veille"),
                wr::L("Power off; the power button turns it back on", "\xC3\x89teindre ; le bouton d'alimentation rallume"),
                kText2,
                sc(16));
     const int cw = sc(150), ch = sc(44);
-    menuRects_[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects_[MenuSleep].bottom() + sc(14), cw, ch};
-    const wr::Rect& c = menuRects_[MenuClose];
+    menuRects[MenuClose] = wr::Rect{A.x + (W - cw) / 2, menuRects[MenuSleep].bottom() + sc(14), cw, ch};
+    const wr::Rect& c = menuRects[MenuClose];
     C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
@@ -76,6 +77,9 @@ void Ui::renderMenu(const char* version) {
     C.setTextDatum(textdatum_t::bottom_right);
     C.setTextColor(kText2);
     C.drawString((String("Version ") + version).c_str(), C.width() - sc(20), H - sc(14));
+    // Touchables (la barre est inscrite par navRail) : les six choix, dans l'ordre de MenuChoice
+    for (int i = 0; i < 6; ++i)
+        targets_.add(wr::Act::MenuChoice, i, menuRects[i], i == MenuConfig ? wr::kTargetDefault : 0);
     present();
 }
 
@@ -97,16 +101,18 @@ void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     const String ver = String("Version ") + version;
     if (X + sc(150) + C.textWidth(ver.c_str()) < W - m - bw - sc(24) - qw)  // sinon : version dans Réglages
         C.drawString(ver.c_str(), X + sc(150), Y + sc(6));
-    logClose_ = wr::Rect{W - bw - m, Y, bw, bh};
-    C.fillRoundRect(logClose_.x, logClose_.y, bw, bh, bh / 2, kCardHi);
+    const wr::Rect logClose = wr::Rect{W - bw - m, Y, bw, bh};
+    C.fillRoundRect(logClose.x, logClose.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString(wr::L("Close", "Fermer"), logClose_.x + bw / 2, logClose_.y + bh / 2 + 1);
+    C.drawString(wr::L("Close", "Fermer"), logClose.x + bw / 2, logClose.y + bh / 2 + 1);
     // Diagnostic de la file de lecture du WiiM (service UPnP PlayQueue)
-    logQueue_ = wr::Rect{logClose_.x - sc(12) - qw, Y, qw, bh};
-    C.fillRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, kCard);
-    C.drawRoundRect(logQueue_.x, logQueue_.y, qw, bh, bh / 2, accent_);
-    C.drawString(wr::L("WiiM queue", "File du WiiM"), logQueue_.x + qw / 2, logQueue_.y + bh / 2 + 1);
+    const wr::Rect logQueue = wr::Rect{logClose.x - sc(12) - qw, Y, qw, bh};
+    C.fillRoundRect(logQueue.x, logQueue.y, qw, bh, bh / 2, kCard);
+    C.drawRoundRect(logQueue.x, logQueue.y, qw, bh, bh / 2, accent_);
+    C.drawString(wr::L("WiiM queue", "File du WiiM"), logQueue.x + qw / 2, logQueue.y + bh / 2 + 1);
+    targets_.add(wr::Act::LogClose, 0, logClose, wr::kTargetDefault);
+    targets_.add(wr::Act::LogQueue, 0, logQueue);
     // Lignes : police fine, pleine largeur ; une ligne longue passe sur 3 lignes au plus.
     // On part de la plus récente (en bas) et on remonte tant qu'il y a de la place.
     useFont(C, kTiny);
@@ -157,11 +163,12 @@ void Ui::renderTouchTest(int x, int y, int count) {
         C.fillCircle(x, y, sc(6), kText);
     }
     const int bw = sc(150), bh = sc(48);
-    touchClose_ = wr::Rect{W - bw - sc(20), sc(20), bw, bh};
-    C.fillRoundRect(touchClose_.x, touchClose_.y, bw, bh, bh / 2, kCardHi);
+    const wr::Rect touchClose = wr::Rect{W - bw - sc(20), sc(20), bw, bh};
+    C.fillRoundRect(touchClose.x, touchClose.y, bw, bh, bh / 2, kCardHi);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString(wr::L("Close", "Fermer"), touchClose_.x + bw / 2, touchClose_.y + bh / 2 + 1);
+    C.drawString(wr::L("Close", "Fermer"), touchClose.x + bw / 2, touchClose.y + bh / 2 + 1);
+    targets_.add(wr::Act::TouchClose, 0, touchClose, wr::kTargetDefault);
     present();
 }
 
@@ -179,7 +186,6 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     int y = m + C.fontHeight() + sc(16);
     useFont(C, kSmall);
     C.setTextColor(kText2);
-    pickRects_.clear();
     if (devices.empty()) {
         for (auto& l : wr::wrapText(wr::L("Check that the WiiM is on and connected to the same Wi-Fi as the Tab5, then retry. "
                                           "You can also enter its IP address in the setup.",
@@ -202,7 +208,7 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
         const int cw = (W - 2 * m - (cols - 1) * gap) / cols, ch = sc(84);
         for (size_t i = 0; i < devices.size() && i < 6; ++i) {
             wr::Rect r{m + (int)(i % cols) * (cw + gap), y + (int)(i / cols) * (ch + gap), cw, ch};
-            pickRects_.push_back(r);
+            targets_.add(wr::Act::PickDevice, (int)i, r, i == 0 ? wr::kTargetDefault : 0);
             C.fillRoundRect(r.x, r.y, r.w, r.h, sc(16), kCard);
             C.fillCircle(r.x + sc(34), r.y + r.h / 2, sc(14), accent_);
             useFont(C, kMid);
@@ -217,30 +223,32 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     }
     // Réessayer / Configuration
     const int bw = sc(190), bh = sc(48), gap = sc(16);
-    pickRetry_ = wr::Rect{W / 2 - gap / 2 - bw, H - m - bh, bw, bh};
-    pickConfig_ = wr::Rect{W / 2 + gap / 2, H - m - bh, bw, bh};
+    const wr::Rect pickRetry = wr::Rect{W / 2 - gap / 2 - bw, H - m - bh, bw, bh};
+    const wr::Rect pickConfig = wr::Rect{W / 2 + gap / 2, H - m - bh, bw, bh};
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
-    for (auto* b : {&pickRetry_, &pickConfig_}) {
-        C.fillRoundRect(b->x, b->y, b->w, b->h, b->h / 2, b == &pickRetry_ && devices.empty() ? accent_ : kCard);
-        C.setTextColor(b == &pickRetry_ && devices.empty() ? kBg : kText);
-        C.drawString(b == &pickRetry_ ? wr::L("Retry", "R\xC3\xA9" "essayer") : wr::L("Setup", "Configuration"), b->x + b->w / 2, b->y + b->h / 2 + 1);
+    for (auto* b : {&pickRetry, &pickConfig}) {
+        C.fillRoundRect(b->x, b->y, b->w, b->h, b->h / 2, b == &pickRetry && devices.empty() ? accent_ : kCard);
+        C.setTextColor(b == &pickRetry && devices.empty() ? kBg : kText);
+        C.drawString(b == &pickRetry ? wr::L("Retry", "R\xC3\xA9" "essayer") : wr::L("Setup", "Configuration"), b->x + b->w / 2, b->y + b->h / 2 + 1);
     }
+    // Les lecteurs (inscrits plus haut), puis Réessayer et Configuration ; focus de départ : le premier lecteur,
+    // sinon Réessayer
+    targets_.add(wr::Act::PickRetry, 0, pickRetry, devices.empty() ? wr::kTargetDefault : 0);
+    targets_.add(wr::Act::PickSetup, 0, pickConfig);
     present();
 }
 
 int Ui::hitPicker(int x, int y) const {
-    for (size_t i = 0; i < pickRects_.size(); ++i)
-        if (pickRects_[i].contains(x, y)) return (int)i;
-    if (pickRetry_.contains(x, y)) return PickRetry;
-    if (pickConfig_.contains(x, y)) return PickConfig;
+    if (const wr::Target* t = targets_.hit(wr::Act::PickDevice, x, y)) return t->arg;
+    if (targets_.hit(wr::Act::PickRetry, x, y)) return PickRetry;
+    if (targets_.hit(wr::Act::PickSetup, x, y)) return PickConfig;
     return PickNone;
 }
 
 Ui::MenuChoice Ui::hitMenu(int x, int y) const {
-    for (int i = 0; i < 6; ++i)
-        if (menuRects_[i].contains(x, y)) return static_cast<MenuChoice>(i);
-    return MenuNone;
+    const wr::Target* t = targets_.hit(wr::Act::MenuChoice, x, y);
+    return t ? static_cast<MenuChoice>(t->arg) : MenuNone;
 }
 
 void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
@@ -308,11 +316,12 @@ void Ui::showUpdate(const String& url, const String& code, const char* version, 
     C.setTextDatum(textdatum_t::bottom_left);
     C.drawString((String(wr::L("Installed version: ", "Version install\xC3\xA9" "e : ")) + version).c_str(), m, H - sc(24));
     const int bw = sc(150), bh = sc(44);
-    cancelRect_ = wr::Rect{W - m - bw, H - sc(24) - bh, bw, bh};
-    C.fillRoundRect(cancelRect_.x, cancelRect_.y, bw, bh, bh / 2, kCard);
+    const wr::Rect cancelRect = wr::Rect{W - m - bw, H - sc(24) - bh, bw, bh};
+    C.fillRoundRect(cancelRect.x, cancelRect.y, bw, bh, bh / 2, kCard);
     C.setTextDatum(textdatum_t::middle_center);
     C.setTextColor(kText);
-    C.drawString(wr::L("Cancel", "Annuler"), cancelRect_.x + bw / 2, cancelRect_.y + bh / 2 + 1);
+    C.drawString(wr::L("Cancel", "Annuler"), cancelRect.x + bw / 2, cancelRect.y + bh / 2 + 1);
+    targets_.add(wr::Act::UpdateCancel, 0, cancelRect, wr::kTargetDefault);
     present();
 }
 

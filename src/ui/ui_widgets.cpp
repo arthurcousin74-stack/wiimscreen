@@ -23,6 +23,12 @@ void Ui::micIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     (void)bg;
 }
 
+// Bouton de la barre : toute la largeur de la barre compte, et un peu autour
+static wr::Rect navHit(const wr::Rect& rail, const wr::Rect& b, int pad) {
+    if (rail.h > rail.w) return wr::Rect{rail.x, b.y - pad, rail.w, b.h + 2 * pad};
+    return wr::Rect{b.x - pad, rail.y, b.w + 2 * pad, rail.h};
+}
+
 // Barre de navigation : Accueil en haut, Réglages en bas ; l'écran affiché est en couleur
 void Ui::navRail(int active) {
     auto& C = canvas_;
@@ -41,10 +47,12 @@ void Ui::navRail(int active) {
         else if (i == 1) gearIcon(cx, cy, b.w / 4, fg, bg);
         else searchIcon(cx, cy, b.w / 4, fg, bg);
     }
-    railShown_ = true;
+    // Zones tactiles : toute la largeur (la hauteur en portrait) de la barre, et sc(16) autour du bouton. Elles ne
+    // touchent aucun autre élément (la barre est à part : wr::computeLayout), leur place dans la liste est donc libre.
+    targets_.add(wr::Act::Home, 0, layout_.navHome, navHit(layout_.rail, layout_.navHome, sc(16)));
+    targets_.add(wr::Act::Search, 0, layout_.navSearch, navHit(layout_.rail, layout_.navSearch, sc(16)));
+    targets_.add(wr::Act::Settings, 0, layout_.navSettings, navHit(layout_.rail, layout_.navSettings, sc(16)));
 }
-
-static bool hitNav(const wr::Rect& rail, const wr::Rect& b, int pad, int x, int y);  // plus bas
 
 // Loupe : anneau et manche
 void Ui::searchIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
@@ -57,9 +65,7 @@ void Ui::searchIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
     C.fillCircle(cx + r, cy + r, t / 2, c);
 }
 
-bool Ui::hitSearch(int x, int y) const {
-    return railShown_ && view_ != View::Ambient && hitNav(layout_.rail, layout_.navSearch, sc(16), x, y);
-}
+bool Ui::hitSearch(int x, int y) const { return targets_.hit(wr::Act::Search, x, y) != nullptr; }
 
 // Engrenage : dents en couronne, disque, trou central
 void Ui::gearIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
@@ -81,17 +87,8 @@ void Ui::homeIcon(int cx, int cy, int s, uint32_t c, uint32_t bg) {
     C.fillRect(cx - s / 5, cy + s / 3, s * 2 / 5, s * 2 / 3 - s / 8, bg);
 }
 
-// Boutons de la barre : toute la largeur de la barre compte, et un peu autour
-static bool hitNav(const wr::Rect& rail, const wr::Rect& b, int pad, int x, int y) {
-    if (rail.h > rail.w) return x >= rail.x && x < rail.right() && y >= b.y - pad && y < b.bottom() + pad;
-    return y >= rail.y && y < rail.bottom() && x >= b.x - pad && x < b.right() + pad;
-}
+// Accueil : bouton de la barre, ou celui de la vue ambiance ; Réglages, Recherche : barre. Inscrits seulement
+// pendant que leur écran est affiché (beginScreen() vide la liste).
+bool Ui::hitHome(int x, int y) const { return targets_.hit(wr::Act::Home, x, y) != nullptr; }
 
-bool Ui::hitHome(int x, int y) const {
-    if (view_ == View::Ambient) return homeRect_.contains(x, y);
-    return railShown_ && hitNav(layout_.rail, layout_.navHome, sc(16), x, y);
-}
-
-bool Ui::hitSettings(int x, int y) const {
-    return railShown_ && view_ != View::Ambient && hitNav(layout_.rail, layout_.navSettings, sc(16), x, y);
-}
+bool Ui::hitSettings(int x, int y) const { return targets_.hit(wr::Act::Settings, x, y) != nullptr; }
