@@ -1,6 +1,7 @@
 #include "upnp.h"
 
 #include "core.h"
+#include "text.h"  // trim, appendUtf8
 
 #include <algorithm>
 #include <cctype>
@@ -136,13 +137,6 @@ std::vector<std::string> xmlElements(const std::string& xml, const std::string& 
         pos = end;
     }
     return out;
-}
-
-static std::string trim(const std::string& s) {
-    size_t a = 0, b = s.size();
-    while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
-    while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
-    return s.substr(a, b - a);
 }
 
 std::vector<UpnpService> parseUpnpServices(const std::string& descriptionXml) {
