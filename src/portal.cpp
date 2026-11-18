@@ -25,6 +25,37 @@ static String randomPassword(int n) {
     return s;
 }
 
+// Jeton anti-CSRF tiré à chaque démarrage du portail : une page d'un autre site (le téléphone garde souvent ses
+// données mobiles) ne peut pas le lire, donc ne peut pas poster /save à notre place.
+static String g_formToken;
+
+static String randomToken() {
+    static const char kHex[] = "0123456789abcdef";
+    String t;
+    for (int i = 0; i < 4; ++i) {
+        uint32_t r = esp_random();
+        for (int j = 0; j < 4; ++j, r >>= 8) {
+            t += kHex[(r >> 4) & 0xF];
+            t += kHex[r & 0xF];
+        }
+    }
+    return t;  // 32 caractères hexadécimaux (128 bits)
+}
+
+// Comparaison en temps constant
+static bool sameToken(const String& a, const String& b) {
+    if (a.length() != b.length() || a.length() == 0) return false;
+    uint8_t d = 0;
+    for (unsigned i = 0; i < a.length(); ++i) d |= (uint8_t)(a[i] ^ b[i]);
+    return d == 0;
+}
+
+// En-tête Host = adresse du point d'accès (avec ou sans « :80 ») : refuse le DNS rebinding et les noms captifs
+static bool hostIsPortal(const String& host, const IPAddress& ip) {
+    const String a = ip.toString();
+    return host == a || host == a + ":80";
+}
+
 static String option(const char* value, const char* label, bool selected) {
     return String("<option value=\"") + value + "\"" + (selected ? " selected" : "") + ">" + label +
            "</option>";
@@ -71,7 +102,9 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
     h += wr::L("Tab5 setup", "Configuration du Tab5");
     h += F("</p></div></header>");
     if (error.length()) h += "<p class=err>" + esc(error) + "</p>";
-    h += F("<form method=post action=/save id=f>");
+    h += F("<form method=post action=/save id=f><input type=hidden name=t value=");
+    h += g_formToken;  // hexadécimal : pas besoin d'échappement
+    h += F(">");
 
     // --- Langue : changer la liste recharge la page dans cette langue (/?lang=xx). Les champs déjà tapés
     // sont perdus, mais la liste est en tête du formulaire, donc choisie avant de taper : plus simple et plus
@@ -397,14 +430,29 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
 
     WebServer server(80);
     String error;
+    g_formToken = randomToken();
+    static const char* kHeaders[] = {"Host"};
+    server.collectHeaders(kHeaders, 1);  // remis à zéro à chaque requête (hostHeader() garde l'ancienne valeur)
 
     server.on("/", HTTP_GET, [&] {
+        if (!hostIsPortal(server.header("Host"), ip)) {  // autre nom (portail captif) : vers l'adresse du Tab5
+            server.sendHeader("Location", url + "/", true);
+            server.send(302, "text/plain", "");
+            return;
+        }
         // /?lang=fr ou /?lang=en : la page change de langue tout de suite (choix enregistré seulement avec le formulaire)
         if (server.hasArg("lang")) wr::setLang(wr::langFromCode(server.arg("lang").c_str()));
         server.send(200, "text/html; charset=utf-8", formPage(s, ssids, error));
     });
 
     server.on("/save", HTTP_POST, [&] {
+        // Seulement depuis la page du portail : bonne adresse et jeton du formulaire
+        if (!hostIsPortal(server.header("Host"), ip) || !sameToken(server.arg("t"), g_formToken)) {
+            server.send(403, "text/plain; charset=utf-8",
+                        wr::L("Refused: open the setup page again at the Tab5 address and try again.",
+                              "Refus\xC3\xA9 : rouvre la page de configuration \xC3\xA0 l'adresse du Tab5 et r\xC3\xA9" "essaie."));
+            return;
+        }
         if (server.hasArg("wipe")) {
             // Remise à zéro : NVS + LittleFS (favoris, copie des réglages), puis portail au redémarrage
             eraseSettings();
@@ -448,7 +496,14 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
 
         std::string perr;
         String err;
-        if (next.ssid.length() == 0 || next.ssid.length() > 32) err = wr::L("Invalid Wi-Fi network name.", "Nom de réseau Wi-Fi invalide.");
+        // Bornes côté serveur (les maxlength du formulaire ne protègent de rien)
+        if (next.presetsText.length() > 1200)
+            err = wr::L("Presets: the text is too long (1200 characters at most).",
+                        "Presets : le texte est trop long (1200 caract\xC3\xA8res au plus).");
+        else if (server.arg("pass").length() > 63 || server.arg("oaikey").length() > 200 || next.host.length() > 64 ||
+                 deezerIn.length() > 120 || server.arg("sttmodel").length() > 60)
+            err = wr::L("A field is too long.", "Un champ est trop long.");
+        else if (next.ssid.length() == 0 || next.ssid.length() > 32) err = wr::L("Invalid Wi-Fi network name.", "Nom de réseau Wi-Fi invalide.");
         else if (next.pass.length() && (next.pass.length() < 8 || next.pass.length() > 63))
             err = wr::L("The Wi-Fi password must have 8 to 63 characters.",
                         "Le mot de passe Wi-Fi doit faire entre 8 et 63 caractères.");

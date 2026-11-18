@@ -18,20 +18,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
         with:
           path: ~/.platformio
           key: pio-tab5-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
 
       # esptool (fourni avec la plateforme pioarduino) exige click < 8.2
       - name: Installer PlatformIO
-        run: pip install "platformio==6.2.0" "click<8.2"
+        run: pip install "platformio==6.2.0" "click==8.1.8"
 
       - name: Tests de la logique (PC)
         run: pio test -e native
@@ -42,7 +42,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libsdl2-dev
           pio run -e sim
           timeout 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt
-          pip install pillow && python tools/preview/topng.py .pio/sim-out/*.ppm
+          pip install "pillow==13.0.0" && python tools/preview/topng.py .pio/sim-out/*.ppm
 
       # The preview tool makes the docs/*.png images: keep it building
       - name: Aperçu (preview)
@@ -73,7 +73,7 @@ jobs:
           pio run -e desktop
           ./platform/pc/selftest.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: sim-screens
           path: .pio/sim-out/*.png
@@ -103,7 +103,7 @@ jobs:
           cp LISEZMOI.md dist/
           sha256sum dist/wiim-remote-tab5.bin | tee dist/SHA256SUMS.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: wiim-remote-tab5
           path: dist/
@@ -115,7 +115,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: wiim-remote-tab5
           path: dist
