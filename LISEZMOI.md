@@ -219,6 +219,19 @@ partage en UPnP (`GetUserInfo`), ce que Qobuz n'a pas approuvé. À toi de chois
 - Réponses du WiiM plafonnées à 64 Ko.
 - Images (pochettes, presets) : certificat du serveur vérifié (certificats racines Mozilla) pour les adresses HTTPS ; taille plafonnée à 768 Ko ; seuls JPEG et PNG sont décodés, après vérification de leur signature.
 
+## Remerciements et projets voisins
+
+wiimscreen s'appuie sur ces sources ; merci à leurs auteurs :
+
+- [HTTP API for WiiM Products](https://www.wiimhome.com/pdf/HTTP%20API%20for%20WiiM%20Products.pdf), le document de WiiM ;
+- le fil du forum WiiM [Possible to start a Qobuz playlist and/or WiiM preset from the HTTP API](https://forum.wiimhome.com/threads/possible-to-start-a-qobuz-playlist-and-or-wiim-preset-from-the-http-api.968/), qui montre comment lancer un album par la file de lecture du WiiM ;
+- [linkplay-console](https://github.com/laozhudu/linkplay-console) de laozhudu (pull request 35 : les actions `PlayQueue`) ;
+- [wiimplay](https://pkg.go.dev/github.com/shumatech/wiimplay/upnp) de shumatech (liste des actions UPnP).
+
+Projets voisins, qui ne sont pas des sources de wiimscreen : [retired-guy](https://github.com/retired-guy) publie depuis 2022 de nombreux projets pour WiiM (afficheurs « en cours de lecture » pour Raspberry Pi, écran HDMI et Pimoroni Presto, VU-mètre, extensions Chrome, clients en terminal pour Qobuz, Tidal et Deezer). Ses clients en terminal utilisaient la file de lecture du WiiM avant wiimscreen.
+
+Le détail de chaque interface, avec sa source : [docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md).
+
 ## Licence
 
 [MIT](LICENSE) © wiimscreen contributors. Composants tiers : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Projet indépendant, sans lien avec WiiM / Linkplay ni M5Stack.
