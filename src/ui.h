@@ -206,9 +206,10 @@ private:
     wr::Rect pickRetry_, pickConfig_;
     // Visualiseur
     bool visEnabled_ = false;
-    bool ambientShown_ = false;
     enum class View { Other, Controls, Ambient };
     View view_ = View::Other;  // dernier écran affiché (pour les mises à jour partielles)
+    // Début de chaque écran complet : view_ = view, barre de navigation absente (navRail() la marque affichée)
+    void beginScreen(View view);
     wr::Rect ambProg_;          // ligne de progression de la vue ambiance
     wr::Rect homeRect_;         // bouton Accueil de la vue ambiance
     bool railShown_ = false;    // barre de navigation à l'écran
