@@ -6,6 +6,8 @@
 #include <WiFi.h>
 #include <esp_random.h>
 
+#include <algorithm>
+
 #include "firmware.h"
 #include "i18n.h"
 #include "version.h"
@@ -64,6 +66,14 @@ static const PageText kTexts[] = {
     {"%T_LOST%", "Connection lost: try again.", "Connexion perdue : r\xC3\xA9" "essaie."},
 };
 
+// Comparaison en temps constant
+static bool sameCode(const String& a, const String& b) {
+    if (a.length() != b.length() || a.length() == 0) return false;
+    uint8_t d = 0;
+    for (unsigned i = 0; i < a.length(); ++i) d |= (uint8_t)(a[i] ^ b[i]);
+    return d == 0;
+}
+
 static String updatePage() {
     String page = FPSTR(kWebHead);
     page.replace("%LANG%", wr::langCode(wr::lang()));
@@ -89,7 +99,9 @@ void runUpdateMode(Ui& ui) {
 
     WebServer server(80);
     int wrongCodes = 0;
-    bool accepted = false;  // code juste pour le transfert en cours
+    uint32_t retryAt = millis();  // pas d'essai examiné avant cet instant
+    bool waited = false;          // dernier essai refusé sans examen (attente en cours)
+    bool accepted = false;        // code juste pour le transfert en cours
     bool done = false;
     String result;
     int lastPercent = -2;
@@ -112,26 +124,33 @@ void runUpdateMode(Ui& ui) {
         [&] {
             if (!accepted) {
                 server.send(403, "text/plain; charset=utf-8",
-                            wrongCodes >= 5 ? wr::L("Wrong code: too many attempts, start again from the Tab5.",
-                                                    "Code incorrect : trop d'essais, recommence depuis le Tab5.")
-                                            : wr::L("Wrong code.", "Code incorrect."));
+                            waited ? wr::L("Too many wrong codes: wait a few seconds, then try again.",
+                                           "Trop de codes incorrects : attends quelques secondes, puis r\xC3\xA9" "essaie.")
+                                   : wr::L("Wrong code.", "Code incorrect."));
                 return;
             }
+            accepted = false;  // la requête suivante doit redonner le code
             server.send(done ? 200 : 400, "text/plain; charset=utf-8", result);
         },
         // Morceaux du fichier
         [&] {
             HTTPUpload& up = server.upload();
             if (up.status == UPLOAD_FILE_START) {
-                accepted = server.arg("code") == code && wrongCodes < 5;
+                // Après un code faux, le suivant n'est examiné qu'après une attente qui double (1 s, 2 s… 32 s au
+                // plus) : environ 25 essais en 10 minutes pour un million de codes. Un autre appareil du réseau
+                // ne peut plus fermer le mode mise à jour avec cinq envois faux.
+                waited = (int32_t)(millis() - retryAt) < 0;
+                accepted = !waited && sameCode(server.arg("code"), code);
                 done = false;
                 result = "";
                 stream = wr::FirmwareStream();
                 expected = server.clientContentLength() > 0 ? server.clientContentLength() : 0;
+                if (waited) return;  // ni compté ni affiché : l'attente ne s'allonge pas
                 if (!accepted) {
                     ++wrongCodes;
+                    retryAt = millis() + (1000UL << std::min(wrongCodes - 1, 5));
                     draw(-1, String(wr::L("Wrong code received (", "Code incorrect re\xC3\xA7u (")) + String(wrongCodes) +
-                                 "/5)");
+                                 ")");
                     return;
                 }
                 draw(0, wr::L("Receiving the firmware\xE2\x80\xA6", "R\xC3\xA9" "ception du firmware\xE2\x80\xA6"));
@@ -189,7 +208,7 @@ void runUpdateMode(Ui& ui) {
             ESP.restart();
         }
         if (result.length() && lastPercent != -1 && millis() - lastDraw > 400) draw(-1, result);
-        if ((t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) || wrongCodes >= 5 || millis() - start > 10UL * 60 * 1000)
+        if ((t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) || millis() - start > 10UL * 60 * 1000)
             break;
         delay(2);
     }

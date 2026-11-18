@@ -64,12 +64,16 @@ covers, certificate pinning. Only the lowest layer changes: each connection goes
    ```
 
    On the first start, it looks for the WiiM (like a new Tab5). If it finds several, touch yours.
-3. To use the relay of another computer: `--relay <address>:8787` on the simulator and `--listen 0.0.0.0:8787`
-   on the relay (then anyone on your network can use the relay: only on a trusted network).
+3. To use the relay of another computer, start the relay with `--listen 0.0.0.0:8787`. The relay then shows a
+   key (`WIIMSIM_RELAY_KEY=…`), or uses the key that you give with `--secret`. Start the simulator with
+   `--relay <address>:8787` and give it this key in the `WIIMSIM_RELAY_KEY` environment variable. The relay refuses
+   clients without the key. The traffic is not encrypted: do this only on a trusted network.
 
-The relay listens on 127.0.0.1 by default. It connects only to private addresses (your WiiM), and to public
-hosts only with TLS on port 443 (certificate checked) or HTTP on port 80. It logs host and port only, never the
-data (the Qobuz token is in the HTTP headers). `tools/relay/selftest.sh` checks the chain, and the search through a WiiM play queue (shuffle, restore), with a mock
+The relay listens on 127.0.0.1 by default. On your network, it connects only to the WiiMs that it knows (`--wiim`
+and the WiiMs that it discovered), on ports 443, 80, 49152 and 59152. It does not connect to other devices of
+your network or to the relay computer. On the Internet, it connects only with TLS on port 443 (certificate
+checked) or HTTP on port 80. It logs host and port only, never the data (the Qobuz token is in the HTTP headers).
+`tools/relay/selftest.sh` checks the chain, and the search through a WiiM play queue (shuffle, restore), with a mock
 WiiM (CI runs it).
 
 Checked with a real WiiM (2026-11, Windows 11 + WSL in NAT mode, relay with `--wiim`): the simulator finds the
