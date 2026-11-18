@@ -14,6 +14,10 @@
 // Réseau : tout échange avec le WiiM passe par WiimWorker (tâche de fond). Cette
 // boucle ne bloque jamais sur le WiiM : un appui s'affiche tout de suite (état
 // optimiste), la commande part en arrière-plan, et seules les erreurs reviennent.
+//
+// Fichiers : main.cpp (démarrage, boucle, appuis, relevés du WiiM, vue ambiance, menus), app_search.cpp
+// (recherche et résultats), app_voice.cpp (dictée), app_tiles.cpp (presets, favoris, images) ; état partagé et
+// écran affiché (enum class Screen) dans app_internal.h.
 
 #include <M5Unified.h>
 #include <WiFi.h>
@@ -43,29 +47,38 @@
 #include "voice.h"
 #include "voice_service.h"
 #include "wiim_worker.h"
+#include "app_internal.h"
 
-static Settings g_settings;
-static Ui g_ui;
-static WiimWorker g_worker;
-static UiState g_state;
-static const char* kQobuzFavsId = "qobuz-favoris";    // tuile « Favoris Qobuz » : liste des morceaux favoris
-static const char* kDeezerFavsId = "deezer-favoris";  // tuile « Favoris Deezer » (profil Deezer configuré)
+namespace app {
 
-// Onglet du clavier de recherche (indice du bouton dans Ui::renderSearch)
-enum : int { kTabQobuz = 0, kTabDeezer = 1, kTabAlbums = 2 };
-static SearchKind kindOfTab(int tab) {
-    return tab == kTabDeezer ? SearchKind::Deezer : tab == kTabAlbums ? SearchKind::QobuzAlbums : SearchKind::QobuzTracks;
-}
+// État de l'application (types, rôles : app_internal.h). Ordre de construction inchangé.
+Settings g_settings;
+Ui g_ui;
+WiimWorker g_worker;
+UiState g_state;
+ImageCache g_img;
+TileData g_tiles;
+ActiveTile g_active;
+WorkerJobs g_jobs;
+SearchScreen g_search;
+OpenScreens g_view;
+VoiceInput g_voice;
+MicInput g_mic;
+StripTouch g_strip;
+PressFlash g_flash;
+MotionWake g_motion;
+Redraw g_draw;
+IdleClock g_idle;
+StatusClock g_status;
+HeaderPress g_header;
+PendingCommand g_pending;
+
 // Le WiiM charge l'album du morceau choisi (Deezer, albums) : plus long qu'une piste de la file
 static bool loadsAlbum(SearchKind k) {
     return k == SearchKind::Deezer || k == SearchKind::DeezerFavorites || k == SearchKind::QobuzAlbums;
 }
 
 static constexpr int kSwipePx = 50;
-
-// Visualiseur : blocs de 512 échantillons à 16 kHz (32 ms), deux tampons en alternance
-static constexpr int kMicRate = 16000, kMicBlock = 512, kBands = 24;
-static constexpr size_t kVoiceMax = kMicRate * 8;  // dictée : 8 s au plus
 
 static constexpr uint32_t kLongPressMs = 3000;
 static constexpr uint32_t kWifiTimeoutMs = 20000;
@@ -83,196 +96,6 @@ static constexpr uint32_t kOffMs = 20UL * 60 * 1000;
 static constexpr int kSdioClk = 12, kSdioCmd = 13, kSdioD0 = 11, kSdioD1 = 10, kSdioD2 = 9,
                      kSdioD3 = 8, kSdioRst = 15;
 
-// ------------------------------------------------------------------ état de l'application
-//
-// Tout l'état de la boucle est ici, regroupé par sujet (en plus de g_settings, g_ui, g_worker et g_state).
-
-// Images : téléchargeur, pochette en cours, images des tuiles et des lignes de résultats
-struct ImageCache {
-    ArtFetcher fetcher;
-    ArtImage art;                                  // pochette affichée
-    std::string wanted;                            // adresse de la pochette attendue ("" = aucune)
-    std::map<std::string, ArtImage> presets;       // images des presets, par adresse
-    std::map<std::string, ArtImage> results;       // pochettes de la liste de résultats (jusqu'à la suivante)
-    std::set<std::string> coverRequested;          // pochettes de résultats demandées au téléchargement
-};
-static ImageCache g_img;
-
-// Tuiles : presets du WiiM, favoris enregistrés, albums favoris des comptes ; file qui joue (♥)
-struct TileData {
-    std::vector<wr::Preset> list;                  // presets affichés
-    std::vector<wr::Preset> wiimPresets;           // presets du WiiM (ou saisis), sans les favoris
-    bool favOk = false;                            // mémoire des favoris disponible
-    std::vector<wr::Favorite> favs;
-    std::vector<wr::QobuzAlbum> deezerAlbums;      // albums favoris du compte Deezer
-    std::vector<wr::QobuzAlbum> qobuzAlbums;       // albums favoris du compte Qobuz (lus par l'accès du WiiM)
-    bool fromWiim = false;                         // dernière liste de presets lue sur le WiiM
-    uint32_t lastFetch = 0;
-    std::string queueKey;                          // clé de la file qui joue (relevé du WiiM), vide si inconnue
-};
-static TileData g_tiles;
-
-// Preset en cours : marqué jusqu'à ce que la source change ou que la lecture s'arrête
-struct ActiveTile {
-    int index = -1;
-    uint32_t since = 0;
-    int mode = -1;
-};
-static ActiveTile g_active;
-
-// Travaux confiés à la tâche WiiM, en attente de leur évènement (abandonnés après 120 s par la boucle)
-struct WorkerJobs {
-    bool search = false;                           // recherche (ou liste de favoris) en cours
-    bool favorite = false;                         // enregistrement d'un favori en cours
-    bool albumFavorite = false;                    // album en cours d'ajout aux favoris
-    uint32_t since = 0;                            // début de la recherche / de l'enregistrement en cours
-};
-static WorkerJobs g_jobs;
-
-// Recherche Qobuz (par le WiiM) : clavier, puis résultats
-struct SearchScreen {
-    std::string resultsTitle;                      // en-tête de la liste : texte cherché, ou « Favoris Qobuz »
-    SearchKind resultsKind = SearchKind::QobuzTracks;  // liste affichée (recherche ou favoris)
-    std::string query;
-    String status;
-    std::vector<wr::QueueTrack> results;
-    int page = 0;
-    int source = kTabQobuz;                        // onglet du clavier
-    std::vector<wr::QobuzAlbum> albums;            // résultats de la recherche d'albums (SearchKind::QobuzAlbums)
-    bool deezerOk = false;                         // une file Deezer a été vue sur le WiiM
-    // Touche enfoncée : dessinée tout de suite, relâchée ~90 ms plus tard (mises à jour partielles de l'écran)
-    int keyDown = -1;
-    uint32_t keyDownAt = 0;
-};
-static SearchScreen g_search;
-
-// Écran affiché. Un seul à la fois : chaque passage d'un écran à l'autre se fait depuis l'écran quitté.
-enum class Screen {
-    Controls,   // commandes (ou vue ambiance, voir OpenScreens::ambient)
-    Menu,       // menu Réglages (barre, ou appui long sur l'en-tête)
-    TouchTest,  // test tactile (menu Réglages)
-    Log,        // Journal (menu Réglages)
-    Search,     // recherche : clavier
-    Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
-};
-
-// Écran affiché, vue ambiance, et compteurs des écrans Journal et test tactile
-struct OpenScreens {
-    Screen screen = Screen::Controls;
-    // Vue ambiance : façon de dessiner les commandes (micro du visualiseur ouvert). Drapeau à part, pas une valeur
-    // de Screen : elle commence seulement sur les commandes, mais une tuile « Favoris » relâchée dans le tour
-    // de boucle où elle commence ouvre la liste par-dessus (Results), et Accueil y ramène ensuite ; exitAmbient()
-    // ferme alors le micro. Une seule valeur perdrait la vue ambiance et laisserait le micro ouvert.
-    bool ambient = false;
-    uint32_t logFrame = 0;
-    int touchCount = 0;
-    uint32_t touchFrame = 0;
-};
-static OpenScreens g_view;
-
-// Transcription en tâche de fond : l'appel à OpenAI (jusqu'à ~30 s si le réseau est lent) ne doit pas figer
-// l'écran (règle « jamais d'attente réseau dans la boucle »). La boucle lit le résultat quand il est prêt.
-struct SttJob {
-    std::atomic<bool> busy{false}, done{false};  // atomiques : `done` publie text/err/ok écrits avant lui
-    bool ok = false;
-    std::string text;
-    String err;
-};
-
-// Dictée de la recherche : enregistrement, niveau affiché, volume baissé, transcription
-struct VoiceInput {
-    bool listening = false;                        // micro en cours d'écoute
-    bool dictation = false;                        // écoute pour la recherche (arrêt par un appui, pas par la fin de phrase)
-    int16_t* buf = nullptr;
-    size_t len = 0;
-    float level = 0;
-    uint32_t frame = 0;
-    int duckedFrom = -1;                           // volume d'avant l'écoute, à rétablir
-    SttJob stt;
-};
-static VoiceInput g_voice;
-
-// Micro (visualiseur de la vue ambiance et dictée) : deux tampons en alternance
-struct MicInput {
-    wr::Visualizer vis{kBands};
-    bool on = false;                               // micro ouvert pour le visualiseur
-    int16_t buf[2][kMicBlock];
-    int cur = 0;
-    bool pending = false;
-    uint32_t lastVisFrame = 0;
-};
-static MicInput g_mic;
-
-// Bande des presets : appui = tuile enfoncée, relâcher = lancer, glisser = changer de page
-struct StripTouch {
-    bool touch = false;
-    int preset = -1;
-    int startX = 0;
-    bool dragged = false;
-};
-static StripTouch g_strip;
-
-// Bouton montré enfoncé un court instant après un appui
-struct PressFlash {
-    int preset = -1, transport = -1;
-    uint32_t until = 0;
-};
-static PressFlash g_flash;
-
-// Réveil par mouvement : accéléromètre lu à 50 Hz
-struct MotionWake {
-    wr::MotionDetector detector;
-    uint32_t lastImu = 0;
-};
-static MotionWake g_motion;
-
-// Dessin : image complète à refaire (show(), plus bas), dernière image, progression à redessiner
-struct Redraw {
-    bool dirty = false;
-    uint32_t lastTick = 0;                         // dernière image (complète, progression ou anneau)
-    bool progressDue = false;                      // saut de position (avance, retour) : ligne de progression redessinée sans attendre
-};
-static Redraw g_draw;
-
-// Écran et veille : dernier appui, dernière lecture vue, rétroéclairage
-struct IdleClock {
-    uint32_t lastTouch = 0;
-    uint32_t lastPlayingAt = 0;                    // dernier tour de boucle où le WiiM (joignable) jouait : veille, écran éteint
-    int brightness = -1;
-};
-static IdleClock g_idle;
-
-// Relevé affiché : instant du relevé, fin du message, tic de la batterie
-struct StatusClock {
-    uint32_t at = 0;                               // instant du dernier relevé (pour faire avancer la progression)
-    uint32_t lastTick = 0;
-    uint32_t messageUntil = 0;
-};
-static StatusClock g_status;
-
-// Appui long sur l'en-tête (pochette, titre) : menu Réglages
-struct HeaderPress {
-    bool pressed = false;
-    uint32_t since = 0;
-};
-static HeaderPress g_header;
-
-// Commande en attente de confirmation : anneau tournant sur le bouton (sinon l'appui semble ignoré
-// pendant que le WiiM réagit). Levée quand le relevé montre le changement, sur erreur, ou après 10 s.
-using Await = wr::Awaited;  // ce que l'on attend (lib/core/src/decisions.h)
-struct PendingCommand {
-    int button = -1;                               // bouton concerné (wr::kPrev, kNext, kPlayPause)
-    Await await = Await::None;                     // ce que l'on attend du WiiM
-    uint32_t since = 0, seq = 0;
-    std::string title;                             // morceau affiché au moment de l'appui
-    bool playing = false;
-    uint32_t pos = 0;                              // position au moment de l'appui (⏮ peut reprendre le même morceau)
-    // Await::Music : la commande est arrivée au WiiM (appui, ou évènement FavPlayed) ; « chargement » vu depuis
-    uint32_t readyAt = 0;
-    bool ready = false, sawLoading = false;
-};
-static PendingCommand g_pending;
-
 // Batterie NP-F550 optionnelle : sans elle, pas d'indicateur
 static int batteryLevel() {
     int b = M5.Power.getBatteryLevel();
@@ -287,7 +110,6 @@ static void setBrightness(int b) {
 }
 
 static void markPending(int button, Await what, bool viaEvent = false);
-static void show();
 
 // Lecture en cours, d'après le dernier relevé ; WiiM injoignable : son dernier état ne compte plus
 static bool playingNow() { return g_state.online && g_state.player.playing; }
@@ -320,18 +142,11 @@ static void markPending(int button, Await what, bool viaEvent) {
 
 // Affichage différé : show() marque l'écran à redessiner, renderNow() le dessine une
 // seule fois par tour de boucle, même si plusieurs changements sont arrivés.
-
-static void show() { g_draw.dirty = true; }
+void show() { g_draw.dirty = true; }
 
 // Écran autre que les commandes. La dictée (g_voice.listening) n'a lieu que sur Search ou Results : elle
 // commence sur le clavier, et seule la fin d'une recherche peut passer de l'un à l'autre pendant l'écoute.
 static bool modalOpen() { return g_view.screen != Screen::Controls; }
-static void openSearch();  // recherche Qobuz, plus bas
-static void onSearchKey(int k);
-static void onSearchDone(const WiimEvent& ev);
-static void renderResultsList(int pressed = -1, const String& status = String());
-
-static int favoriteState();  // plus bas, avec les favoris
 
 // Court effet « bouton enfoncé » encore actif (différence signée : juste après 49 jours aussi)
 static bool flashActive(uint32_t now) { return g_flash.until && (int32_t)(g_flash.until - now) > 0; }
@@ -362,7 +177,7 @@ static void flash(int preset, int transport) {
     show();
 }
 
-static void setMessage(const String& m, uint32_t durationMs = 8000) {
+void setMessage(const String& m, uint32_t durationMs) {
     g_state.message = m;
     g_status.messageUntil = m.length() ? millis() + durationMs : 0;
 }
@@ -459,7 +274,6 @@ static void restartIntoPortal(const String& reason) {
 // arrive sur GPIO23, et seules GPIO0-15 réveillent le P4) : on éteint donc le Tab5. Sur batterie, l'impulsion
 // PWROFF coupe l'alimentation et le bouton d'alimentation le rallume ; sur USB, M5Unified passe en sommeil
 // profond sans source de réveil (redémarrage par le bouton ou en débranchant).
-static void stopListening();  // plus bas, avec la voix
 
 static void goToSleep(const char* why) {
     logEvent("Mise en veille (%s)", why);
@@ -472,220 +286,6 @@ static void goToSleep(const char* why) {
     delay(2500);
     setBrightness(0);
     M5.Power.powerOff();  // ne revient pas (coupure, ou sommeil profond)
-}
-
-// ------------------------------------------------------------------- presets
-
-static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
-    if (a.size() != b.size()) return false;
-    for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl || a[i].favId != b[i].favId)
-            return false;
-    return true;
-}
-
-static void applyPresets(const std::vector<wr::Preset>& list) {
-    // Doigt posé sur une tuile : son indice ne vaut plus rien dans la nouvelle liste (mauvaise tuile lancée, ou
-    // lecture hors de la liste si elle a raccourci)
-    if (g_strip.touch) {
-        g_strip.touch = false;
-        g_strip.preset = -1;
-    }
-    g_tiles.list = list;
-    // Images des tuiles disparues : libérées (PSRAM) quand le cache grandit
-    if (g_img.presets.size() > 48)
-        for (auto it = g_img.presets.begin(); it != g_img.presets.end();) {
-            bool used = it->first == g_img.art.url;
-            for (auto& p : g_tiles.list) used |= p.picUrl == it->first;
-            it = used ? std::next(it) : g_img.presets.erase(it);
-        }
-    g_ui.setPresets(g_tiles.list);
-    g_active.index = -1;
-    for (size_t i = 0; i < g_tiles.list.size(); ++i) {
-        const std::string& url = g_tiles.list[i].picUrl;
-        if (url.empty()) continue;
-        auto it = g_img.presets.find(url);
-        if (it != g_img.presets.end()) g_ui.setPresetArt((int)i, &it->second);
-        else g_img.fetcher.request(url);
-    }
-}
-
-// Tuiles : presets du WiiM, puis favoris enregistrés sur la télécommande
-static void refreshTiles() {
-    g_tiles.favs = g_tiles.favOk ? fav::list() : std::vector<wr::Favorite>();
-    std::vector<wr::Preset> list = g_tiles.wiimPresets;
-    for (size_t i = 0; i < g_tiles.favs.size(); ++i) {
-        wr::Preset p;
-        p.slot = 100 + (int)i;
-        p.label = g_tiles.favs[i].title;
-        p.picUrl = g_tiles.favs[i].artUrl;
-        p.favId = g_tiles.favs[i].id;
-        list.push_back(p);
-    }
-    // Favoris Qobuz du compte (ceux de l'app) : le WiiM les charge avec sa propre connexion Qobuz
-    if (g_tiles.favOk && fav::hasQobuzModel()) {
-        wr::Preset p;
-        p.slot = 99;
-        p.label = wr::L("Qobuz favorites", "Favoris Qobuz");
-        p.favId = kQobuzFavsId;
-        list.push_back(p);
-    }
-    // Favoris Deezer (profil public indiqué dans la configuration) : il faut un modèle de file Deezer du WiiM
-    if (g_tiles.favOk && g_settings.deezerUser.length() && fav::hasDeezerModel()) {
-        wr::Preset p;
-        p.slot = 98;
-        p.label = wr::L("Deezer favorites", "Favoris Deezer");
-
-        p.favId = kDeezerFavsId;
-        list.push_back(p);
-    }
-    // Albums favoris Qobuz, avec leur pochette
-    for (size_t i = 0; i < g_tiles.qobuzAlbums.size() && i < 36; ++i) {
-        wr::Preset p;
-        p.slot = 200 + (int)i;
-        p.label = g_tiles.qobuzAlbums[i].title;
-        p.picUrl = g_tiles.qobuzAlbums[i].image;
-        p.favId = "qobuz-album:" + g_tiles.qobuzAlbums[i].id;
-        list.push_back(p);
-    }
-    // Albums favoris Deezer
-    for (size_t i = 0; i < g_tiles.deezerAlbums.size() && i < 36; ++i) {
-        wr::Preset p;
-        p.slot = 300 + (int)i;
-        p.label = g_tiles.deezerAlbums[i].title;
-        p.picUrl = g_tiles.deezerAlbums[i].image;
-        p.favId = "deezer-album:" + g_tiles.deezerAlbums[i].id;
-        list.push_back(p);
-    }
-    if (samePresets(list, g_tiles.list)) return;
-    applyPresets(list);
-    show();
-}
-
-// Favori correspondant à ce qui joue : même file (clé), sinon même album et même artiste
-static std::string currentFavorite() {
-    if (!g_tiles.queueKey.empty())
-        for (auto& f : g_tiles.favs)
-            if (f.key == g_tiles.queueKey) return f.id;
-    const UiState& st = g_state;
-    const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
-    if (album.empty()) return "";
-    const std::string a = wr::normalizeText(album), artist = wr::normalizeText(st.player.artist);
-    for (auto& f : g_tiles.favs)
-        if (wr::normalizeText(f.title) == a && (f.artist.empty() || artist.empty() || wr::normalizeText(f.artist) == artist))
-            return f.id;
-    return "";
-}
-
-static int favoriteState() {
-    if (!g_tiles.favOk || !g_state.online || g_state.player.title.empty()) return 0;
-    if (g_jobs.favorite) return 3;
-    return currentFavorite().empty() ? 1 : 2;
-}
-
-// Réponse de getPresetInfo : presets du WiiM (noms et images), ou liste saisie
-// complétée par les images du WiiM. Sans preset sur le WiiM : pas de tuiles, et
-// l'écran explique comment en ajouter (plutôt que des presets factices).
-static void onPresets(bool ok, const std::vector<wr::Preset>& fromWiim) {
-    g_tiles.fromWiim = ok;
-    std::vector<wr::Preset> list;
-    if (g_settings.autoPresets()) {
-        if (!ok) return;  // on garde la liste actuelle ; nouvel essai plus tard
-        list = fromWiim;
-    } else {
-        list = g_settings.presets;
-        if (ok)
-            for (auto& p : list)
-                for (auto& w : fromWiim)
-                    if (w.slot == p.slot) p.picUrl = w.picUrl;
-    }
-    g_tiles.wiimPresets = list;
-    refreshTiles();
-}
-
-static void requestPresets() {
-    g_tiles.lastFetch = millis();
-    g_worker.refreshPresets();
-    g_worker.refreshQobuzFavorites();  // albums favoris Qobuz (tuiles), même rythme que les presets
-}
-
-// Images téléchargées en tâche de fond : pochette ou image de preset
-static void checkImages() {
-    ArtImage img;
-    bool changed = false;
-    while (g_img.fetcher.poll(img)) {
-        if (!img.ok()) {
-            // Échec (réseau, format) : rien n'est gardé, l'image sera redemandée (retryImages, nouvelle page)
-            g_img.coverRequested.erase(img.url);
-            // Pochette du nouveau morceau introuvable : celle du précédent (et sa couleur d'accent) ne reste pas
-            // à côté du nouveau titre ; image par défaut jusqu'au prochain essai
-            if (!g_img.wanted.empty() && img.url == g_img.wanted && g_img.art.url != g_img.wanted &&
-                (g_img.art.ok() || !g_img.art.url.empty())) {
-                g_ui.setArt(nullptr);
-                g_img.art.reset();
-                g_img.art.url.clear();
-                changed = true;
-            }
-            continue;
-        }
-        if (!g_img.wanted.empty() && img.url == g_img.wanted) {
-            // Même image pour une tuile (album en cours parmi les favoris) : une copie pour la tuile, sinon elle
-            // ne recevait jamais son image (vu dans le simulateur)
-            bool tile = false;
-            for (auto& p : g_tiles.list) tile |= p.picUrl == img.url;
-            if (tile && img.ok() && !g_img.presets[img.url].ok()) {
-                ArtImage& copy = g_img.presets[img.url];
-                copy.url = img.url;
-                copy.data = static_cast<uint8_t*>(heap_caps_malloc(img.len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-                if (copy.data) {
-                    memcpy(copy.data, img.data, img.len);
-                    copy.len = img.len;
-                    for (size_t i = 0; i < g_tiles.list.size(); ++i)
-                        if (g_tiles.list[i].picUrl == img.url) g_ui.setPresetArt((int)i, &copy);
-                }
-            }
-            g_img.art = std::move(img);
-            g_ui.setArt(&g_img.art);
-            changed = true;
-            continue;
-        }
-        bool used = false;
-        for (auto& p : g_tiles.list)
-            if (p.picUrl == img.url) used = true;
-        if (!used && g_img.coverRequested.count(img.url)) {  // pochette d'une ligne de résultats
-            const std::string url = img.url;
-            ArtImage& stored = g_img.results[url];
-            stored = std::move(img);
-            if (g_view.screen == Screen::Results)
-                for (size_t i = 0; i < g_search.results.size(); ++i)
-                    if (g_search.results[i].art == url) g_ui.updateResultCover((int)i, &stored);
-            continue;
-        }
-        if (!used) continue;  // piste ou liste déjà changée : image périmée
-        std::string url = img.url;
-        ArtImage& stored = g_img.presets[url];
-        stored = std::move(img);
-        for (size_t i = 0; i < g_tiles.list.size(); ++i)
-            if (g_tiles.list[i].picUrl == url) g_ui.setPresetArt((int)i, &stored);
-        if (g_view.screen == Screen::Results && g_img.coverRequested.count(url))  // même image dans la liste ouverte
-            for (size_t i = 0; i < g_search.results.size(); ++i)
-                if (g_search.results[i].art == url) g_ui.updateResultCover((int)i, &stored);
-        changed = true;
-    }
-    if (changed) show();
-}
-
-// Images manquantes (échec, ou résultat perdu pendant un écran sans checkImages) : redemandées toutes les minutes
-static void retryImages() {
-    static uint32_t last = 0;
-    if (millis() - last < 60000) return;
-    last = millis();
-    if (!g_img.wanted.empty() && g_img.art.url != g_img.wanted) g_img.fetcher.request(g_img.wanted, true);
-    for (auto& p : g_tiles.list) {
-        if (p.picUrl.empty()) continue;
-        auto it = g_img.presets.find(p.picUrl);
-        if (it == g_img.presets.end() || !it->second.ok()) g_img.fetcher.request(p.picUrl);
-    }
 }
 
 // ------------------------------------------------------- état venant du WiiM
@@ -981,8 +581,6 @@ static bool handleBars(int x, int y) {
     return false;
 }
 
-static void openFavoriteList(bool deezer);
-
 static void playPreset(int p) {
     if (p < 0 || p >= (int)g_tiles.list.size()) return;
     logEvent("Preset %d : %s", g_tiles.list[p].slot, g_tiles.list[p].label.c_str());
@@ -1003,148 +601,6 @@ static void playPreset(int p) {
         markPending(wr::kPlayPause, Await::Music);
     }
     flash(p, -1);
-}
-
-// ------------------------------------------------------------ dictée de la recherche
-//
-// Dictée de la recherche : bouton micro → écoute (la musique est baissée le temps d'écouter) → appui sur
-// le bouton rouge → transcription OpenAI en tâche de fond → texte cherché.
-
-static void stopListening() {
-    M5.Mic.end();
-    g_mic.pending = false;
-    g_voice.listening = false;
-    sound::resume();
-    if (g_voice.duckedFrom >= 0) {
-        g_worker.command("setPlayerCmd:vol:" + String(g_voice.duckedFrom));
-        g_voice.duckedFrom = -1;
-    }
-}
-
-static void renderSearch(int pressedKey = -1);
-
-static void startVoice() {
-    if (!g_settings.voiceEnabled()) return;
-    g_voice.dictation = true;
-    if (!g_voice.buf)
-        g_voice.buf = static_cast<int16_t*>(heap_caps_malloc(kVoiceMax * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (!g_voice.buf) {
-        g_search.status = wr::L("Not enough memory to listen", "M\xC3\xA9moire insuffisante pour \xC3\xA9" "couter");
-        renderSearch();
-        return;
-    }
-    const auto& p = g_state.player;
-    if (g_state.online && p.playing && !p.muted && p.volume > 15) {
-        g_voice.duckedFrom = p.volume;
-        g_worker.command("setPlayerCmd:vol:12");
-    }
-    sound::confirm();
-    delay(200);  // le bip finit avant que le bus audio passe au micro
-    sound::suspend();
-    if (!M5.Mic.begin()) {
-        stopListening();
-        g_voice.dictation = false;
-        g_search.status = wr::L("Microphone unavailable", "Micro indisponible");
-        renderSearch();
-        return;
-    }
-    g_voice.listening = true;
-    g_voice.len = 0;
-    g_voice.level = 0;
-    g_mic.pending = false;
-    g_mic.cur = 0;
-    renderSearch();
-}
-
-static void runSearchQuery();
-
-// Dictée de la recherche : la phrase entendue devient le texte cherché, puis la recherche part
-
-static void sttTask(void*) {
-    // Indication pour la transcription, dans la langue de l'interface (choisie à l'exécution, pas à l'initialisation)
-    const std::string hint = wr::L("Music search: artist names, track and album titles, in English or French.",
-                                   "Recherche de musique : noms d'artistes, titres de morceaux et d'albums, en "
-                                   "fran\xC3\xA7" "ais ou en anglais.");
-    std::string text;
-    String err;
-    const bool ok = transcribe(g_voice.buf, g_voice.len, kMicRate, g_settings.openaiKey, g_settings.sttModel, hint, text, err);
-    g_voice.stt.text = text;
-    g_voice.stt.err = err;
-    g_voice.stt.ok = ok;
-    g_voice.stt.done = true;  // écrit en dernier : la boucle lit les champs après
-    vTaskDelete(nullptr);
-}
-
-static void finishDictation(bool send) {
-    stopListening();
-    g_voice.dictation = false;
-    if (!send || g_voice.len < kMicRate / 3) {
-        g_search.status = send ? String(wr::L("I didn't hear anything", "Je n'ai rien entendu")) : String();
-        renderSearch();
-        return;
-    }
-    if (g_voice.stt.busy) return;
-    g_ui.updateSearchField(g_search.query, "", false, g_search.source, g_search.deezerOk, 2);
-    g_voice.stt.busy = true;
-    g_voice.stt.done = false;
-    // Pile en RAM interne (TLS) ; cœur 0, comme la tâche WiiM : le cœur 1 reste à l'écran et au toucher
-    if (xTaskCreatePinnedToCore(sttTask, "stt", 16 * 1024, nullptr, 1, nullptr, 0) != pdPASS) {
-        g_voice.stt.busy = false;
-        g_search.status = wr::L("Not enough memory for the transcription", "M\xC3\xA9moire insuffisante pour la transcription");
-        renderSearch();
-    }
-}
-
-// Résultat de la transcription (appelé par la boucle de l'écran de recherche)
-static void serviceTranscription() {
-    if (!g_voice.stt.busy || !g_voice.stt.done) return;
-    g_voice.stt.busy = false;
-    g_voice.stt.done = false;
-    if (g_view.screen != Screen::Search) return;  // l'écran a été quitté entre-temps
-    if (!g_voice.stt.ok) {
-        logEvent("Transcription : %s", g_voice.stt.err.c_str());
-        sound::error();
-        g_search.status = g_voice.stt.err;
-        renderSearch();
-        return;
-    }
-    const std::string text = wr::cleanTranscript(g_voice.stt.text, 60);  // guillemets et ponctuation ajoutés retirés
-    logEvent("Dict\xC3\xA9" "e : \xC2\xAB %s \xC2\xBB", text.c_str());
-    g_search.query = text;
-    g_search.status = "";
-    if (text.empty()) {
-        g_search.status = wr::L("I didn't understand anything", "Je n'ai rien compris");
-        renderSearch();
-        return;
-    }
-    runSearchQuery();
-}
-
-// Micro pendant l'écoute : enregistre, suit le niveau, détecte la fin de la phrase
-static void serviceVoice() {
-    if (!g_voice.listening) return;
-    if (!g_mic.pending) {
-        g_mic.pending = M5.Mic.record(g_mic.buf[g_mic.cur], kMicBlock, kMicRate);
-        return;
-    }
-    if (M5.Mic.isRecording()) return;
-    const int done = g_mic.cur;
-    g_mic.cur ^= 1;
-    g_mic.pending = M5.Mic.record(g_mic.buf[g_mic.cur], kMicBlock, kMicRate);
-    const int16_t* b = g_mic.buf[done];
-    double sum = 0;
-    for (int i = 0; i < kMicBlock; ++i) sum += double(b[i]) * b[i];
-    const float rms = std::sqrt(sum / kMicBlock) / 32768.0f;
-    const size_t n = std::min<size_t>(kMicBlock, kVoiceMax - g_voice.len);
-    memcpy(g_voice.buf + g_voice.len, b, n * 2);
-    g_voice.len += n;
-    g_voice.level = std::max(std::min(1.0f, rms * 10), g_voice.level * 0.8f);
-    // On écoute jusqu'à l'appui sur ■ (ou la limite du tampon)
-    if (millis() - g_voice.frame > 100) {
-        g_voice.frame = millis();
-        g_ui.updateSearchField(g_search.query, "", false, g_search.source, g_search.deezerOk, 1, g_voice.level);
-    }
-    if (g_voice.len >= kVoiceMax) finishDictation(true);
 }
 
 // Bande des presets, suivi du doigt : enfoncer, glisser (page), relâcher (lancer)
@@ -1297,6 +753,24 @@ static void connectWifi() {
     }
 }
 
+// Mémoire dans le Journal (au démarrage + toutes les 10 min) : pour repérer une fuite lors d'un essai de longue durée
+static void logMemory() {
+    static uint32_t last = 0;
+    static bool first = true;
+    const uint32_t now = millis();
+    if (!first && now - last < 10 * 60 * 1000UL) return;
+    first = false;
+    last = now;
+    logEvent("M\xC3\xA9moire : interne %u ko (min %u), PSRAM %u ko, pile WiiM %u o",
+             unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), unsigned(g_worker.stackLeft()));
+}
+
+}  // namespace app
+
+using namespace app;
+
 void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
@@ -1346,220 +820,6 @@ void setup() {
     g_state.battery = batteryLevel();
     g_idle.lastTouch = g_idle.lastPlayingAt = millis();
     show();
-}
-
-// ------------------------------------------------------------ recherche Qobuz
-
-static void renderSearch(int pressedKey) {
-    g_ui.renderSearch(g_search.query, g_search.status, g_jobs.search, pressedKey, g_search.source, g_search.deezerOk);
-}
-
-// Lance la recherche du texte saisi ou dicté
-static void runSearchQuery() {
-    std::string q = g_search.query;
-    while (!q.empty() && q.back() == ' ') q.pop_back();
-    if (q.empty() || g_jobs.search) {
-        renderSearch();
-        return;
-    }
-    logEvent("Recherche %s : %s", g_search.source == kTabDeezer ? "Deezer" : g_search.source == kTabAlbums ? "Albums Qobuz" : "Qobuz",
-             q.c_str());
-    g_jobs.search = true;
-    g_jobs.since = millis();
-    g_search.resultsTitle = q;
-    g_search.resultsKind = kindOfTab(g_search.source);
-    g_search.status = g_search.source == kTabDeezer ? String(wr::L("Searching Deezer\xE2\x80\xA6", "Recherche sur Deezer\xE2\x80\xA6"))
-                     : g_search.source == kTabAlbums ? String(wr::L("Searching Qobuz albums\xE2\x80\xA6",
-                                                          "Recherche d'albums sur Qobuz\xE2\x80\xA6"))
-                                           : String(wr::L("Searching Qobuz through your WiiM\xE2\x80\xA6",
-                                                          "Recherche sur Qobuz par ton WiiM\xE2\x80\xA6"));
-    g_worker.search(q.c_str(), g_search.resultsKind);
-    renderSearch();
-}
-
-// Tuiles « Favoris Qobuz » / « Favoris Deezer » : morceaux favoris du compte (tâche WiiM), affichés comme des
-// résultats. source 0 : Qobuz, 1 : Deezer.
-static void openFavoriteList(bool deezer) {
-    if (g_jobs.search) {
-        setMessage(wr::L("Search in progress, try again in a moment",
-                         "Recherche en cours, r\xC3\xA9" "essaie dans un instant"),
-                   3000);
-        show();  // message affiché, tuile relâchée
-        return;
-    }
-    g_jobs.search = true;
-    g_jobs.since = millis();
-    g_search.resultsTitle = deezer ? wr::L("Deezer favorites", "Favoris Deezer") : wr::L("Qobuz favorites", "Favoris Qobuz");
-    g_search.resultsKind = deezer ? SearchKind::DeezerFavorites : SearchKind::QobuzFavorites;
-    g_search.results.clear();
-    g_search.page = 0;
-    g_view.screen = Screen::Results;
-    g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
-                       deezer ? wr::L("Loading your Deezer favorites\xE2\x80\xA6", "Chargement de tes favoris Deezer\xE2\x80\xA6")
-                              : wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
-    g_worker.search(g_search.resultsTitle.c_str(), g_search.resultsKind);
-}
-
-static void openSearch() {
-    g_view.screen = Screen::Search;
-    g_search.deezerOk = g_tiles.favOk && fav::hasDeezerModel();
-    if (!g_search.deezerOk && g_search.source == kTabDeezer) g_search.source = kTabQobuz;
-    if (!g_settings.qobuzDirect && g_search.source == kTabAlbums) g_search.source = kTabQobuz;
-    g_search.status = g_jobs.search ? String(wr::L("Searching\xE2\x80\xA6", "Recherche en cours\xE2\x80\xA6")) : String();
-    renderSearch();
-}
-
-static void updateSearchField() {
-    g_ui.updateSearchField(g_search.query, g_search.status, g_jobs.search, g_search.source, g_search.deezerOk);
-}
-
-static void releaseKey(bool force) {
-    if (g_search.keyDown < 0 || (!force && millis() - g_search.keyDownAt < 90)) return;
-    g_ui.pressKey(g_search.keyDown, false);
-    g_search.keyDown = -1;
-}
-
-static void onSearchKey(int k) {
-    if (k < 0) return;
-    if (g_jobs.search && g_ui.keys()[k].kind == wr::Key::Enter) return;
-    const wr::Key key = g_ui.keys()[k];
-    releaseKey(true);
-    g_ui.pressKey(k, true);  // retour visuel immédiat
-    g_search.keyDown = k;
-    g_search.keyDownAt = millis();
-    sound::tap();
-    switch (key.kind) {
-        case wr::Key::Char:
-            if (g_search.query.size() < 60) g_search.query += key.text;
-            break;
-        case wr::Key::Space:
-            if (!g_search.query.empty() && g_search.query.back() != ' ') g_search.query += ' ';
-            break;
-        case wr::Key::Back: g_search.query = wr::utf8PopBack(g_search.query); break;
-        case wr::Key::Clear: g_search.query.clear(); break;
-        case wr::Key::Enter:
-            runSearchQuery();
-            return;
-    }
-    if (key.kind != wr::Key::Enter) g_search.status = g_jobs.search ? g_search.status : String();
-    updateSearchField();  // seul le champ change
-}
-
-// Liste des résultats ; albums Qobuz : un cœur par ligne, plein si l'album est déjà une tuile
-static int albumFavIndex(size_t i) {
-    if (i >= g_search.albums.size()) return -1;
-    const std::string key = wr::qobuzAlbumKey(g_search.albums[i].id);
-    for (size_t k = 0; k < g_tiles.favs.size(); ++k)
-        if (g_tiles.favs[k].key == key) return (int)k;
-    return -1;
-}
-
-// Image déjà téléchargée pour cette adresse (résultats, presets, pochette en cours), sinon nullptr
-static const ArtImage* knownImage(const std::string& url) {
-    if (url.empty()) return nullptr;
-    auto r = g_img.results.find(url);
-    if (r != g_img.results.end()) return &r->second;
-    auto p = g_img.presets.find(url);
-    if (p != g_img.presets.end()) return &p->second;
-    return g_img.art.url == url ? &g_img.art : nullptr;
-}
-
-// Pochettes des lignes de la page affichée : demandées une fois chacune (pas toute la liste d'un coup)
-static void requestCovers() {
-    const int first = g_ui.resultsFirst(), n = g_ui.resultsPerPage();
-    for (int i = first; i < first + n && i < (int)g_search.results.size(); ++i) {
-        const std::string& url = g_search.results[i].art;
-        if (url.empty() || knownImage(url) || !g_img.coverRequested.insert(url).second) continue;
-        g_img.fetcher.request(url);
-    }
-}
-
-static void renderResultsList(int pressed, const String& status) {
-    std::vector<int> hearts;
-    String sub = status;
-    if (g_search.resultsKind == SearchKind::QobuzAlbums && g_search.albums.size() == g_search.results.size()) {
-        for (size_t i = 0; i < g_search.albums.size(); ++i) hearts.push_back(albumFavIndex(i) >= 0 ? 1 : 0);
-        if (!sub.length() && !g_search.results.empty())
-            sub = String((int)g_search.results.size()) + (g_search.results.size() > 1 ? " albums" : " album") +
-                  wr::L(" \xC2\xB7 tap to play, the heart makes it a tile",
-                        " \xC2\xB7 touche pour \xC3\xA9" "couter, le c\xC5\x93ur en fait une tuile");
-    }
-    std::vector<const ArtImage*> covers;
-    for (auto& t : g_search.results) covers.push_back(knownImage(t.art));
-    g_ui.renderResults(g_search.resultsTitle, g_search.results, g_search.page, sub, pressed, hearts, covers);
-    requestCovers();
-}
-
-// Cœur d'un album trouvé : ajouté en tuile (tâche WiiM : il faut le modèle de file Qobuz), ou retiré
-static void toggleAlbumFavorite(int i) {
-    if (i < 0 || i >= (int)g_search.albums.size() || g_jobs.albumFavorite) return;
-    sound::tap();
-    const wr::QobuzAlbum& a = g_search.albums[i];
-    const int f = albumFavIndex(i);
-    if (f >= 0) {
-        const bool ok = fav::remove(g_tiles.favs[f].id);
-        logEvent("Favori retir\xC3\xA9 depuis la recherche (%s) : %s", g_tiles.favs[f].id.c_str(), ok ? "OK" : "erreur");
-        refreshTiles();
-        renderResultsList();
-        return;
-    }
-    g_jobs.albumFavorite = true;
-    g_jobs.since = millis();
-    g_worker.saveAlbumFavorite(a.id.c_str(), a.title.c_str(), a.artist.c_str(), a.image.c_str());
-}
-
-// Résultats arrivés (tâche WiiM)
-static void onSearchDone(const WiimEvent& ev) {
-    // Réponse d'une recherche abandonnée (attente trop longue) arrivée pendant une autre : pas sous son titre
-    if (std::string(ev.name.c_str()) != g_search.resultsTitle) {
-        logEvent("Recherche : r\xC3\xA9sultat ancien ignor\xC3\xA9 (%s)", ev.name.c_str());
-        return;
-    }
-    g_jobs.search = false;
-    g_search.albums = ev.albums;
-    if (!ev.ok || ev.tracks.empty()) {
-        if (!ev.ok) sound::error();
-        g_search.status = !ev.ok ? String(wr::L("Search failed: ", "Recherche impossible : ")) + ev.text
-                                : String(g_search.resultsKind == SearchKind::QobuzAlbums ? wr::L("No album found for \xE2\x80\x9C",
-                                                                      "Aucun album trouv\xC3\xA9 pour \xC2\xAB ")
-                                                              : wr::L("No track found for \xE2\x80\x9C",
-                                                                      "Aucun morceau trouv\xC3\xA9 pour \xC2\xAB ")) +
-                                      ev.name + wr::L("\xE2\x80\x9D", " \xC2\xBB");
-        if (g_view.screen == Screen::Results) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
-            g_search.results.clear();
-            g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
-                               !ev.ok ? String(wr::L("Failed: ", "Impossible : ")) + ev.text
-                                      : String(wr::L("No favorite track on ", "Aucun morceau favori sur ")) +
-                                            (g_search.resultsKind == SearchKind::DeezerFavorites ? "Deezer" : "Qobuz"));
-        }
-    } else {
-        g_search.results = ev.tracks;
-        g_search.page = 0;
-        g_img.results.clear();  // pochettes de la liste précédente (PSRAM)
-        g_img.coverRequested.clear();
-        g_search.status = "";
-        // Toujours sur le clavier ou la liste : on montre les résultats
-        if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) {
-            g_view.screen = Screen::Results;
-            renderResultsList(-1, String());
-        }
-        return;
-    }
-    if (g_view.screen == Screen::Search) renderSearch();
-}
-
-// Mémoire dans le Journal (au démarrage + toutes les 10 min) : pour repérer une fuite lors d'un essai de longue durée
-static void logMemory() {
-    static uint32_t last = 0;
-    static bool first = true;
-    const uint32_t now = millis();
-    if (!first && now - last < 10 * 60 * 1000UL) return;
-    first = false;
-    last = now;
-    logEvent("M\xC3\xA9moire : interne %u ko (min %u), PSRAM %u ko, pile WiiM %u o",
-             unsigned(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
-             unsigned(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
-             unsigned(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024), unsigned(g_worker.stackLeft()));
 }
 
 void loop() {
