@@ -17,7 +17,7 @@ pio run -e preview                   # PC build of the real UI (needs SDL2 heade
 SDL_VIDEODRIVER=dummy .pio/build/preview/program <images_dir> <out_dir> && python tools/preview/topng.py <out_dir>/*.ppm
 pio run -e sim                       # simulator: the real app + a fake WiiM in an SDL window (tools/sim/README.md)
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
-pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning)
+pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning, play queues; ~90 s)
 pio run -e desktop && ./platform/pc/selftest.sh   # computer build (Raspberry Pi/Linux/macOS): direct to a mock WiiM
 # Sanitizers (CI runs the first): separate build folder so normal builds are not touched
 PLATFORMIO_BUILD_DIR=.pio/build-asan PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -g -O1" pio run -e sim
@@ -63,7 +63,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
 | `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), SDL window/input/options (`pc_platform.cpp`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
 | `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
-| `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), mock WiiM and `selftest.sh` |
+| `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), `mock_wiim.py` (httpapi + UPnP PlayQueue on port 49152 with the behaviours seen on a real WiiM: shuffle, queues that fill step by step, `--nofill-file`) and `selftest.sh` (search through a queue, restore, album play) |
 
 ## Conventions
 
@@ -143,6 +143,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   after the restore (`shuffleBack`), else the results come shuffled. A result plays from its **album queue**
   (`QueueTrack::albumId`), not from the search queue (it grows to 1000 tracks, 1.35 MB: `kMaxBody` is 3 MB). A track
   paused before the search is put back paused (`RestoreAction::PutBackPaused`). (Code comments date these 2026-11-17.)
+- **A search through a WiiM queue changes the WiiM** (mute, shuffle off): `noteSearchChanges()` keeps a note in
+  LittleFS (`fav::saveSearchUndo`) until the search ends; `undoInterruptedSearch()` puts them back at the next start
+  (only what is still in that state). A queue that stays empty gets at most one other spelling
+  (`wr::searchTryNext`; four tries took 43 s). Change this flow with `tools/relay/selftest.sh`: it runs these cases on
+  the mock WiiM. When the real WiiM behaves differently from the mock, fix the mock too.
 - **HTTP header values**: compare them through `headerValue()` in `core.cpp` (Qobuz sends `Transfer-Encoding:  chunked`
   with two spaces).
 - **Direct Qobuz search is opt-in** (`Settings::qobuzDirect`, setup page › Advanced, off by default): it reuses

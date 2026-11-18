@@ -225,6 +225,7 @@ void WiimWorker::pollOnce() {
     lastPollError_ = e;
     if (r.online) {
         learnIdentity();
+        if (!undoChecked_) undoInterruptedSearch(st);
         // Titre, artiste, album, pochette, qualité : getMetaInfo (absents de getPlayerStatus
         // sur les WiiM). Sauté si une commande attend : elle passe d'abord.
         if (!commandsWaiting()) {
@@ -1154,6 +1155,41 @@ void WiimWorker::shuffleBack(const Playback& before, bool changed) {
     logEvent("Recherche : lecture al\xC3\xA9" "atoire remise (%s)", wiimErrorName(e));
 }
 
+// Son coupé et lecture aléatoire retirée pendant une recherche par file : notés dans le stockage tant qu'elle dure.
+// Si le Tab5 s'éteint ou redémarre au milieu, le WiiM resterait muet et sans lecture aléatoire (vu avec le
+// simulateur arrêté en pleine recherche, 2026-11-17) : undoInterruptedSearch() les remet au démarrage suivant.
+void WiimWorker::noteSearchChanges(const Playback& before, bool muted, bool unshuffled) {
+    if (!muted && !unshuffled) return;
+    wr::SearchUndo u;
+    u.unmute = muted;
+    u.loop = unshuffled ? before.loop : -1;
+    fav::saveSearchUndo(wr::searchUndoText(u));
+}
+
+void WiimWorker::undoInterruptedSearch(const wr::PlayerStatus& now) {
+    undoChecked_ = true;
+    std::string text;
+    wr::SearchUndo u;
+    if (!fav::searchUndo(text)) return;
+    if (wr::parseSearchUndo(text, u)) {
+        // Seulement ce qui est encore dans l'état laissé par la recherche : quelqu'un a pu y toucher depuis
+        const bool unmute = u.unmute && now.muted;
+        const bool reshuffle = u.loop >= 0 && now.loop == wr::loopWithoutShuffle(u.loop);
+        WiimError stop = WiimError::None, loop = WiimError::None, mute = WiimError::None;
+        // Encore muet : ce qui joue est un résultat de la recherche, jamais choisi ; arrêté avant de rendre le son
+        if (unmute && now.playing) stop = client_.command("setPlayerCmd:stop");
+        if (reshuffle) loop = client_.command("setPlayerCmd:loopmode:" + String(u.loop));
+        if (unmute) mute = client_.command("setPlayerCmd:mute:0");
+        logEvent("Recherche interrompue : son %s, lecture al\xC3\xA9" "atoire %s", unmute ? wiimErrorName(mute) : "-",
+                 reshuffle ? wiimErrorName(loop) : "-");
+        if (stop != WiimError::None || loop != WiimError::None || mute != WiimError::None) {
+            undoChecked_ = false;  // WiiM injoignable : nouvel essai au prochain relevé réussi
+            return;
+        }
+    }
+    fav::saveSearchUndo("");
+}
+
 void WiimWorker::restoreAfterSearch(const std::string& control, const Playback& before) {
     if (!before.known) return;
     wr::PlayerStatus st;
@@ -1283,8 +1319,12 @@ void WiimWorker::runSearch(const String& query) {
     const bool muted = before.known && !before.muted &&
                        client_.command("setPlayerCmd:mute:1") == WiimError::None;
     const bool unshuffled = shuffleOff(before);
+    noteSearchChanges(before, muted, unshuffled);
     wr::QueueInfo best;
+    const bool severalWords = plus != enc;
+    int empties = 0;
     for (auto& v : variants) {
+        if (!severalWords && &v == &variants[1]) continue;  // un seul mot : même adresse que la première
         // Nom nouveau à chaque essai (deux en alternance) : pas de risque de relire l'ancienne file
         const std::string name = std::string(kSearchQueue) + "-" + std::to_string(++searchCount_ % 2);
         deleteQueue(control, name);
@@ -1309,7 +1349,10 @@ void WiimWorker::runSearch(const String& query) {
             searchQueue_ = name;
             searchUrl_ = url;
         }
-        if (relevant) break;  // en rapport : terminé ; sinon, écriture suivante
+        // En rapport : terminé. File restée vide (rien trouvé, ou le WiiM ne charge rien : 4 écritures prenaient
+        // 43 s, vu sur un WiiM, 2026-11-17) : au plus une autre écriture. Règle : lib/core/src/decisions.h
+        if (!found) ++empties;
+        if (!wr::searchTryNext(found, relevant, empties, severalWords)) break;
     }
     restoreAfterSearch(control, before);  // le WiiM lance la file de recherche dès sa création
     shuffleBack(before, unshuffled);
@@ -1317,6 +1360,7 @@ void WiimWorker::runSearch(const String& query) {
         pause(600, false);  // la musique d'avant a repris (ou la lecture est arrêtée)
         logEvent("Recherche : son r\xC3\xA9tabli (%s)", wiimErrorName(client_.command("setPlayerCmd:mute:0")));
     }
+    if (muted || unshuffled) fav::saveSearchUndo("");
     logEvent("Recherche : termin\xC3\xA9" "e en %lu ms", (unsigned long)(millis() - t0));
     ev.ok = true;
     ev.tracks = best.items;
@@ -1428,6 +1472,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     const Playback before = snapshot(control);
     const bool muted = before.known && !before.muted && client_.command("setPlayerCmd:mute:1") == WiimError::None;
     const bool unshuffled = shuffleOff(before);
+    noteSearchChanges(before, muted, unshuffled);
     deleteQueue(control, name);
     const int c = createQueue(
         control,
@@ -1441,6 +1486,7 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
         pause(600, false);
         client_.command("setPlayerCmd:mute:0");
     }
+    if (muted || unshuffled) fav::saveSearchUndo("");
     logEvent("Favoris Qobuz (file) : CreateQueue %d, %d morceau(x)", c, loaded ? q.tracks : 0);
     resultsFrom_ = ResultsFrom::WiimQueue;
     searchQueue_ = name;

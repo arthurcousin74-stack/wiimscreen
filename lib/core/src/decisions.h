@@ -44,6 +44,20 @@ RestoreAction restoreAction(const PlaybackBefore& before, const PlayerStatus& no
 // repeat one. A search through a WiiM queue turns shuffle off for its duration: else the WiiM shuffles the results.
 int loopWithoutShuffle(int loop);
 
+// Search through a WiiM queue: try the next way to write the query? `found`: the queue got tracks; `relevant`: they
+// share a word with the query; `empties`: queues that stayed empty so far (this one included). An empty queue means no
+// match or a WiiM that loads nothing: only a query of several words gets one more try (other spelling of the spaces).
+bool searchTryNext(bool found, bool relevant, int empties, bool severalWords);
+
+// What a search through a WiiM queue changed on the WiiM (sound muted, shuffle turned off), kept in storage while it
+// runs: if the remote restarts in the middle, the next start puts it back. `loop` is the mode to set again, -1: none.
+struct SearchUndo {
+    bool unmute = false;
+    int loop = -1;
+};
+std::string searchUndoText(const SearchUndo& u);
+bool parseSearchUndo(const std::string& text, SearchUndo& out);  // false: nothing to undo (empty, unreadable)
+
 // A queue filled by the WiiM (search, favorites, album) grows step by step (1-2 tracks after 1 s, 7 after 6 s):
 // it is complete when the same non-zero count comes back 4 more times in a row and at least 3 s have passed.
 class QueueStability {

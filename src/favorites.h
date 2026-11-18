@@ -30,6 +30,10 @@ bool saveSourceModel(const std::string& source, const std::string& queueContext)
 bool sourceModel(const std::string& source, std::string& out);
 bool hasDeezerModel();
 bool hasQobuzModel();
+// Note kept while a search through a WiiM queue runs (wr::searchUndoText: sound and shuffle to put back), read at
+// the next start if the remote restarted in the middle. No secret in it. An empty text removes the note.
+bool saveSearchUndo(const std::string& text);
+bool searchUndo(std::string& out);
 // Vrai la première fois seulement pour cette étiquette (petit fichier marqueur), faux ensuite : une action
 // automatique (tuile Flow) n'est faite qu'une fois, et ne revient pas si l'on retire la tuile.
 bool firstTime(const std::string& tag);

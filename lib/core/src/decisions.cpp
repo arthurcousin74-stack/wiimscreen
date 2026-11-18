@@ -1,5 +1,7 @@
 #include "decisions.h"
 
+#include <cstdio>
+
 #include <cstring>
 
 #include "voice.h"
@@ -42,6 +44,25 @@ bool QueueStability::feed(int tracks, uint32_t elapsedMs) {
     }
     last_ = tracks;
     return false;
+}
+
+bool searchTryNext(bool found, bool relevant, int empties, bool severalWords) {
+    if (relevant) return false;
+    if (found) return true;  // results without any word of the query: the WiiM may have misread it
+    return severalWords && empties < 2;
+}
+
+std::string searchUndoText(const SearchUndo& u) {
+    return "unmute " + std::to_string(u.unmute ? 1 : 0) + " loop " + std::to_string(u.loop) + "\n";
+}
+
+bool parseSearchUndo(const std::string& text, SearchUndo& out) {
+    int unmute = 0, loop = -1;
+    if (std::sscanf(text.c_str(), "unmute %d loop %d", &unmute, &loop) != 2) return false;
+    if (loop < -1 || loop > 5) loop = -1;
+    out.unmute = unmute == 1;
+    out.loop = loop;
+    return out.unmute || out.loop >= 0;
 }
 
 int loopWithoutShuffle(int loop) {

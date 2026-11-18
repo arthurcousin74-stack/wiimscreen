@@ -69,7 +69,7 @@ covers, certificate pinning. Only the lowest layer changes: each connection goes
 
 The relay listens on 127.0.0.1 by default. It connects only to private addresses (your WiiM), and to public
 hosts only with TLS on port 443 (certificate checked) or HTTP on port 80. It logs host and port only, never the
-data (the Qobuz token is in the HTTP headers). `tools/relay/selftest.sh` checks the chain with a mock
+data (the Qobuz token is in the HTTP headers). `tools/relay/selftest.sh` checks the chain, and the search through a WiiM play queue (shuffle, restore), with a mock
 WiiM (CI runs it).
 
 Checked with a real WiiM (2026-11, Windows 11 + WSL in NAT mode, relay with `--wiim`): the simulator finds the

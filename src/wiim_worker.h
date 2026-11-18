@@ -139,6 +139,9 @@ private:
     Playback snapshot(const std::string& control);
     bool shuffleOff(const Playback& before);  // pendant une recherche par file : sinon le WiiM mélange les résultats
     void shuffleBack(const Playback& before, bool changed);
+    void noteSearchChanges(const Playback& before, bool muted, bool unshuffled);  // gardé si le Tab5 redémarre
+    void undoInterruptedSearch(const wr::PlayerStatus& now);
+    bool undoChecked_ = false;
     void restoreAfterSearch(const std::string& control, const Playback& before);
     bool deezerModel(const std::string& control, std::string& templ);
     void runDeezerSearch(const String& query);

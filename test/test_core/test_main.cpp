@@ -311,6 +311,29 @@ static void test_decisions() {
     searchQ.playing = false;
     TEST_ASSERT_EQUAL((int)RestoreAction::StopSearchQueue, (int)restoreAction(paused, searchQ));
 
+    // Écriture suivante de la recherche : file vide = une seule autre écriture, et seulement avec plusieurs mots
+    TEST_ASSERT_FALSE(searchTryNext(true, true, 0, true));
+    TEST_ASSERT_TRUE(searchTryNext(true, false, 0, false));   // résultats sans rapport : requête peut-être mal lue
+    TEST_ASSERT_FALSE(searchTryNext(false, false, 1, false));  // un mot, file vide : inutile d'insister (43 s sinon)
+    TEST_ASSERT_TRUE(searchTryNext(false, false, 1, true));
+    TEST_ASSERT_FALSE(searchTryNext(false, false, 2, true));
+
+    SearchUndo undo;
+    TEST_ASSERT_FALSE(parseSearchUndo("", undo));
+    TEST_ASSERT_FALSE(parseSearchUndo("n'importe quoi", undo));
+    TEST_ASSERT_FALSE(parseSearchUndo(searchUndoText(SearchUndo{}), undo));  // rien à remettre
+    SearchUndo both;
+    both.unmute = true;
+    both.loop = 3;
+    TEST_ASSERT_TRUE(parseSearchUndo(searchUndoText(both), undo));
+    TEST_ASSERT_TRUE(undo.unmute);
+    TEST_ASSERT_EQUAL(3, undo.loop);
+    TEST_ASSERT_TRUE(parseSearchUndo("unmute 0 loop 2\n", undo));
+    TEST_ASSERT_FALSE(undo.unmute);
+    TEST_ASSERT_EQUAL(2, undo.loop);
+    TEST_ASSERT_TRUE(parseSearchUndo("unmute 1 loop 99", undo));  // mode inconnu : le son seulement
+    TEST_ASSERT_EQUAL(-1, undo.loop);
+
     TEST_ASSERT_EQUAL(4, loopWithoutShuffle(3));  // aléatoire sans répétition (vu sur un WiiM, 2026-11-17)
     TEST_ASSERT_EQUAL(0, loopWithoutShuffle(2));
     TEST_ASSERT_EQUAL(1, loopWithoutShuffle(5));

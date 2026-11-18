@@ -159,6 +159,18 @@ bool settingsBackup(std::string& out) {
     return g_ok && readFile("/settings.bak", out) && !out.empty();
 }
 
+bool saveSearchUndo(const std::string& text) {
+    Guard g;
+    if (!g_ok) return false;
+    if (text.empty()) return !LittleFS.exists("/fav/search_undo") || LittleFS.remove("/fav/search_undo");
+    return writeFile("/fav/search_undo", text);
+}
+
+bool searchUndo(std::string& out) {
+    Guard g;
+    return g_ok && LittleFS.exists("/fav/search_undo") && readFile("/fav/search_undo", out) && !out.empty();
+}
+
 bool firstTime(const std::string& tag) {
     Guard g;
     if (!g_ok) return false;

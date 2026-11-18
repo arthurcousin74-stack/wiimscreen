@@ -21,6 +21,13 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - A track that was paused before a search is put back, paused at the same position (it was lost).
 - The music before a search was not put back when its queue was very large (Qobuz search queue of 1000 tracks).
 - Direct Qobuz answers with extra spaces in their HTTP headers are read correctly.
+- A search through the WiiM that loads nothing ends after about 10 s (one word) or 20 s (several words), not 43 s.
+- If the remote restarts during a search through the WiiM, the next start turns the WiiM's sound and shuffle back on.
+
+### Tests
+- The mock WiiM has a play-queue service (shuffle, queues that fill step by step, a mode that loads nothing). The
+  relay self-test now runs the search through a WiiM queue: results in order, music before put back (paused and
+  playing), a result played from its album, an empty WiiM, a search cut by a restart.
 
 ## [0.1.1-beta] — 2026-11-16 — direct Qobuz search becomes an option
 
