@@ -90,7 +90,9 @@ std::string urlOrigin(const std::string& url);
 // Percent-encoding for a URL query value (RFC 3986 unreserved characters kept).
 std::string urlQueryEncode(const std::string& s);
 
-// Replaces the values of token/secret/password/signature query parameters by "***".
+// Replaces the values of token/secret/password/signature/id keys by "***": query parameters (key=value, also
+// percent-encoded key%3Dvalue), JSON members (string or number, also escaped as \"…\" or &quot;…&quot;), XML elements
+// (<key>value</key>, also escaped as &lt;key&gt;).
 std::string maskSecrets(const std::string& text);
 // "arthur@example.com" → "ar***@ex***" ; short names → "***".
 std::string maskAccount(const std::string& name);

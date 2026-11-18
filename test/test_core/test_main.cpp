@@ -14,6 +14,7 @@
 #include "upnp.h"
 #include "qobuz.h"
 
+#include <chrono>
 #include <cmath>
 
 using namespace wr;
@@ -396,7 +397,6 @@ static void test_wrap() {
 
 static void checkLayout(int W, int H, int n) {
     Layout L = computeLayout(W, H, n);
-    const Rect screen{0, 0, W, H};
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
@@ -707,7 +707,8 @@ static void test_upnp_queue() {
     TEST_ASSERT_EQUAL_STRING("a=1&mytoken=x", maskSecrets("a=1&mytoken=x").c_str());  // pas un paramètre "token"
     TEST_ASSERT_EQUAL_STRING("{\"clientId\":\"***\",\"accessToken\" : \"***\",\"userName\":\"x\"}",
                              maskSecrets("{\"clientId\":\"123\",\"accessToken\" : \"a\\\"b\",\"userName\":\"x\"}").c_str());
-    TEST_ASSERT_EQUAL_STRING("{\"token\":12}", maskSecrets("{\"token\":12}").c_str());  // pas une chaîne : inchangé
+    // Valeur numérique : masquée aussi désormais (avant : inchangée)
+    TEST_ASSERT_EQUAL_STRING("{\"token\":***}", maskSecrets("{\"token\":12}").c_str());
     TEST_ASSERT_EQUAL_STRING("x?app_id=***&uid=***&eid=***&hmac=***&album_id=42",
                              maskSecrets("x?app_id=123&uid=9&eid=abc&hmac=f00&album_id=42").c_str());
     TEST_ASSERT_EQUAL_STRING("so***@ex***", maskAccount(q.user).c_str());
@@ -833,7 +834,23 @@ static void test_shares_word() {
     TEST_ASSERT_TRUE(sharesWord("aretha frank", {"Respect", "Aretha Franklin", "Lady Soul"}));
     TEST_ASSERT_TRUE(sharesWord("Beyonc\xC3\xA9", {"BEYONCE"}));  // accents et casse ignorés
     TEST_ASSERT_FALSE(sharesWord("justin hurwitz", {"Respect", "Aretha Franklin"}));
-    TEST_ASSERT_FALSE(sharesWord("a b", {"a b c"}));  // mots trop courts : pas de preuve
+    // Mots courts seulement : requête entière comparée mot pour mot (avant : jamais en rapport, et chaque
+    // écriture de l'adresse était essayée, ~10 s chacune)
+    TEST_ASSERT_TRUE(sharesWord("a b", {"a b c"}));
+    TEST_ASSERT_FALSE(sharesWord("a b", {"ab c"}));
+    TEST_ASSERT_TRUE(sharesWord("U2", {"One", "U2", "Achtung Baby"}));
+    TEST_ASSERT_FALSE(sharesWord("U2", {"U23 Live"}));
+    TEST_ASSERT_TRUE(sharesWord("Yo Yo Ma", {"Bach: Cello Suites", "Yo-Yo Ma"}));
+    TEST_ASSERT_TRUE(sharesWord("AC DC", {"Back in Black", "AC/DC"}));
+    TEST_ASSERT_TRUE(sharesWord("!!!", {"x"}));  // rien à comparer : en rapport
+    // Lettres non latines gardées (cyrillique en minuscules)
+    TEST_ASSERT_TRUE(sharesWord("\xD0\x9A\xD0\xB8\xD0\xBD\xD0\xBE", {"\xD0\x93\xD1\x80\xD1\x83\xD0\xBF\xD0\xBF\xD0\xB0", "\xD0\x9A\xD0\x98\xD0\x9D\xD0\x9E"}));  // Кино / КИНО
+    TEST_ASSERT_FALSE(sharesWord("\xD0\x9A\xD0\xB8\xD0\xBD\xD0\xBE", {"Daft Punk"}));
+    TEST_ASSERT_TRUE(sharesWord("\xE5\x91\xA8\xE6\x9D\xB0", {"\xE5\x91\xA8\xE6\x9D\xB0\xE5\x80\xAB"}));  // 周杰 / 周杰倫
+    TEST_ASSERT_EQUAL_STRING("\xD0\xBA\xD0\xB8\xD0\xBD\xD0\xBE", normalizeText("\xD0\x9A\xD0\x98\xD0\x9D\xD0\x9E!").c_str());
+    TEST_ASSERT_EQUAL_STRING("a b", normalizeText("a\xE2\x80\x94" "b").c_str());  // tiret cadratin : séparateur
+    TEST_ASSERT_EQUAL_STRING("strasse aeon", normalizeText("Stra\xC3\x9F" "e \xC3\x86on").c_str());
+    TEST_ASSERT_EQUAL_STRING("x y", normalizeText("x\xFF\xC3y").c_str());  // octets invalides : séparateurs
 }
 
 static void test_deezer() {
@@ -952,6 +969,269 @@ static void test_fields() {
     TEST_ASSERT_TRUE(decodeFields("").empty());
 }
 
+// --- Corrections de la revue de code (chaque cas contient l'entrée qui posait problème)
+
+static void test_wrap_empty() {
+    // Texte vide ou fait d'espaces : une ligne (ui.cpp lit wrapText(...)[0])
+    for (const char* s : {"", " ", "     "}) {
+        auto l = wrapText(s, 100, 1, fakeMeasure);
+        TEST_ASSERT_EQUAL(1, (int)l.size());
+        TEST_ASSERT_EQUAL_STRING("", l[0].c_str());
+        TEST_ASSERT_EQUAL(1, (int)wrapText(s, 100, 3, fakeMeasure).size());
+    }
+    TEST_ASSERT_TRUE(wrapText("abc", 100, 0, fakeMeasure).empty());
+    // Titres faits d'espaces : vides
+    PlayerStatus st = parsePlayerStatus("{\"status\":\"play\",\"Title\":\" \",\"Artist\":\"  A  \",\"Album\":\"\"}");
+    TEST_ASSERT_EQUAL_STRING("", st.title.c_str());
+    TEST_ASSERT_EQUAL_STRING("A", st.artist.c_str());
+    TrackMeta m = parseMetaInfo("{\"metaData\":{\"title\":\" \",\"artist\":\" Miles \",\"album\":\" unknow \"}}");
+    TEST_ASSERT_EQUAL_STRING("", m.title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Miles", m.artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("", m.album.c_str());
+}
+
+static void test_json_array_progress() {
+    // '}' égaré au niveau du tableau : boucle sans fin avant
+    TEST_ASSERT_TRUE(parseDeezerAlbums("{\"data\":[}").empty());
+    TEST_ASSERT_TRUE(parseQobuzTracks("{\"tracks\":{\"items\":[}]}}").empty());
+    auto a = jsonArray("[1,}2,:3]");
+    TEST_ASSERT_EQUAL(3, (int)a.size());
+    TEST_ASSERT_EQUAL_STRING("2", a[1].c_str());
+    TEST_ASSERT_TRUE(parseDeezerTracks("{\"data\":[}]}").empty());
+}
+
+static void test_restore_stopped() {
+    // La recherche a arrêté la musique (DeleteQueue) et sa file est restée vide : remise si la file est connue
+    PlaybackBefore before;
+    before.playing = true;
+    before.title = "Song";
+    before.posMs = 60000;
+    before.inQueue = true;
+    PlayerStatus now;  // arrêt, pas de titre
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBack, (int)restoreAction(before, now));
+    now.title = "Song";  // en pause sur le même morceau
+    TEST_ASSERT_EQUAL((int)RestoreAction::PutBack, (int)restoreAction(before, now));
+    before.inQueue = false;  // AirPlay, Spotify… : impossible à relancer d'ici
+    TEST_ASSERT_EQUAL((int)RestoreAction::Nothing, (int)restoreAction(before, now));
+    now.title = "";
+    TEST_ASSERT_EQUAL((int)RestoreAction::Nothing, (int)restoreAction(before, now));
+}
+
+static double secondsSince(std::chrono::steady_clock::time_point t0) {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
+static void test_xml_hostile_speed() {
+    // 300 Ko de '<' ou de '&' : temps linéaire (200 Ko de '<' prenaient 52 s)
+    const std::string lt(300000, '<'), amp(300000, '&');
+    std::string mixed;
+    for (int i = 0; i < 30000; ++i) mixed += "<a&b;<";
+    const auto t0 = std::chrono::steady_clock::now();
+    std::string v;
+    for (const std::string* s : std::initializer_list<const std::string*>{&lt, &amp, &mixed}) {
+        xmlElement(*s, "Track1", v);
+        xmlElements(*s, "a");
+        parseQueueContext(*s);
+        TEST_ASSERT_TRUE(xmlUnescape(*s).size() <= s->size());
+    }
+    TEST_ASSERT_TRUE(secondsSince(t0) < 3.0);
+    // Noms longs : toujours trouvés jusqu'à 63 caractères, ignorés au-delà
+    const std::string name(60, 'n');
+    TEST_ASSERT_TRUE(xmlElement("<" + name + ">x</" + name + ">", name, v));
+    TEST_ASSERT_EQUAL_STRING("x", v.c_str());
+}
+
+static void test_hex_only_for_status() {
+    // Noms en texte ordinaire : « 2021 » n'est pas de l'hexadécimal (devenait « ! »)
+    WiimIdentity w = parseStatusEx("{\"uuid\":\"u\",\"DeviceName\":\"2021\"}");
+    TEST_ASSERT_EQUAL_STRING("2021", w.name.c_str());
+    w = parseStatusEx("{\"uuid\":\"u\",\"DeviceName\":\" \",\"ssid\":\"4142\"}");
+    TEST_ASSERT_EQUAL_STRING("4142", w.name.c_str());
+    std::vector<Preset> p;
+    TEST_ASSERT_TRUE(parsePresetInfo("{\"preset_list\":[{\"number\":1,\"name\":\"2021\"}]}", p));
+    TEST_ASSERT_EQUAL_STRING("2021", p[0].label.c_str());
+    // getPlayerStatus : toujours décodé
+    TEST_ASSERT_EQUAL_STRING("AB", parsePlayerStatus("{\"status\":\"play\",\"Title\":\"4142\"}").title.c_str());
+}
+
+static void test_mask_more() {
+    TEST_ASSERT_EQUAL_STRING("{\"app_id\": ***}", maskSecrets("{\"app_id\": 123456789}").c_str());
+    TEST_ASSERT_EQUAL_STRING("<accessToken>***</accessToken>", maskSecrets("<accessToken>SECRET</accessToken>").c_str());
+    TEST_ASSERT_EQUAL_STRING("<u:accessToken>***</u:accessToken>", maskSecrets("<u:accessToken>SECRET</u:accessToken>").c_str());
+    TEST_ASSERT_EQUAL_STRING("&lt;token&gt;***&lt;/token&gt;", maskSecrets("&lt;token&gt;SECRET&lt;/token&gt;").c_str());
+    TEST_ASSERT_TRUE(maskSecrets("f(token=SECRET)").find("SECRET") == std::string::npos);
+    TEST_ASSERT_TRUE(maskSecrets("'token=SECRET'").find("SECRET") == std::string::npos);
+    TEST_ASSERT_TRUE(maskSecrets("\"token=SECRET\"").find("SECRET") == std::string::npos);
+    TEST_ASSERT_EQUAL_STRING("a\ttoken=***\tb", maskSecrets("a\ttoken=SECRET\tb").c_str());
+    TEST_ASSERT_EQUAL_STRING("u=x%3Fuser_auth_token%3D***%26b%3D1",
+                             maskSecrets("u=x%3Fuser_auth_token%3DSECRET%26b%3D1").c_str());
+    TEST_ASSERT_EQUAL_STRING("q%26token%3d***", maskSecrets("q%26token%3dSECRET").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\"accessToken\":\n  \"***\"}", maskSecrets("{\"accessToken\":\n  \"SECRET\"}").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\\\"accessToken\\\":\\\"***\\\"}", maskSecrets("{\\\"accessToken\\\":\\\"SECRET\\\"}").c_str());
+    TEST_ASSERT_EQUAL_STRING("{&quot;clientId&quot;:&quot;***&quot;}", maskSecrets("{&quot;clientId&quot;:&quot;123&quot;}").c_str());
+    // Inchangés : autre nom, valeur qui est un nom de clé, objet
+    TEST_ASSERT_EQUAL_STRING("mytoken=x&my_sig=y", maskSecrets("mytoken=x&my_sig=y").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\"name\":\"token\",\"n\":1}", maskSecrets("{\"name\":\"token\",\"n\":1}").c_str());
+    TEST_ASSERT_EQUAL_STRING("{\"token\":{\"a\":1}}", maskSecrets("{\"token\":{\"a\":1}}").c_str());
+    TEST_ASSERT_EQUAL_STRING("token", maskSecrets("token").c_str());
+}
+
+static void test_http_chunks() {
+    const std::string h = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n";
+    // Données d'un morceau qui contiennent « \r\n0\r\n\r\n » : pas la fin
+    const std::string data = "\r\n0\r\n\r\nxyz";  // 10 octets
+    TEST_ASSERT_FALSE(httpFrame(h + "a\r\n" + data).complete);
+    TEST_ASSERT_FALSE(httpFrame(h + "a\r\n" + data + "\r\n").complete);
+    HttpFrame f = httpFrame(h + "a\r\n" + data + "\r\n0\r\n\r\n");
+    TEST_ASSERT_TRUE(f.complete && f.reusable);
+    HttpResponse r;
+    TEST_ASSERT_TRUE(parseHttpResponse(h + "a\r\n" + data + "\r\n0\r\n\r\n", r));
+    TEST_ASSERT_TRUE(r.body == data);
+    // Extensions de morceau, en-têtes de fin, taille en majuscules
+    TEST_ASSERT_TRUE(parseHttpResponse(h + "A;x=1\r\n0123456789\r\n0\r\nX-T: 1\r\n\r\n", r));
+    TEST_ASSERT_EQUAL_STRING("0123456789", r.body.c_str());
+    TEST_ASSERT_FALSE(httpFrame(h + "0\r\nX-T: 1\r\n").complete);
+    // Tronqué : refusé (avant : corps partiel accepté)
+    TEST_ASSERT_FALSE(parseHttpResponse(h + "4\r\nWi", r));
+    TEST_ASSERT_FALSE(parseHttpResponse(h + "4\r\nWiki\r\n", r));
+    TEST_ASSERT_FALSE(parseHttpResponse(h, r));
+    // Abîmé : fin de lecture (inutile d'attendre), connexion non réutilisée, réponse refusée
+    f = httpFrame(h + "zz\r\n");
+    TEST_ASSERT_TRUE(f.complete && !f.reusable);
+    f = httpFrame(h + "2\r\nabcd\r\n0\r\n\r\n");
+    TEST_ASSERT_TRUE(f.complete && !f.reusable);
+    TEST_ASSERT_FALSE(parseHttpResponse(h + "2\r\nabcd\r\n0\r\n\r\n", r));
+    TEST_ASSERT_FALSE(parseHttpResponse(h + "ffffffffffffffec\r\nxyz\r\n0\r\n\r\n", r));
+    // Content-Length illisible : longueur inconnue (avant : 0, réponse « complète » tout de suite)
+    f = httpFrame("HTTP/1.1 200 OK\r\nContent-Length: abc\r\n\r\nOK");
+    TEST_ASSERT_FALSE(f.complete || f.reusable);
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\n").complete);
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length: 2x\r\n\r\nOK").complete);
+    TEST_ASSERT_TRUE(httpFrame("HTTP/1.1 200 OK\r\ncontent-length:2\r\n\r\nOK").complete);
+    // Transfer-Encoding l'emporte sur Content-Length
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n").complete);
+    TEST_ASSERT_FALSE(httpFrame("HTTP/1.1 200 OK\r\nConnection: Close\r\nContent-Length: 0\r\n\r\n").reusable);
+}
+
+static void test_deezer_ids() {
+    // Numéros au-delà de 2^31 (32 bits sur l'ESP32-P4) ; « album » et « artist » comme titres
+    auto t = parseDeezerTracks(
+        "{\"data\":[{\"id\":3000000001,\"title\":\"album\",\"artist\":{\"id\":5,\"name\":\"A\"},"
+        "\"album\":{\"id\":\"4294967297\",\"title\":\"B\",\"cover_medium\":\"https:\\/\\/e\\/c.jpg\"}},"
+        "{\"id\":2,\"title\":\"artist\",\"album\":{\"id\":7,\"title\":\"C\"},\"artist\":{\"name\":\"D\"}}]}");
+    TEST_ASSERT_EQUAL(2, (int)t.size());
+    TEST_ASSERT_TRUE(sizeof(t[0].id) == 8 && sizeof(t[0].albumId) == 8);
+    TEST_ASSERT_TRUE(t[0].id == 3000000001LL);
+    TEST_ASSERT_TRUE(t[0].albumId == 4294967297LL);
+    TEST_ASSERT_EQUAL_STRING("album", t[0].title.c_str());
+    TEST_ASSERT_EQUAL_STRING("A", t[0].artist.c_str());
+    TEST_ASSERT_EQUAL_STRING("B", t[0].album.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://e/c.jpg", t[0].cover.c_str());
+    TEST_ASSERT_TRUE(t[1].albumId == 7);
+    TEST_ASSERT_EQUAL_STRING("D", t[1].artist.c_str());
+    TEST_ASSERT_TRUE(parseDeezerTracks("{\"data\":[{\"id\":-3,\"title\":\"x\"},{\"id\":\"12a\",\"title\":\"y\"}]}").empty());
+}
+
+static void test_escapes_strict() {
+    std::string v;
+    TEST_ASSERT_TRUE(jsonString("{\"a\":\"l1\\r\\nl2\\b\\f\\/\"}", "a", v));
+    TEST_ASSERT_EQUAL_STRING("l1\nl2/", v.c_str());  // avant : « l1r\nl2bf/ »
+    TEST_ASSERT_EQUAL_STRING("l1\nl2", jsonText("\"l1\\r\\nl2\\b\\f\"").c_str());
+    // Références numériques XML refusées : NUL, contrôle, moitié de paire, signes, espaces, hors Unicode
+    for (const char* bad : {"&#0;", "&#1;", "&#x1F;", "&#xD800;", "&#-1;", "&#+65;", "&# 65;", "&#x110000;", "&#;", "&#x;"})
+        TEST_ASSERT_EQUAL_STRING(bad, xmlUnescape(bad).c_str());
+    TEST_ASSERT_EQUAL_STRING("\tA\n\xF0\x9F\x8E\xB5", xmlUnescape("&#9;&#65;&#x0A;&#x1F3B5;").c_str());
+    TEST_ASSERT_EQUAL_STRING("a &b c;", xmlUnescape("a &b c;").c_str());
+    TEST_ASSERT_EQUAL_STRING("&abcdefghijkl;", xmlUnescape("&abcdefghijkl;").c_str());  // trop long : brut
+}
+
+static void test_template_empty_element() {
+    // <SearchUrl/> : remplacé (avant : gardé devant le nouveau et lu en premier, adresse vide)
+    const std::string t = "<PlayList><ListName/><ListInfo><SourceName>Qobuz</SourceName><SearchUrl/></ListInfo>"
+                          "<Tracks/></PlayList>";
+    QueueInfo q = parseQueueContext(queueFromTemplate(t, "n", "https://x/y?a=1&b=2"));
+    TEST_ASSERT_EQUAL_STRING("n", q.listName.c_str());
+    TEST_ASSERT_EQUAL_STRING("https://x/y?a=1&b=2", q.searchUrl.c_str());
+    q = parseQueueContext(queueFromTemplate("<PlayList><ListInfo/></PlayList>", "n", "https://x/z"));
+    TEST_ASSERT_EQUAL_STRING("https://x/z", q.searchUrl.c_str());
+}
+
+// Toutes les fonctions d'analyse sur des entrées tronquées ou absurdes : elles doivent seulement rendre la main
+// (avec ASan/UBSan dans [env:native], cela garde contre les plantages et les boucles sans fin)
+static size_t g_sink = 0;
+
+static void feedAll(const std::string& s) {
+    std::vector<Preset> presets;
+    std::string err, v, ip;
+    HttpResponse r;
+    QobuzAccess acc;
+    long n = 0;
+    uint8_t fp[32];
+    uint16_t port = 0;
+    g_sink += parsePresets(s, presets, err);
+    g_sink += decodeHexText(s).size();
+    g_sink += parsePlayerStatus(s).title.size();
+    g_sink += parseMetaInfo(s).artUrl.size();
+    g_sink += parsePresetInfo(s, presets);
+    g_sink += parseStatusEx(s).name.size();
+    g_sink += parseHttpResponse(s, r) + r.body.size();
+    const HttpFrame f = httpFrame(s);
+    g_sink += f.complete + f.reusable;
+    g_sink += jsonString(s, "a", v) + jsonInt(s, "a", n);
+    g_sink += ssdpHost(s, ip) + isHttpUrl(s) + isValidHost(s) + parseFingerprint(s, fp);
+    std::string name;
+    splitHostPort(s, name, port, 1);
+    g_sink += baselineCoverUrl(s).size() + htmlEscape(s).size();
+    g_sink += wrapText(s, 50, 2, fakeMeasure).size();
+    g_sink += decodeFields(s).size() + utf8PopBack(s).size();
+    const QueueInfo q = parseQueueContext(s);
+    g_sink += q.items.size() + queueKey(q).size() + isLiveQueue(q) + queueIndexOf(q, "a", true);
+    g_sink += xmlElement(s, "a", v) + xmlElements(s, "Track1").size() + xmlUnescape(s).size();
+    g_sink += parseUpnpServices(s).size() + parseScpdActions(s).size() + parseScpdArguments(s, "a").size();
+    g_sink += queueFromTemplate(s, "n", "u").size() + maskSecrets(s).size() + favoritesFromText(s).size();
+    g_sink += urlOrigin(s).size() + urlQueryEncode(s).size() + maskAccount(s).size();
+    g_sink += parseQobuzTracks(s).size() + parseQobuzAlbums(s).size() + parseQobuzAccess(s, acc);
+    g_sink += parseDeezerTracks(s).size() + parseDeezerAlbums(s).size() + jsonValuesOf(s, "a").size();
+    g_sink += jsonTop(s, "a").size() + jsonText(s).size() + jsonArray(s).size();
+    g_sink += normalizeText(s).size() + sharesWord(s, {s, "abc"}) + deezerUserId(s).size();
+    g_sink += cleanTranscript(s).size();
+}
+
+static void test_parsers_robust() {
+    const auto t0 = std::chrono::steady_clock::now();
+    const std::string samples[] = {
+        "{\"status\":\"play\",\"Title\":\"4142\",\"vol\":\"42\",\"curpos\":\"1\",\"totlen\":\"9\"}",
+        "{\"metaData\":{\"title\":\"So \\u00e9 \\ud83d\\ude00\",\"albumArtURI \":\"https://a/b\",\"sampleRate\":\"44100\"}}",
+        "{\"preset_list\":[{\"number\":1,\"name\":\"FIP\",\"picurl\":\"http://p\"},{\"number\":2}]}",
+        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n4;e\r\nWiki\r\n0\r\n\r\n",
+        "HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nOK",
+        "<?xml version=\"1.0\"?><PlayList><ListName>L &amp; M</ListName><ListInfo><SourceName>Qobuz</SourceName>"
+        "<SearchUrl>https://q/a?x=1&amp;user_auth_token=S</SearchUrl><TrackNumber>2</TrackNumber></ListInfo><Tracks>"
+        "<Track1><Metadata>&lt;DIDL-Lite&gt;&lt;dc:title&gt;T &amp;amp; U&lt;/dc:title&gt;&lt;/DIDL-Lite&gt;</Metadata>"
+        "</Track1><Track2/></Tracks></PlayList>",
+        "<root><service><serviceType>urn:x</serviceType><controlURL>/c</controlURL></service></root>",
+        "{\"tracks\":{\"items\":[{\"id\":1,\"title\":\"t\",\"album\":{\"id\":\"a\",\"image\":{\"small\":\"s\"}},"
+        "\"performer\":{\"name\":\"p\"}}]},\"albums\":{\"items\":[{\"id\":\"x\",\"title\":\"y\"}]}}",
+        "{\"data\":[{\"id\":3135556,\"title\":\"H\",\"artist\":{\"name\":\"D\"},\"album\":{\"id\":3,\"title\":\"x\"}}]}",
+        "{\"clientId\":\"1\",\"accessToken\":\"t\",\"userName\":\"u\"}",
+        "f1\tk\tTitle\tArtist\tQobuz\thttps://a\nssid\tLive\\tbox\n1=FIP\n# c\n",
+        "https://www.deezer.com/fr/profile/123456 x?token=a&sig=b \xC3\xA9\xE2\x80\xA6\xF0\x9F\x8E\xB5",
+    };
+    for (const std::string& s : samples)
+        for (size_t k = 0; k <= s.size(); ++k) feedAll(s.substr(0, k));
+    for (char c : std::string("<&{[}]\"\\:;%\r\n\t\x80\xC3")) {
+        feedAll(std::string(1, c));
+        feedAll(std::string(3000, c));
+    }
+    std::string mix;
+    for (int i = 0; i < 500; ++i) mix += "<{[\"\\&#x;}]>%3D=\r\n0\r\n";
+    feedAll(mix);
+    feedAll("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string(3000, 'f'));
+    feedAll("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + std::string(3000, '0'));
+    TEST_ASSERT_TRUE(g_sink > 0);
+    TEST_ASSERT_TRUE(secondsSince(t0) < 8.0);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_presets_ok);
@@ -990,5 +1270,16 @@ int main() {
     RUN_TEST(test_voice_audio);
     RUN_TEST(test_deezer_user);
     RUN_TEST(test_firmware_stream);
+    RUN_TEST(test_wrap_empty);
+    RUN_TEST(test_json_array_progress);
+    RUN_TEST(test_restore_stopped);
+    RUN_TEST(test_xml_hostile_speed);
+    RUN_TEST(test_hex_only_for_status);
+    RUN_TEST(test_mask_more);
+    RUN_TEST(test_http_chunks);
+    RUN_TEST(test_deezer_ids);
+    RUN_TEST(test_escapes_strict);
+    RUN_TEST(test_template_empty_element);
+    RUN_TEST(test_parsers_robust);
     return UNITY_END();
 }

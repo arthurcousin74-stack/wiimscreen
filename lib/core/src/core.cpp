@@ -105,7 +105,10 @@ bool parsePresets(const std::string& text, std::vector<Preset>& out, std::string
             error = L("12 presets at most", "12 presets au maximum");
             return false;
         }
-        out.push_back(Preset{static_cast<int>(slot), label});
+        Preset preset;
+        preset.slot = static_cast<int>(slot);
+        preset.label = label;
+        out.push_back(preset);
         if (end == text.size()) break;
     }
     if (out.empty()) {
@@ -194,8 +197,9 @@ bool jsonString(const std::string& json, const std::string& key, std::string& ou
                 switch (e) {
                     case 'n': out += '\n'; break;
                     case 't': out += '\t'; break;
+                    case 'r': case 'b': case 'f': break;  // \r\n → \n ; retour arrière, saut de page : retirés
                     case 'u': q = decodeJsonUnicode(json, q, out); break;
-                    default: out += e;
+                    default: out += e;  // \" \\ \/
                 }
             } else {
                 out += json[q];
@@ -216,9 +220,11 @@ PlayerStatus parsePlayerStatus(const std::string& json) {
     st.loading = (v == "loading" || v == "load");
     st.playing = (v == "play" || st.loading);
     if (jsonString(json, "vol", v)) st.volume = std::max(0, std::min(100, std::atoi(v.c_str())));
-    if (jsonString(json, "Title", v)) st.title = decodeHexText(v);
-    if (jsonString(json, "Artist", v)) st.artist = decodeHexText(v);
-    if (jsonString(json, "Album", v)) st.album = decodeHexText(v);
+    // Seuls Title/Artist/Album de getPlayerStatus sont en hexadécimal (docs/WIIM_API_NOTES.md) ;
+    // espaces retirés : un titre « » ne compte pas comme un titre
+    if (jsonString(json, "Title", v)) st.title = trim(decodeHexText(v));
+    if (jsonString(json, "Artist", v)) st.artist = trim(decodeHexText(v));
+    if (jsonString(json, "Album", v)) st.album = trim(decodeHexText(v));
     long n;
     if (jsonInt(json, "mode", n)) st.mode = static_cast<int>(n);
     if (jsonInt(json, "mute", n)) st.muted = n == 1;
@@ -302,8 +308,8 @@ WiimIdentity parseStatusEx(const std::string& json) {
     std::string v;
     if (!jsonString(json, "uuid", id.uuid) && !jsonString(json, "project", v)) return id;
     id.ok = true;
-    if (!jsonString(json, "DeviceName", id.name) || id.name.empty()) jsonString(json, "ssid", id.name);
-    id.name = decodeHexText(id.name);
+    if (!jsonString(json, "DeviceName", id.name) || trim(id.name).empty()) jsonString(json, "ssid", id.name);
+    id.name = trim(id.name);  // texte ordinaire, pas d'hexadécimal (« 2021 » reste « 2021 »)
     if (id.name.size() > 60) id.name.resize(60);
     if (id.name.empty()) id.name = "WiiM";
     return id;
@@ -336,11 +342,15 @@ bool parsePresetInfo(const std::string& json, std::vector<Preset>& out) {
         std::string name, pic;
         if (!jsonInt(item, "number", number) || number < 1 || number > 20) continue;
         jsonString(item, "name", name);
-        name = decodeHexText(name);
+        name = trim(name);  // texte ordinaire, pas d'hexadécimal
         if (isUnknown(name)) name = "Preset " + std::to_string(number);
         if (name.size() > 60) name.resize(60);
         if (jsonString(item, "picurl", pic) && !isHttpUrl(pic)) pic.clear();
-        out.push_back(Preset{static_cast<int>(number), name, pic});
+        Preset preset;
+        preset.slot = static_cast<int>(number);
+        preset.label = name;
+        preset.picUrl = pic;
+        out.push_back(preset);
         if (static_cast<int>(out.size()) >= kMaxPresets) break;
     }
     std::sort(out.begin(), out.end(), [](const Preset& a, const Preset& b) { return a.slot < b.slot; });
@@ -357,9 +367,10 @@ TrackMeta parseMetaInfo(const std::string& json) {
         return jsonString(json, key, v) || jsonString(json, std::string(key) + " ", v);
     };
     std::string v;
-    if (get("title", v) && !isUnknown(v)) m.title = v;
-    if (get("artist", v) && !isUnknown(v)) m.artist = v;
-    if (get("album", v) && !isUnknown(v)) m.album = v;
+    // Espaces retirés : un titre « » ne compte pas comme un titre
+    if (get("title", v) && !isUnknown(v = trim(v))) m.title = v;
+    if (get("artist", v) && !isUnknown(v = trim(v))) m.artist = v;
+    if (get("album", v) && !isUnknown(v = trim(v))) m.album = v;
     if (get("albumArtURI", v) && isHttpUrl(v)) m.artUrl = v;
     if (get("sampleRate", v)) m.sampleRate = std::max(0, std::atoi(v.c_str()));
     if (get("bitDepth", v)) m.bitDepth = std::max(0, std::atoi(v.c_str()));
@@ -418,6 +429,79 @@ ImageType sniffImage(const uint8_t* d, size_t n) {
     return ImageType::Unknown;
 }
 
+namespace {
+
+// Valeur (sans espaces autour) de l'en-tête `name` (en minuscules) dans des en-têtes déjà en minuscules
+bool headerValue(const std::string& lowerHeaders, const char* name, std::string& value) {
+    const std::string needle = std::string("\n") + name + ":";
+    size_t p = lowerHeaders.find(needle);
+    if (p == std::string::npos) return false;
+    p += needle.size();
+    size_t e = lowerHeaders.find('\r', p);
+    if (e == std::string::npos) e = lowerHeaders.size();
+    value = trim(lowerHeaders.substr(p, e - p));
+    return true;
+}
+
+// Content-Length : chiffres seulement (« abc », « -1 », « 12x » : longueur inconnue)
+bool contentLength(const std::string& lowerHeaders, size_t& n) {
+    std::string v;
+    if (!headerValue(lowerHeaders, "content-length", v) || v.empty() || v.size() > 9) return false;  // < 1 Go, 32 bits
+    n = 0;
+    for (char c : v) {
+        if (c < '0' || c > '9') return false;
+        n = n * 10 + static_cast<size_t>(c - '0');
+    }
+    return true;
+}
+
+bool isChunked(const std::string& lowerHeaders) {
+    std::string v;
+    return headerValue(lowerHeaders, "transfer-encoding", v) && v.find("chunked") != std::string::npos;
+}
+
+enum class Chunks { Incomplete, Complete, Malformed };
+
+// Parcourt les morceaux d'un corps "chunked" à partir de `p` (taille en hexadécimal, extensions « ;… »
+// ignorées, données, CRLF ; morceau de taille 0 puis en-têtes de fin éventuels). `dec` (optionnel) reçoit
+// les données. Coût : proportionnel au nombre de morceaux, pas à leur taille.
+Chunks walkChunks(const std::string& raw, size_t p, std::string* dec) {
+    while (true) {
+        size_t n = 0, k = p, digits = 0;
+        int d;
+        while (k < raw.size() && (d = hexVal(raw[k])) >= 0) {
+            if (n > 0xFFFFFF) return Chunks::Malformed;  // 256 Mo ou plus : hostile (et n + 2 tient en 32 bits)
+            ++digits;
+            n = n * 16 + static_cast<size_t>(d);
+            ++k;
+        }
+        if (k >= raw.size()) return Chunks::Incomplete;
+        if (digits == 0) return Chunks::Malformed;
+        size_t le = raw.find("\r\n", k);
+        if (le == std::string::npos) return raw.size() - k > 256 ? Chunks::Malformed : Chunks::Incomplete;
+        if (le - k > 256 || (le > k && raw[k] != ';' && raw[k] != ' ' && raw[k] != '\t')) return Chunks::Malformed;
+        p = le + 2;
+        if (n == 0) {
+            // Fin : ligne vide tout de suite, ou en-têtes de fin terminés par une ligne vide
+            if (raw.size() < p + 2) return Chunks::Incomplete;
+            if (raw.compare(p, 2, "\r\n") == 0) return Chunks::Complete;
+            return raw.find("\r\n\r\n", p) != std::string::npos ? Chunks::Complete : Chunks::Incomplete;
+        }
+        if (raw.size() - p < n + 2) return Chunks::Incomplete;
+        if (raw.compare(p + n, 2, "\r\n") != 0) return Chunks::Malformed;
+        if (dec) dec->append(raw, p, n);
+        p += n + 2;
+    }
+}
+
+std::string lowerCopy(const std::string& s) {
+    std::string o = s;
+    std::transform(o.begin(), o.end(), o.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return o;
+}
+
+}  // namespace
+
 bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
     size_t eol = raw.find("\r\n");
     if (eol == std::string::npos || raw.compare(0, 5, "HTTP/") != 0) return false;
@@ -426,25 +510,15 @@ bool parseHttpResponse(const std::string& raw, HttpResponse& out) {
     out.status = std::atoi(raw.c_str() + sp + 1);
     size_t hdrEnd = raw.find("\r\n\r\n");
     if (hdrEnd == std::string::npos) return false;
-    std::string headers = raw.substr(0, hdrEnd);
-    std::transform(headers.begin(), headers.end(), headers.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    std::string body = raw.substr(hdrEnd + 4);
-    if (headers.find("transfer-encoding: chunked") != std::string::npos) {
+    const std::string headers = lowerCopy(raw.substr(0, hdrEnd));
+    if (isChunked(headers)) {
+        // Corps tronqué ou abîmé : refusé (pas de réponse partielle prise pour la réponse entière)
         std::string dec;
-        size_t p = 0;
-        while (p < body.size()) {
-            size_t le = body.find("\r\n", p);
-            if (le == std::string::npos) break;
-            long n = std::strtol(body.substr(p, le - p).c_str(), nullptr, 16);
-            if (n <= 0) break;
-            p = le + 2;
-            dec += body.substr(p, static_cast<size_t>(n));
-            p += static_cast<size_t>(n) + 2;
-        }
-        body = dec;
+        if (walkChunks(raw, hdrEnd + 4, &dec) != Chunks::Complete) return false;
+        out.body = dec;
+    } else {
+        out.body = raw.substr(hdrEnd + 4);
     }
-    out.body = body;
     return true;
 }
 
@@ -452,22 +526,25 @@ HttpFrame httpFrame(const std::string& raw) {
     HttpFrame f;
     size_t hdrEnd = raw.find("\r\n\r\n");
     if (hdrEnd == std::string::npos) return f;
-    std::string headers = raw.substr(0, hdrEnd);
-    std::transform(headers.begin(), headers.end(), headers.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    const std::string headers = lowerCopy(raw.substr(0, hdrEnd));
     const size_t bodyStart = hdrEnd + 4;
+    std::string conn;
+    const bool hasConn = headerValue(headers, "connection", conn);
     const bool http10 = headers.compare(0, 8, "http/1.0") == 0;
-    const bool closes = headers.find("\nconnection: close") != std::string::npos ||
-                        (http10 && headers.find("\nconnection: keep-alive") == std::string::npos);
-    size_t p = headers.find("\ncontent-length:");
-    if (p != std::string::npos) {
-        long n = std::strtol(headers.c_str() + p + 16, nullptr, 10);
-        if (n < 0) return f;
-        f.complete = raw.size() >= bodyStart + static_cast<size_t>(n);
-    } else if (headers.find("\ntransfer-encoding: chunked") != std::string::npos) {
-        f.complete = raw.find("\r\n0\r\n\r\n", bodyStart - 2) != std::string::npos;
+    const bool closes = (hasConn && conn.find("close") != std::string::npos) ||
+                        (http10 && !(hasConn && conn.find("keep-alive") != std::string::npos));
+    size_t n = 0;
+    if (isChunked(headers)) {  // Transfer-Encoding l'emporte sur Content-Length (RFC 7230 3.3.3)
+        const Chunks c = walkChunks(raw, bodyStart, nullptr);
+        if (c == Chunks::Incomplete) return f;
+        f.complete = true;  // abîmé : inutile d'attendre la suite, parseHttpResponse le refusera
+        f.reusable = c == Chunks::Complete && !closes;
+        return f;
+    }
+    if (contentLength(headers, n)) {
+        f.complete = raw.size() >= bodyStart + n;
     } else {
-        return f;  // longueur inconnue : lire jusqu'à la fermeture
+        return f;  // longueur inconnue (ou illisible) : lire jusqu'à la fermeture
     }
     f.reusable = f.complete && !closes;
     return f;
@@ -572,6 +649,8 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
         }
         lines.push_back(line);
     }
+    // Texte vide ou fait d'espaces : une ligne vide quand même (les appelants lisent [0])
+    if (lines.empty() && maxLines >= 1) lines.emplace_back();
     return lines;
 }
 
