@@ -16,9 +16,12 @@ done
 printf 'wait 3000\ntap 932 348\nwait 2000\nquit\n' > "$T/script.txt"
 timeout 60 .pio/build/desktop/program --headless --state "$T/state" --out "$T" --wiim 127.0.0.1:4444 \
     --script "$T/script.txt" > "$T/app.log" 2>&1
-fail() { echo "SELFTEST FAILED: $1"; cat "$T/app.log"; exit 1; }
-grep -q "Presets du WiiM : OK, 2" "$T/app.log" || fail "presets"
-grep -q "Relev.* : OK" "$T/app.log" || fail "status"
+fail() { echo "SELFTEST FAILED: $1"; cat "$T/app.log"; echo "SELFTEST FAILED: $1"; exit 1; }
+# Journal assertions match tagged lines only (src/log.h): "<time>  [tag] key=value ... | <French sentence>"
+HINT="a Journal tag changed or a line is no longer logged: see src/log.h"
+has() { grep -q -- "\\[$1\\] $2" "$T/app.log" || fail "$3: no Journal line \"[$1] $2\" ($HINT)"; }
+has wiim.presets "result=ok count=2 " "presets"
+has wiim.status "result=ok " "status"
 grep -q "setPlayerCmd:pause" "$T/mock.log" || fail "pause command"
 PIN=$(openssl x509 -in "$T/cert.pem" -outform der | sha256sum | cut -c1-64)
 grep -q "^fp	$PIN" "$T/state/settings.txt" || fail "certificate pinning"

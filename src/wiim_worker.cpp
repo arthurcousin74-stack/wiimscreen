@@ -33,6 +33,18 @@ const char* wiimErrorName(WiimError e) {
     return "?";
 }
 
+// Valeur ASCII stable pour les lignes étiquetées du journal (logTagged, src/log.h)
+static const char* errorKey(WiimError e) {
+    switch (e) {
+        case WiimError::None: return "ok";
+        case WiimError::Network: return "network";
+        case WiimError::PinMismatch: return "pin";
+        case WiimError::Http: return "http";
+        case WiimError::Refused: return "refused";
+    }
+    return "unknown";
+}
+
 void WiimWorker::begin(const Settings& s) {
     cfg_ = s;
     client_.configure(cfg_);
@@ -222,7 +234,8 @@ void WiimWorker::pollOnce() {
     r.error = e;
     r.online = e == WiimError::None;
     if (!polledOnce_ || e != lastPollError_)  // seulement les changements : pas de journal inondé
-        logEvent("Relev\xC3\xA9 du WiiM (%s) : %s%s", cfg_.host.c_str(), wiimErrorName(e),
+        logTagged("wiim.status", "result=%s playing=%d | Relev\xC3\xA9 du WiiM (%s) : %s%s", errorKey(e),
+                  r.online && st.playing ? 1 : 0, cfg_.host.c_str(), wiimErrorName(e),
                  r.online ? (st.playing ? ", lecture" : ", arr\xC3\xAAt") : "");
     polledOnce_ = true;
     lastPollError_ = e;
@@ -320,7 +333,8 @@ void WiimWorker::run() {
             ev.kind = WiimEvent::Presets;
             ev.error = client_.presets(ev.presets);
             ev.ok = ev.error == WiimError::None;
-            logEvent("Presets du WiiM : %s, %u", wiimErrorName(ev.error), (unsigned)ev.presets.size());
+            logTagged("wiim.presets", "result=%s count=%u | Presets du WiiM : %s, %u", errorKey(ev.error),
+                      (unsigned)ev.presets.size(), wiimErrorName(ev.error), (unsigned)ev.presets.size());
             notePinning(ev.error);
             push(std::move(ev));
         }
@@ -404,14 +418,14 @@ int upnpRequest(const std::string& url, const char* soapAction, const std::strin
 }
 
 // Journal : lignes courtes (l'écran coupe au-delà), découpées si besoin
-void logLong(const char* label, const std::string& text) {
+// `tag` (facultatif) : première ligne étiquetée (logTagged, src/log.h), avec les paires clé=valeur `kv`
+void logLong(const char* label, const std::string& text, const char* tag = nullptr, const char* kv = "") {
     const size_t kChunk = 56;  // une ligne de l'écran du journal
-    if (text.size() <= kChunk) {
-        logEvent("  %s%s", label, text.c_str());
-        return;
+    for (size_t i = 0; i == 0 || (i < text.size() && i < kChunk * 6); i += kChunk) {
+        const std::string part = text.size() <= kChunk ? text : text.substr(i, kChunk);
+        if (i == 0 && tag) logTagged(tag, "%s | " "  %s%s", kv, label, part.c_str());
+        else logEvent("  %s%s", i == 0 ? label : "  ", part.c_str());
     }
-    for (size_t i = 0; i < text.size() && i < kChunk * 6; i += kChunk)
-        logEvent("  %s%s", i == 0 ? label : "  ", text.substr(i, kChunk).c_str());
 }
 
 // Copie complète sur le port série, sans jeton ni compte en clair
@@ -863,8 +877,10 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
         index = k;
         play = playQueueAt(control, name, index);
     }
-    logEvent("%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d, essai %d) : CreateQueue %d, Play %d (%lu ms)", label,
-             title.c_str(), index, tries, create, play, (unsigned long)(millis() - t0));
+    logTagged("play.result", "create=%d play=%d index=%d tries=%d | "
+              "%s \xE2\x96\xB6 \xC2\xAB %s \xC2\xBB (piste %d, essai %d) : CreateQueue %d, Play %d (%lu ms)",
+              create, play, index, tries, label, title.c_str(), index, tries, create, play,
+              (unsigned long)(millis() - t0));
     nextPoll_ = millis() + 800;
     return play == 200;
 }
@@ -1167,8 +1183,9 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
             p.listName = q.listName;
         }
     }
-    logEvent("Avant la recherche : %s \xC2\xAB %s \xC2\xBB%s", p.playing ? "lecture" : "arr\xC3\xAAt", p.title.c_str(),
-             p.index ? " (file connue)" : "");
+    logTagged("search.before", "playing=%d inqueue=%d | Avant la recherche : %s \xC2\xAB %s \xC2\xBB%s",
+              p.playing ? 1 : 0, p.index ? 1 : 0, p.playing ? "lecture" : "arr\xC3\xAAt", p.title.c_str(),
+              p.index ? " (file connue)" : "");
     return p;
 }
 
@@ -1184,7 +1201,8 @@ bool WiimWorker::shuffleOff(const Playback& before) {
 bool WiimWorker::shuffleBack(const Playback& before, bool changed) {
     if (!changed) return true;
     const WiimError e = client_.command("setPlayerCmd:loopmode:" + String(before.loop));
-    logEvent("Recherche : lecture al\xC3\xA9" "atoire remise (%s)", wiimErrorName(e));
+    logTagged("search.shuffle", "result=%s | Recherche : lecture al\xC3\xA9" "atoire remise (%s)", errorKey(e),
+              wiimErrorName(e));
     return e == WiimError::None;
 }
 
@@ -1214,8 +1232,9 @@ void WiimWorker::undoInterruptedSearch(const wr::PlayerStatus& now) {
         if (unmute && now.playing && !undoKeepsPlayback_) stop = client_.command("setPlayerCmd:stop");
         if (reshuffle) loop = client_.command("setPlayerCmd:loopmode:" + String(u.loop));
         if (unmute) mute = client_.command("setPlayerCmd:mute:0");
-        logEvent("Recherche interrompue : son %s, lecture al\xC3\xA9" "atoire %s", unmute ? wiimErrorName(mute) : "-",
-                 reshuffle ? wiimErrorName(loop) : "-");
+        logTagged("search.undo", "unmute=%s shuffle=%s | Recherche interrompue : son %s, lecture al\xC3\xA9" "atoire %s",
+                  unmute ? errorKey(mute) : "skip", reshuffle ? errorKey(loop) : "skip",
+                  unmute ? wiimErrorName(mute) : "-", reshuffle ? wiimErrorName(loop) : "-");
         if (stop != WiimError::None || loop != WiimError::None || mute != WiimError::None) {
             undoChecked_ = false;  // WiiM injoignable : nouvel essai au prochain relevé réussi
             return;
@@ -1242,7 +1261,8 @@ bool WiimWorker::searchGuardBegin(const std::string& control, SearchGuard& g, St
         g.before = snapshot(control);
     }
     if (!g.before.known) {
-        logEvent("Recherche annul\xC3\xA9" "e : \xC3\xA9tat du WiiM illisible (rien n'est lanc\xC3\xA9)");
+        logTagged("search.cancelled",
+                  "reason=status | Recherche annul\xC3\xA9" "e : \xC3\xA9tat du WiiM illisible (rien n'est lanc\xC3\xA9)");
         error = unreachable;
         return false;
     }
@@ -1275,8 +1295,9 @@ bool WiimWorker::searchGuardEnd(const std::string& control, const SearchGuard& g
         // La file de recherche joue peut-être encore (son coupé) : arrêtée avant de rendre le son
         const WiimError e = client_.command("setPlayerCmd:stop");
         stopped = e == WiimError::None;
-        logEvent("Apr\xC3\xA8s la recherche : musique d'avant non remise, lecture arr\xC3\xAAt\xC3\xA9" "e (%s)",
-                 wiimErrorName(e));
+        logTagged("search.stop",
+                  "result=%s | Apr\xC3\xA8s la recherche : musique d'avant non remise, lecture arr\xC3\xAAt\xC3\xA9" "e (%s)",
+                  errorKey(e), wiimErrorName(e));
         error = wr::L("the music before could not be put back", "la musique d'avant n'a pas pu \xC3\xAAtre remise");
     }
     const bool shuffled = shuffleBack(g.before, g.unshuffled);
@@ -1286,7 +1307,7 @@ bool WiimWorker::searchGuardEnd(const std::string& control, const SearchGuard& g
             pause(600, false);  // la musique d'avant a repris (ou la lecture est arrêtée)
             const WiimError e = client_.command("setPlayerCmd:mute:0");
             unmuted = e == WiimError::None;
-            logEvent("Recherche : son r\xC3\xA9tabli (%s)", wiimErrorName(e));
+            logTagged("search.unmute", "result=%s | Recherche : son r\xC3\xA9tabli (%s)", errorKey(e), wiimErrorName(e));
         } else {
             unmuted = false;  // un morceau jamais choisi pourrait être entendu
             logEvent("Recherche : son laiss\xC3\xA9 coup\xC3\xA9 (arr\xC3\xAAt refus\xC3\xA9)");
@@ -1370,9 +1391,11 @@ bool WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         // Le morceau était en pause : il le reste (le son est encore coupé pour la recherche)
         if (action == wr::RestoreAction::PutBackPaused && p == 200) client_.command("setPlayerCmd:pause");
         ok = c == 200 && p == 200;
+        const bool paused = action == wr::RestoreAction::PutBackPaused;
         if (ok)
-            logEvent("Apr\xC3\xA8s la recherche : musique d'avant remise%s (%d, %d, essai %d)",
-                     action == wr::RestoreAction::PutBackPaused ? " en pause" : "", c, p, tries);
+            logTagged("search.restore", "paused=%d create=%d play=%d tries=%d | "
+                      "Apr\xC3\xA8s la recherche : musique d'avant remise%s (%d, %d, essai %d)",
+                      paused ? 1 : 0, c, p, tries, paused ? " en pause" : "", c, p, tries);
         else
             logEvent("Apr\xC3\xA8s la recherche : remise refus\xC3\xA9" "e (CreateQueue %d, PlayQueueWithIndex %d)", c, p);
     } else {
@@ -1459,7 +1482,8 @@ void WiimWorker::runSearch(const String& query) {
         const std::string& url = v.second;
         const std::string ctx = wr::queueFromTemplate(templ, name, url);
         const int create = createQueue(control, ctx);
-        logEvent("Recherche \xC2\xAB %s \xC2\xBB (%s) : CreateQueue %d", query.c_str(), v.first, create);
+        logTagged("search.queue", "create=%d | Recherche \xC2\xAB %s \xC2\xBB (%s) : CreateQueue %d", create,
+                  query.c_str(), v.first, create);
         logLong("envoy\xC3\xA9 ", url);
         // File refusée (ou sans réponse) : comptée comme une file vide. Avant, toutes les écritures étaient
         // essayées (chacune avec un DeleteQueue qui arrête la lecture), puis « aucun résultat » au lieu d'une erreur.
@@ -1472,10 +1496,12 @@ void WiimWorker::runSearch(const String& query) {
             std::vector<std::string> texts;
             for (auto& t : q.items) texts.insert(texts.end(), {t.title, t.artist, t.album});
             relevant = found && wr::sharesWord(words, texts);
-            logEvent("  %d r\xC3\xA9sultat(s)%s%s", found ? q.tracks : 0, ", sans lecture",
-                     found ? (relevant ? ", en rapport" : ", SANS RAPPORT avec la recherche") : "");
+            logTagged("search.results", "tracks=%d relevant=%d | " "  %d r\xC3\xA9sultat(s)%s%s", found ? q.tracks : 0,
+                      relevant ? 1 : 0, found ? q.tracks : 0, ", sans lecture",
+                      found ? (relevant ? ", en rapport" : ", SANS RAPPORT avec la recherche") : "");
             for (size_t i = 0; i < q.items.size() && i < 2; ++i)
-                logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist);
+                logLong("  - ", q.items[i].title + " \xE2\x80\x94 " + q.items[i].artist, "search.item",
+                        i == 0 ? "n=1" : "n=2");
             if (found && (best.tracks == 0 || relevant)) {
                 best = q;
                 searchQueue_ = name;
@@ -1488,8 +1514,8 @@ void WiimWorker::runSearch(const String& query) {
         if (!wr::searchTryNext(found, relevant, empties, severalWords)) break;
     }
     searchGuardEnd(control, guard, error);  // le WiiM lance la file de recherche dès sa création
-    logEvent("Recherche : termin\xC3\xA9" "e en %lu ms%s", (unsigned long)(millis() - t0),
-             created ? "" : " (file de recherche refus\xC3\xA9" "e par le WiiM)");
+    logTagged("search.done", "created=%d | Recherche : termin\xC3\xA9" "e en %lu ms%s", created,
+              (unsigned long)(millis() - t0), created ? "" : " (file de recherche refus\xC3\xA9" "e par le WiiM)");
     // Aucune file créée : erreur, pas « aucun résultat ». Musique d'avant non remise : dit seulement sans résultat
     // (la liste des résultats reste utile).
     ev.ok = created > 0 && (best.tracks > 0 || error.isEmpty());

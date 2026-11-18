@@ -75,6 +75,12 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   `String(...)` before `+`; never evaluate it at static-initialisation time. The language is `Settings::lang`
   ("en"/"fr", setup page), applied at boot with `wr::setLang`; the keyboard is QWERTY in English, AZERTY in French.
   **The Journal (`logEvent`) stays in French**: the hardware checklist quotes its lines.
+- **Self-tests never match French Journal sentences.** A line that a test checks is written with
+  `logTagged("search.restore", "paused=%d create=%d | <French sentence>", ...)` (`src/log.h`): the Journal screen
+  shows only the sentence; the serial port / terminal shows `[tag] key=value ... | sentence`, and
+  `tools/relay/selftest.sh` and `platform/pc/selftest.sh` grep the tag and the values. Rewording a sentence is safe;
+  renaming a tag or a key means updating those scripts. Tag a new line only when a test needs it (lower-case,
+  dotted by area; ASCII values without spaces).
 - **Code comments are in French** (the original author's language). Keep it consistent within a file; English is
   fine for new files. Non-ASCII text is written as UTF-8 escapes in C strings when needed.
 - **README.md is written in ASD-STE100 Simplified Technical English** (short sentences, active voice, one

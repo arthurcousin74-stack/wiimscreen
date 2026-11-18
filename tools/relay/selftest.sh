@@ -24,7 +24,8 @@ N=0
 fail() {
     echo "SELFTEST FAILED: $1"
     for f in "$T"/sim*.log; do echo "--- $f"; cat "$f"; done
-    echo "--- relay"; cat "$T/relay.log"; echo "--- mock"; grep -v "getPlayerStatus\|getMetaInfo" "$T/mock.log"; exit 1
+    echo "--- relay"; cat "$T/relay.log"; echo "--- mock"; grep -v "getPlayerStatus\|getMetaInfo" "$T/mock.log"
+    echo "SELFTEST FAILED: $1"; exit 1
 }
 # run <script lines>: one start of the simulator (same stored state), Journal in $LOG
 run() {
@@ -33,7 +34,15 @@ run() {
     timeout 90 .pio/build/simreal/program --headless --relay 127.0.0.1:8799 --state "$T/state" --out "$T" \
         --script "$T/script.txt" > "$LOG" 2>&1 || fail "simulator run $N"
 }
-has() { grep -q -- "$1" "$LOG" || fail "$2"; }
+# Journal assertions match tagged lines only (src/log.h): "<time>  [tag] key=value ... | <French sentence>".
+# The French sentence is never matched, so rewording it is harmless.
+HINT="a Journal tag changed or a line is no longer logged: see src/log.h"
+# tagged <tag> [key=value regex]: grep pattern of a tagged Journal line
+tagged() { printf '\\[%s\\] %s' "$1" "${2:-}"; }
+# has <tag> <key=value regex> <what>: a tagged line in the Journal of the last run
+has() { grep -q -- "$(tagged "$1" "$2")" "$LOG" || fail "$3: no Journal line \"[$1] $2\" ($HINT)"; }
+# count <tag> <key=value regex>: number of such lines in the Journal of the last run
+count() { grep -c -- "$(tagged "$1" "$2")" "$LOG" || true; }
 # mock <field>: a field of the mock's getPlayerStatus (Title decoded); mock reset: back to its start state
 mock() {
     python3 - "$1" <<'PY'
@@ -56,20 +65,22 @@ MILES='tap 50 360\nwait 400\ntap 861 541\nwait 150\ntap 975 330\nwait 150\ntap 1
 # 1. Status, presets, pause (932,348), pinning. Then, paused in a queue with shuffle on: search "miles", play the
 #    second result (600,300), search again while it plays.
 run "wait 3000\ntap 932 348\nwait 2000\n${MILES}wait 14000\ntap 600 300\nwait 9000\ntap 50 360\nwait 600\ntap 1089 647\nwait 16000\nquit\n"
-has "Presets du WiiM : OK, 2" "presets"
-has "Relev.* : OK" "status"
+has wiim.presets "result=ok count=2 " "presets"
+has wiim.status "result=ok " "status"
 grep -q "setPlayerCmd:pause" "$T/mock.log" || fail "pause command"
 PIN=$(openssl x509 -in "$T/cert.pem" -outform der | sha256sum | cut -c1-64)
 grep -q "^fp	$PIN" "$T/state/settings.txt" || fail "certificate pinning"
-has "Avant la recherche : arr.*t « Mock Song » (file connue)" "paused track seen before the search"
-has "7 r.*sultat(s), sans lecture, en rapport" "search results"
-grep -A1 "7 r.*sultat(s)" "$LOG" | grep -q -- "- So What " || fail "results in order (shuffle off during the search)"
-has "musique d'avant remise en pause (200, 200" "paused track put back"
-has "atoire remise (OK)" "shuffle put back"
-has "son r.*tabli (OK)" "sound put back"
-has "Qobuz (album) .* « Freddie Freeloader » .*Play 200" "result played from its album"
-has "Avant la recherche : lecture « Freddie Freeloader » (file connue)" "playing track seen before the search"
-has "musique d'avant remise (200, 200" "playing track put back"
+has search.before "playing=0 inqueue=1 | .*Mock Song" "paused track seen before the search"
+has search.results "tracks=7 relevant=1 " "search results"
+# The line right after a results count is the first result
+grep -A1 -- "$(tagged search.results "tracks=7 ")" "$LOG" | grep -q -- "$(tagged search.item "n=1 | .*- So What ")" ||
+    fail "results in order (shuffle off during the search): no \"[search.item] n=1 | ... So What\" right after \"[search.results] tracks=7\" ($HINT)"
+has search.restore "paused=1 create=200 play=200 " "paused track put back"
+has search.shuffle "result=ok " "shuffle put back"
+has search.unmute "result=ok " "sound put back"
+has play.result "create=[0-9]* play=200 .*| Qobuz (album) .*Freddie Freeloader" "result played from its album"
+has search.before "playing=1 inqueue=1 | .*Freddie Freeloader" "playing track seen before the search"
+has search.restore "paused=0 create=200 play=200 " "playing track put back"
 grep -q "setPlayerCmd:seek:" "$T/mock.log" || fail "seek to the position before"
 is Title "Freddie Freeloader" "track before plays again"
 is status play "track before plays again"
@@ -86,9 +97,10 @@ is loop 4 "shuffle off during the search"
 
 # 3. Next start: sound and shuffle put back. Then a search on this WiiM gives up after one empty queue.
 run "wait 4000\n${MILES}wait 16000\nquit\n"
-has "Recherche interrompue : son OK, lecture al.*atoire OK" "interrupted search undone at the next start"
-[ "$(grep -c "Recherche « miles » .* : CreateQueue" "$LOG")" = 1 ] || fail "one try only when the queue stays empty"
-has "Recherche : termin" "empty search finished"
+has search.undo "unmute=ok shuffle=ok " "interrupted search undone at the next start"
+[ "$(count search.queue "create=")" = 1 ] ||
+    fail "one try only when the queue stays empty: $(count search.queue "create=") \"[search.queue]\" lines, expected 1 ($HINT)"
+has search.done "created=" "empty search finished"
 is mute 0 "sound on after the empty search"
 is loop 3 "shuffle on after the empty search"
 [ ! -e "$T/state/fs/fav/search_undo" ] || fail "note removed after the search"
@@ -99,10 +111,11 @@ rm -f "$T/nofill"; mock reset
 printf -- '-1 upnp CreateQueue wiimscreen-recherche\n1 setPlayerCmd:mute:0\n' > "$T/faults"
 run "wait 3000\n${MILES}wait 9000\nquit\n"
 rm -f "$T/faults"
-[ "$(grep -c "Recherche « miles » .* : CreateQueue" "$LOG")" = 1 ] || fail "one try only when the WiiM refuses the queue"
-has "file de recherche refus.*e par le WiiM" "refused search queue reported"
-has "son r.*tabli (refus" "sound put back refused once"
-has "Recherche interrompue : son OK" "sound put back at the next poll"
+[ "$(count search.queue "create=")" = 1 ] ||
+    fail "one try only when the WiiM refuses the queue: $(count search.queue "create=") \"[search.queue]\" lines, expected 1 ($HINT)"
+has search.done "created=0 " "refused search queue reported"
+has search.unmute "result=refused " "sound put back refused once"
+has search.undo "unmute=ok " "sound put back at the next poll"
 is mute 0 "sound on after a refused unmute"
 is loop 3 "shuffle on after a refused unmute"
 [ ! -e "$T/state/fs/fav/search_undo" ] || fail "note removed once the sound is back"
@@ -113,8 +126,8 @@ mock reset
 printf -- '-1 upnp CreateQueue Mock Album\n' > "$T/faults"
 run "wait 3000\n${MILES}wait 16000\nquit\n"
 rm -f "$T/faults"
-has "7 r.*sultat(s), sans lecture, en rapport" "search results (restore refused)"
-has "musique d'avant non remise, lecture arr.*t.*e (OK)" "search queue stopped when the restore fails"
+has search.results "tracks=7 relevant=1 " "search results (restore refused)"
+has search.stop "result=ok " "search queue stopped when the restore fails"
 is status stop "nothing plays after a failed restore"
 is mute 0 "sound on after a failed restore"
 is loop 3 "shuffle on after a failed restore"
@@ -125,7 +138,7 @@ mock reset
 printf -- '-1 getPlayerStatus\n' > "$T/faults"
 run "wait 3000\n${MILES}wait 4000\nquit\n"
 rm -f "$T/faults"
-has "Recherche annul.*e : .*tat du WiiM illisible" "search cancelled without the player status"
+has search.cancelled "reason=status " "search cancelled without the player status"
 ! mocklog | grep -q "upnp DeleteQueue\|upnp CreateQueue\|setPlayerCmd:mute:1" || fail "no queue change without the player status"
 is status play "music untouched without the player status"
 is mute 0 "sound untouched without the player status"
