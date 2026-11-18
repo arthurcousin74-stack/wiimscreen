@@ -52,6 +52,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - CI: actions pinned to commits, Python packages to versions. SECURITY.md states the limits of the unsigned update.
 
 ### Tests
+- Reference screens: CI compares 140 rendered screens (English and French, 1280×720 and 800×480, landscape and
+  portrait) with `tools/preview/golden.sha256`. `tools/check.sh` runs every CI gate on a computer.
+- CI fails on a compiler warning in the project's files (PC builds).
+- The self-tests look for stable tags (`[search.restore] create=200 …`) on the terminal, not for French Journal
+  sentences. The Journal on the screen is unchanged.
 - Unit tests run with AddressSanitizer and UBSan, with malformed input for every parser (50 tests).
 - The mock WiiM has a play-queue service (shuffle, queues that fill step by step, a mode that loads nothing). The
   relay self-test now runs the search through a WiiM queue: results in order, music before put back (paused and
