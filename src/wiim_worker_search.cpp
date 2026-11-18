@@ -57,7 +57,7 @@ WiimWorker::Playback WiimWorker::snapshot(const std::string& control) {
     // File en cours (« CurrentQueue ») et place du morceau dedans
     std::string ctx;
     if (!p.title.empty() && browseQueue(control, "CurrentQueue", ctx) == 200 && !ctx.empty()) {
-        const wr::QueueInfo q = wr::parseQueueContext(ctx);
+        const wr::QueueInfo q = wr::parseQueueContext(ctx, wr::kQueueTitlesMax);
         p.index = wr::queueIndexOf(q, p.title, false);
         if (p.index > 0) {
             p.ctx = ctx;
@@ -243,7 +243,7 @@ bool WiimWorker::restoreAfterSearch(const std::string& control, const Playback& 
         auto placeOf = [&]() {
             std::string back;
             if (browseQueue(control, before.listName, back) != 200) return before.index;
-            const int k = wr::queueIndexOf(wr::parseQueueContext(back), before.title, false);
+            const int k = wr::queueIndexOf(wr::parseQueueContext(back, wr::kQueueTitlesMax), before.title, false);
             return k > 0 ? k : before.index;
         };
         auto playAt = [&](int index) {

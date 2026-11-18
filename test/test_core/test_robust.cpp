@@ -56,7 +56,7 @@ static void feedAll(const std::string& s) {
     g_sink += baselineCoverUrl(s).size() + htmlEscape(s).size();
     g_sink += wrapText(s, 50, 2, fakeMeasure).size();
     g_sink += decodeFields(s).size() + utf8PopBack(s).size();
-    const QueueInfo q = parseQueueContext(s);
+    const QueueInfo q = parseQueueContext(s, kQueueTitlesMax);
     g_sink += q.items.size() + queueKey(q).size() + isLiveQueue(q) + queueIndexOf(q, "a", true);
     g_sink += xmlElement(s, "a", v) + xmlElements(s, "Track1").size() + xmlUnescape(s).size();
     g_sink += parseUpnpServices(s).size() + parseScpdActions(s).size() + parseScpdArguments(s, "a").size();

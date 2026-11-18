@@ -59,8 +59,15 @@ struct QueueInfo {
     int tracks = 0;            // <TrackN> elements present
     std::vector<std::string> titles;  // track titles (from the DIDL-Lite metadata), 200 at most
     std::vector<QueueTrack> items;    // same tracks with artist, album and cover, 200 at most
+    // Titles of the tracks after `items` (track kQueueItems + 1 first, one entry per track, empty if no title):
+    // only filled when parseQueueContext() is asked for more than kQueueItems titles. Used by queueIndexOf().
+    std::vector<std::string> moreTitles;
 };
-QueueInfo parseQueueContext(const std::string& xml);
+constexpr size_t kQueueItems = 200;       // tracks read in full (title, artist, album, cover)
+constexpr size_t kQueueTitlesMax = 2000;  // tracks whose title can be read to find a track in a long queue
+// `titleCap`: number of tracks whose title is read. Beyond kQueueItems only the title is kept (moreTitles); pass
+// kQueueTitlesMax when the result goes to queueIndexOf(), keep the default for lists shown on screen.
+QueueInfo parseQueueContext(const std::string& xml, size_t titleCap = kQueueItems);
 
 // Identity of a queue, to recognise the same album/playlist again: the SearchUrl without its paging
 // parameters (offset, limit) for streaming services, otherwise source + list name.

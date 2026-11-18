@@ -12,6 +12,8 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
   files for the Pi. Tested on Linux against a mock WiiM (CI); not yet on a Raspberry Pi or a Mac. docs/DESKTOP.md.
 
 ### Changed
+- A track is now found in queues of more than 200 tracks (up to 2,000): beyond 200 only the titles are read. The
+  music before a search, and an album played at a track, go back to the right place in long playlists.
 - The computer layer of the simulator moved to `platform/pc/` (shared with the desktop build).
 - For contributors: the state of `src/main.cpp` is grouped in named structs in `src/app_internal.h`, one
   `enum class Screen` gives the current screen, and search, dictation and tiles moved to `src/app_search.cpp`,

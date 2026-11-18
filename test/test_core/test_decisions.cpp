@@ -111,6 +111,27 @@ static void test_decisions() {
     TEST_ASSERT_EQUAL(2, queueIndexOf(q, "BLUE IN GREEN!", true));
     TEST_ASSERT_EQUAL(0, queueIndexOf(q, "", true));
 
+    // File longue : au-delà de kQueueItems morceaux, la place se retrouve par les titres seuls
+    std::string longXml = "<PlayList><ListName>L</ListName><Tracks>";
+    for (int n = 1; n <= 450; ++n)
+        longXml += "<Track" + std::to_string(n) + "><Metadata>&lt;DIDL-Lite&gt;&lt;item&gt;&lt;dc:title&gt;" +
+                   (n == 300 ? std::string() : "Titre " + std::to_string(n)) +
+                   "&lt;/dc:title&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</Metadata></Track" + std::to_string(n) + ">";
+    longXml += "</Tracks></PlayList>";
+    const QueueInfo shortRead = parseQueueContext(longXml);
+    TEST_ASSERT_EQUAL(450, shortRead.tracks);
+    TEST_ASSERT_EQUAL(200, (int)shortRead.items.size());
+    TEST_ASSERT_EQUAL(0, (int)shortRead.moreTitles.size());
+    TEST_ASSERT_EQUAL(0, queueIndexOf(shortRead, "Titre 350", false));
+    const QueueInfo longRead = parseQueueContext(longXml, kQueueTitlesMax);
+    TEST_ASSERT_EQUAL(200, (int)longRead.items.size());
+    TEST_ASSERT_EQUAL(250, (int)longRead.moreTitles.size());
+    TEST_ASSERT_EQUAL(150, queueIndexOf(longRead, "Titre 150", false));
+    TEST_ASSERT_EQUAL(201, queueIndexOf(longRead, "Titre 201", false));
+    TEST_ASSERT_EQUAL(350, queueIndexOf(longRead, "titre 350", true));  // un titre vide (300) garde les places
+    TEST_ASSERT_EQUAL(450, queueIndexOf(longRead, "Titre 450", false));
+    TEST_ASSERT_EQUAL(210, (int)parseQueueContext(longXml, 210).moreTitles.size() + 200);
+
     TEST_ASSERT_EQUAL_STRING("Miles Davis", cleanTranscript(" \"Miles Davis.\" ").c_str());
     TEST_ASSERT_EQUAL_STRING("caf", cleanTranscript("caf\xC3\xA9", 4).c_str());  // pas de demi-caractère
     TEST_ASSERT_EQUAL_STRING("", cleanTranscript("...").c_str());

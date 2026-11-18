@@ -194,7 +194,7 @@ std::string soapBody(const std::string& serviceType, const std::string& action,
     return b;
 }
 
-QueueInfo parseQueueContext(const std::string& xml) {
+QueueInfo parseQueueContext(const std::string& xml, size_t titleCap) {
     QueueInfo q;
     std::string list;
     if (!xmlElement(xml, "PlayList", list)) return q;
@@ -220,7 +220,19 @@ QueueInfo parseQueueContext(const std::string& xml) {
             if (!xmlElement(tracks, "Track" + std::to_string(n), t, pos, &end)) break;
             pos = end;
             ++q.tracks;
-            if (q.items.size() < 200) {
+            if (q.items.size() >= kQueueItems) {
+                // File longue : titre seul, pour retrouver la place d'un morceau (queueIndexOf)
+                if (kQueueItems + q.moreTitles.size() < std::min(titleCap, kQueueTitlesMax)) {
+                    std::string meta, title;
+                    if (xmlElement(t, "Metadata", meta)) {
+                        std::string didl = xmlUnescape(meta);
+                        if (didl.find("&lt;") != std::string::npos) didl = xmlUnescape(didl);
+                        std::string v;
+                        if (xmlElement(didl, "title", v)) title = trim(xmlUnescape(v));
+                    }
+                    q.moreTitles.push_back(title);
+                }
+            } else {
                 QueueTrack item;
                 std::string meta;
                 if (xmlElement(t, "Metadata", meta)) {

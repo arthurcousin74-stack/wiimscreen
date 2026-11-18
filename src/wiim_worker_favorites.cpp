@@ -127,7 +127,7 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
             pause(700, true);  // les appuis et le relevé continuent pendant le chargement
             std::string back;
             if (browseQueue(control, name, back) != 200 || back.empty()) continue;
-            const wr::QueueInfo q = wr::parseQueueContext(back);
+            const wr::QueueInfo q = wr::parseQueueContext(back, wr::kQueueTitlesMax);
             index = title.empty() ? (q.tracks > 0 ? 1 : 0) : wr::queueIndexOf(q, title, true);
             if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
         }
@@ -144,7 +144,7 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
             break;
         std::string back;
         if (browseQueue(control, name, back) != 200 || back.empty()) break;
-        const int k = wr::queueIndexOf(wr::parseQueueContext(back), title, true);
+        const int k = wr::queueIndexOf(wr::parseQueueContext(back, wr::kQueueTitlesMax), title, true);
         if (k == 0) break;
         index = k;
         play = playQueueAt(control, name, index);

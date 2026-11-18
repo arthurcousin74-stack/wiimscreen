@@ -83,6 +83,8 @@ int queueIndexOf(const QueueInfo& q, const std::string& title, bool loose) {
     const std::string want = loose ? normalizeText(title) : title;
     for (size_t k = 0; k < q.items.size(); ++k)
         if ((loose ? normalizeText(q.items[k].title) : q.items[k].title) == want) return (int)k + 1;
+    for (size_t k = 0; k < q.moreTitles.size(); ++k)  // file longue : titres seuls, à la suite de items
+        if ((loose ? normalizeText(q.moreTitles[k]) : q.moreTitles[k]) == want) return (int)(q.items.size() + k) + 1;
     return 0;
 }
 
