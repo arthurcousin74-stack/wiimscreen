@@ -235,7 +235,13 @@ static void test_template_empty_element() {
     TEST_ASSERT_EQUAL_STRING("https://x/z", q.searchUrl.c_str());
 }
 
+// maskSecrets skips space, tab, CR and LF between a JSON key and its value (not \v or \f, unlike the JSON helpers)
+static void test_mask_blanks() {
+    TEST_ASSERT_EQUAL_STRING("{\"token\" \t:\r\n \"***\"}", maskSecrets("{\"token\" \t:\r\n \"S\"}").c_str());
+}
+
 void run_upnp_tests() {
+    RUN_TEST(test_mask_blanks);
     RUN_TEST(test_upnp_xml);
     RUN_TEST(test_upnp_description);
     RUN_TEST(test_upnp_queue);

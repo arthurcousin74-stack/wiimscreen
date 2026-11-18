@@ -22,6 +22,7 @@ std::vector<std::string> words(const std::string& s) {
     return out;
 }
 
+// Retire le dernier caractère UTF-8 sur place (tout le texte s'il n'y a que des octets de suite)
 void popUtf8(std::string& s) {
     while (!s.empty()) {
         unsigned char c = s.back();
@@ -168,10 +169,9 @@ std::vector<std::string> wrapText(const std::string& text, int maxWidth, int max
 }
 
 std::string utf8PopBack(const std::string& s) {
-    if (s.empty()) return s;
-    size_t i = s.size() - 1;
-    while (i > 0 && (static_cast<unsigned char>(s[i]) & 0xC0) == 0x80) --i;  // octets de suite 10xxxxxx
-    return s.substr(0, i);
+    std::string o = s;
+    popUtf8(o);  // octets de suite 10xxxxxx, puis le premier octet du caractère
+    return o;
 }
 
 bool sharesWord(const std::string& query, const std::vector<std::string>& texts) {

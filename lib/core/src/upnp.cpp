@@ -1,7 +1,7 @@
 #include "upnp.h"
 
 #include "core.h"
-#include "text.h"  // trim, appendUtf8
+#include "text.h"  // trim, hexVal, appendUtf8
 
 #include <algorithm>
 #include <cctype>
@@ -58,8 +58,7 @@ std::string xmlUnescape(const std::string& s) {
             unsigned long cp = 0;
             for (size_t k = start; ok && k < ent.size(); ++k) {
                 const char c = ent[k];
-                int d = c >= '0' && c <= '9' ? c - '0' : -1;
-                if (hex && d < 0) d = c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+                const int d = hex ? hexVal(c) : c >= '0' && c <= '9' ? c - '0' : -1;
                 ok = d >= 0;
                 cp = cp * (hex ? 16 : 10) + static_cast<unsigned long>(d < 0 ? 0 : d);
             }
@@ -395,6 +394,8 @@ bool startsWithNoCase(const std::string& s, size_t at, const char* lit) {
     return true;
 }
 
+// Espace, tabulation, retours à la ligne ; pas \v ni \f (skipSpace de json.cpp, std::isspace, les saute aussi) :
+// gardé tel quel, une clé suivie de \v ou \f n'est pas reconnue par maskSecrets
 size_t skipBlank(const std::string& s, size_t i) {
     while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r')) ++i;
     return i;

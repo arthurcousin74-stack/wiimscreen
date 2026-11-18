@@ -45,6 +45,30 @@ size_t skipSpace(const std::string& s, size_t i) {
     return i;
 }
 
+// Contenu d'une chaîne JSON à partir de s[i] (après le guillemet ouvrant), ajouté à `out` : \n \t \uXXXX décodés,
+// \r \b \f retirés (\r\n -> \n), \" \\ \/ (et tout autre caractère échappé) gardés sans la barre. Lit jusqu'à `limit`
+// exclu ; avec stopAtQuote, s'arrête aussi au premier guillemet non échappé. Une barre en limit - 1 (rien à échapper
+// avant la limite) est gardée telle quelle ; une séquence \uXXXX peut lire jusqu'à la fin de `s`.
+// Renvoie la position où la lecture s'est arrêtée (guillemet fermant, ou limit).
+size_t jsonUnescape(const std::string& s, size_t i, size_t limit, bool stopAtQuote, std::string& out) {
+    while (i < limit && !(stopAtQuote && s[i] == '"')) {
+        if (s[i] == '\\' && i + 1 < limit) {
+            char e = s[++i];
+            switch (e) {
+                case 'n': out += '\n'; break;
+                case 't': out += '\t'; break;
+                case 'r': case 'b': case 'f': break;  // \r\n → \n ; retour arrière, saut de page : retirés
+                case 'u': i = decodeJsonUnicode(s, i, out); break;
+                default: out += e;  // \" \\ \/
+            }
+        } else {
+            out += s[i];
+        }
+        ++i;
+    }
+    return i;
+}
+
 }  // namespace
 
 size_t decodeJsonUnicode(const std::string& s, size_t i, std::string& out) {
@@ -52,8 +76,7 @@ size_t decodeJsonUnicode(const std::string& s, size_t i, std::string& out) {
         if (at + 4 > s.size()) return false;
         v = 0;
         for (size_t k = at; k < at + 4; ++k) {
-            const char c = s[k];
-            const int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+            const int d = hexVal(s[k]);
             if (d < 0) return false;
             v = v * 16 + (unsigned long)d;
         }
@@ -78,32 +101,15 @@ bool jsonString(const std::string& json, const std::string& key, std::string& ou
     std::string needle = "\"" + key + "\"";
     size_t p = 0;
     while ((p = json.find(needle, p)) != std::string::npos) {
-        size_t q = p + needle.size();
-        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        size_t q = skipSpace(json, p + needle.size());
         if (q >= json.size() || json[q] != ':') {
             p = q;
             continue;
         }
-        ++q;
-        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        q = skipSpace(json, q + 1);
         if (q >= json.size() || json[q] != '"') return false;
-        ++q;
         out.clear();
-        while (q < json.size() && json[q] != '"') {
-            if (json[q] == '\\' && q + 1 < json.size()) {
-                char e = json[++q];
-                switch (e) {
-                    case 'n': out += '\n'; break;
-                    case 't': out += '\t'; break;
-                    case 'r': case 'b': case 'f': break;  // \r\n → \n ; retour arrière, saut de page : retirés
-                    case 'u': q = decodeJsonUnicode(json, q, out); break;
-                    default: out += e;  // \" \\ \/
-                }
-            } else {
-                out += json[q];
-            }
-            ++q;
-        }
+        q = jsonUnescape(json, q + 1, json.size(), true, out);
         return q < json.size();
     }
     return false;
@@ -113,14 +119,12 @@ bool jsonInt(const std::string& json, const std::string& key, long& out) {
     std::string needle = "\"" + key + "\"";
     size_t p = 0;
     while ((p = json.find(needle, p)) != std::string::npos) {
-        size_t q = p + needle.size();
-        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        size_t q = skipSpace(json, p + needle.size());
         if (q >= json.size() || json[q] != ':') {
             p = q;
             continue;
         }
-        ++q;
-        while (q < json.size() && std::isspace(static_cast<unsigned char>(json[q]))) ++q;
+        q = skipSpace(json, q + 1);
         if (q < json.size() && json[q] == '"') ++q;
         char* end = nullptr;
         long v = std::strtol(json.c_str() + q, &end, 10);
@@ -157,22 +161,9 @@ std::string jsonTop(const std::string& o, const std::string& key) {
 
 std::string jsonText(const std::string& raw) {
     if (raw.size() < 2 || raw[0] != '"') return raw == "null" ? "" : raw;
+    // The last character is taken as the closing quote (not checked); a quote in the middle is kept
     std::string o;
-    for (size_t i = 1; i + 1 < raw.size(); ++i) {
-        char c = raw[i];
-        if (c != '\\' || i + 2 >= raw.size()) {
-            o += c;
-            continue;
-        }
-        char e = raw[++i];
-        switch (e) {
-            case 'n': o += '\n'; break;
-            case 't': o += '\t'; break;
-            case 'r': case 'b': case 'f': break;  // \r\n -> \n; backspace, form feed: dropped
-            case 'u': i = decodeJsonUnicode(raw, i, o); break;
-            default: o += e;  // \" \\ \/
-        }
-    }
+    jsonUnescape(raw, 1, raw.size() - 1, false, o);
     return o;
 }
 

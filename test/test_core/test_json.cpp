@@ -54,7 +54,25 @@ static void test_escapes_strict() {
     TEST_ASSERT_EQUAL_STRING("&abcdefghijkl;", xmlUnescape("&abcdefghijkl;").c_str());  // trop long : brut
 }
 
+// jsonString and jsonText share one escape decoder but keep their own limits (they differed before it was shared)
+static void test_json_entry_styles() {
+    std::string v;
+    TEST_ASSERT_TRUE(jsonString("{\"a\":\"x\"y\"}", "a", v));  // flat lookup: stops at the first quote
+    TEST_ASSERT_EQUAL_STRING("x", v.c_str());
+    TEST_ASSERT_FALSE(jsonString("{\"a\":\"x\\", "a", v));     // no closing quote
+    TEST_ASSERT_EQUAL_STRING("x\"y", jsonText("\"x\"y\"").c_str());  // raw token: last character is the quote
+    TEST_ASSERT_EQUAL_STRING("x\\", jsonText("\"x\\\"").c_str());    // backslash just before it: kept
+    TEST_ASSERT_EQUAL_STRING("", jsonText("\"x").c_str());
+    TEST_ASSERT_EQUAL_STRING("\xC3\xA9", jsonText("\"\\u00e9").c_str());  // \uXXXX may read the last character
+    // Depth-aware helpers skip every std::isspace character, \v and \f included
+    TEST_ASSERT_EQUAL_STRING("1", jsonTop("{\v\"a\"\f:\v1}", "a").c_str());
+    long n = 0;
+    TEST_ASSERT_TRUE(jsonInt("{\"a\"\f:\v\"12\"}", "a", n));
+    TEST_ASSERT_EQUAL(12, (int)n);
+}
+
 void run_json_tests() {
+    RUN_TEST(test_json_entry_styles);
     RUN_TEST(test_json_escapes);
     RUN_TEST(test_json_unicode);
     RUN_TEST(test_json_array_progress);

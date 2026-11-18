@@ -82,7 +82,16 @@ static void test_wrap_empty() {
     TEST_ASSERT_EQUAL_STRING("", m.album.c_str());
 }
 
+// utf8PopBack and wrapText share one implementation (they were two equivalent ones): stray continuation bytes
+static void test_utf8_pop_back_edges() {
+    TEST_ASSERT_EQUAL_STRING("", utf8PopBack("\x80\x80").c_str());
+    TEST_ASSERT_EQUAL_STRING("a", utf8PopBack("ab\x80").c_str());
+    TEST_ASSERT_EQUAL_STRING("", utf8PopBack("\xC3").c_str());
+    TEST_ASSERT_EQUAL_STRING("\xC3\xA9", utf8PopBack("\xC3\xA9\xE2\x80\xA6").c_str());
+}
+
 void run_text_tests() {
+    RUN_TEST(test_utf8_pop_back_edges);
     RUN_TEST(test_shares_word);
     RUN_TEST(test_html_escape);
     RUN_TEST(test_wrap);
