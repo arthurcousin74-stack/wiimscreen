@@ -46,14 +46,14 @@ struct KeyEvent {
 
 // Timing rules, in one place
 struct KeyTiming {
-    static constexpr uint32_t kRepeatDelayMs = 400;     // arrows and Backspace: first Repeat after this long held
+    static constexpr uint32_t kRepeatDelayMs = 400;     // arrows, Backspace, volume: first Repeat after this long held
     static constexpr uint32_t kRepeatIntervalMs = 125;  // then one Repeat every 125 ms (8/s)
     static constexpr uint32_t kLongPressMs = 700;       // Ok: LongPress once held this long (no Press on release)
     static constexpr size_t kMaxQueued = 32;            // unread events beyond this: the oldest are dropped
 };
 
 // Raw key-down/key-up → events.
-//   Arrows, Backspace: Press on down, then Repeat after kRepeatDelayMs, every kRepeatIntervalMs while held.
+//   Arrows, Backspace, VolUp/VolDown (held like a remote's volume key): Press on down, then Repeat after kRepeatDelayMs, every kRepeatIntervalMs while held.
 //   Ok: Press on release if held less than kLongPressMs; LongPress once at kLongPressMs while held (or at the
 //       release, when no tick() came in between), then no Press.
 //   Other keys: Press on down.

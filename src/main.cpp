@@ -975,7 +975,8 @@ static void redrawForFocus() {
             break;
         case Screen::TouchTest: g_ui.renderTouchTest(-1, -1, g_view.touchCount); break;
         case Screen::Search:
-        case Screen::Results: break;  // pas d'anneau
+        case Screen::Results:
+        case Screen::Count: break;  // pas d'anneau
     }
 }
 
@@ -1064,7 +1065,9 @@ static void backKey(uint32_t now) {
 
 // Flèche : focus déplacé. Sur la bande des presets, Gauche / Droite sans autre tuile de ce côté changent de page
 // (comme un glissement) et gardent le focus sur une tuile : la première de la page suivante, la dernière de la
-// précédente. Au bord de l'écran : rien.
+// précédente. Voulu : sur une page après la première, Gauche depuis la première tuile revient d'une page au lieu
+// d'aller à la barre (sinon les pages précédentes seraient inatteignables au D-pad : les points ne prennent pas le
+// focus) ; la barre reste à Gauche depuis la première page, ou par Haut puis Gauche. Au bord de l'écran : rien.
 static void moveFocus(const wr::Target& cur, wr::Dir d) {
     wr::FocusSpot& spot = g_focus.spot[(int)g_view.screen];
     const wr::NavResult r = wr::railMove(g_ui.targets(), &cur, d);
@@ -1093,21 +1096,27 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
     // Texte, Effacer, Entrée : pour le clavier de recherche (étape suivante) ; ignorés pour l'instant
     if (k.key == NavKey::None || k.key == NavKey::Text || k.key == NavKey::Backspace || k.key == NavKey::Enter) return;
     g_idle.lastTouch = now;  // activité, comme un appui (atténuation, vue ambiance, veille)
-    // Écran atténué ou éteint, ou vue ambiance : la touche ne fait que réveiller (comme un premier appui)
+    const Screen screen = g_view.screen;
+    const bool search = screen == Screen::Search || screen == Screen::Results;
+    // Touche de lecture, de volume ou de coupure du son : agit aussi en réveillant (sur la vue ambiance, c'est
+    // l'usage principal d'une télécommande) ; les autres touches ne font que réveiller, comme un premier appui.
+    const bool media = !isArrow(k.key) && k.key != NavKey::Ok && k.key != NavKey::Back && k.key != NavKey::Menu &&
+                       k.key != NavKey::Search && !search;
+    // Écran atténué ou éteint, ou vue ambiance
     if (g_idle.brightness != kBrightOn) {
         logEvent("Touche : r\xC3\xA9veil de l'\xC3\xA9" "cran");
         setBrightness(kBrightOn);
         if (g_view.ambient) exitAmbient();
+        if (media) mediaKey(k.key, now);
         return;
     }
-    if (g_view.ambient && g_view.screen == Screen::Controls) {
+    if (g_view.ambient && screen == Screen::Controls) {
         logEvent("Touche en vue ambiance");
         exitAmbient();
-        sound::tap();
+        if (media) mediaKey(k.key, now);
+        else sound::tap();
         return;
     }
-    const Screen screen = g_view.screen;
-    const bool search = screen == Screen::Search || screen == Screen::Results;
     const bool dictation = g_voice.listening && g_voice.dictation;
     if (k.key == NavKey::Back) return backKey(now);
     if (k.key == NavKey::Menu) {

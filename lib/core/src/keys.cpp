@@ -9,7 +9,8 @@ namespace wr {
 namespace {
 
 bool repeats(NavKey k) {
-    return k == NavKey::Up || k == NavKey::Down || k == NavKey::Left || k == NavKey::Right || k == NavKey::Backspace;
+    return k == NavKey::Up || k == NavKey::Down || k == NavKey::Left || k == NavKey::Right || k == NavKey::Backspace ||
+           k == NavKey::VolUp || k == NavKey::VolDown;
 }
 
 // At least `ms` since `since` (expired() is "more than")

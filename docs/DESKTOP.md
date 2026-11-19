@@ -122,17 +122,18 @@ click on the screen hides the ring; the next key shows it again, on the same but
 
 | Key | Controls view | Settings menu, Journal, touch test | Search keyboard and results |
 |---|---|---|---|
-| up, down, left, right | Move the ring. Left from the content goes to the bar on the left (Home, Search, Settings). Left or right past the first or last preset tile shows the previous or next page of tiles | Move the ring | Not used yet |
+| up, down, left, right | Move the ring. Left from the content goes to the bar on the left (Home, Search, Settings). Left or right past the first or last preset tile shows the previous or next page of tiles (on the first page, Left goes to the bar) | Move the ring | Not used yet |
 | ok | Press the button with the ring | Press the button with the ring | Not used yet |
 | ok, held 0.7 s | Settings menu (as a long press on the cover) | As ok | Not used yet |
 | back | Nothing | Close (back to the controls view) | Results: back to the keyboard. Keyboard: back to the controls view. During dictation: stop it |
 | menu | Settings menu | Settings menu (in the menu: close it) | Settings menu |
 | search | Search keyboard | Search keyboard | Results: back to the keyboard |
 | playpause, play, pause, next, prev | As the buttons of the controls view | As the buttons of the controls view | Not used yet |
-| volup, voldown, mute | Volume +, volume −, mute (as the buttons) | As the buttons | Not used yet |
+| volup, voldown, mute | Volume +, volume −, mute (as the buttons; hold volume to keep changing it) | As the buttons | Not used yet |
 | ffwd, rewind, backspace, typed text | Not used yet | Not used yet | Not used yet |
 
-When the screen is dim or off, or shows the ambient view (large cover), a key only wakes it, as a first tap does.
+When the screen is dim or off, or shows the ambient view (large cover), a key wakes it, as a first tap does. The
+play, next, previous, volume and mute keys also do their action at the same time; the other keys only wake it.
 A key also counts as activity: the screen does not dim and the computer does not go to sleep while you use the keys.
 WiiM picker (first start): the arrow keys and OK choose a WiiM, back searches again. Update and setup screens:
 ok or back closes them.

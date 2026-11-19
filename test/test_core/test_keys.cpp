@@ -62,6 +62,22 @@ void test_backspace_repeats_quick_tap_does_not() {
     TEST_ASSERT_EQUAL(KeyEvent::Repeat, v[1].kind);
 }
 
+// Held volume keys repeat like the arrows (a remote's Vol+ held keeps raising the volume)
+void test_volume_keys_repeat() {
+    KeyTracker t;
+    t.down(NavKey::VolUp, 0);
+    auto v = run(t, 0, KeyTiming::kRepeatDelayMs);
+    TEST_ASSERT_EQUAL(2, (int)v.size());
+    TEST_ASSERT_TRUE(v[0].key == NavKey::VolUp);
+    TEST_ASSERT_EQUAL(KeyEvent::Press, v[0].kind);
+    TEST_ASSERT_EQUAL(KeyEvent::Repeat, v[1].kind);
+    t.up(NavKey::VolUp, 500);
+    t.down(NavKey::VolDown, 1000);
+    v = run(t, 1000, 1000 + KeyTiming::kRepeatDelayMs);
+    TEST_ASSERT_EQUAL(2, (int)v.size());
+    TEST_ASSERT_TRUE(v[1].key == NavKey::VolDown);
+}
+
 void test_late_tick_gives_one_repeat_not_a_burst() {
     KeyTracker t;
     t.down(NavKey::Down, 0);
@@ -235,6 +251,7 @@ void test_names() {
 void run_keys_tests() {
     RUN_TEST(test_arrow_press_then_repeat);
     RUN_TEST(test_backspace_repeats_quick_tap_does_not);
+    RUN_TEST(test_volume_keys_repeat);
     RUN_TEST(test_late_tick_gives_one_repeat_not_a_burst);
     RUN_TEST(test_ok_short_press_on_release);
     RUN_TEST(test_ok_long_press_once_then_no_press);

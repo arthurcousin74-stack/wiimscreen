@@ -108,8 +108,9 @@ enum class Screen {
     Log,        // Journal (menu Réglages)
     Search,     // recherche : clavier
     Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
+    Count,      // nombre d'écrans (pas un écran) : toujours en dernier
 };
-constexpr int kScreenCount = 6;  // nombre de valeurs de Screen (focus retenu par écran)
+constexpr int kScreenCount = (int)Screen::Count;  // tableaux indexés par (int)Screen (focus retenu par écran)
 
 // Écran affiché, vue ambiance, et compteurs des écrans Journal et test tactile
 struct OpenScreens {
