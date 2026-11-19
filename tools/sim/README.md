@@ -48,6 +48,9 @@ python tools/preview/topng.py .pio/sim-out/*.ppm
 ```
 
 CI runs `tools/sim/scripts/tour.txt` on every push (artifact `sim-screens`): a crash or a hang fails the build.
+It also runs `tools/sim/scripts/taps.txt`: a tap on every element of every screen (controls, Settings, Journal,
+touch test, update screen, search keyboard, dictation, results), which ends with Sleep. Without `--quiet`, the
+Journal lines show what each tap did: compare them before and after a change of the tap handling.
 It also runs `tools/sim/scripts/keys.txt` with `--log-keys` and checks the `[key]` lines (`tools/check.sh sim`).
 
 ## Real WiiM mode (relay)

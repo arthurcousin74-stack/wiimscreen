@@ -519,17 +519,15 @@ static void chooseWiim() {
         for (bool retry = false; !retry;) {
             M5.update();
             auto t = M5.Touch.getDetail();
-            if (t.wasPressed()) {
-                int c = g_ui.hitPicker(t.x, t.y);
-                if (c >= 0 && c < (int)found.size()) {
-                    sound::tap();
-                    useWiim(found[c]);
-                    return;
-                }
-                if (c == Ui::PickRetry) sound::tap(), retry = true;
-                if (c == Ui::PickConfig) restartIntoPortal(wr::L("Enter the IP address of the WiiM.", "Saisis l'adresse IP du WiiM."));
-
+            const wr::Target* tg = t.wasPressed() ? g_ui.targets().hit(t.x, t.y) : nullptr;
+            if (tg && tg->act == wr::Act::PickDevice && tg->arg >= 0 && tg->arg < (int)found.size()) {
+                sound::tap();
+                useWiim(found[tg->arg]);
+                return;
             }
+            if (tg && tg->act == wr::Act::PickRetry) sound::tap(), retry = true;
+            if (tg && tg->act == wr::Act::PickSetup)
+                restartIntoPortal(wr::L("Enter the IP address of the WiiM.", "Saisis l'adresse IP du WiiM."));
             delay(20);
         }
     }
@@ -547,40 +545,26 @@ static bool wiimStateKnown(const char* what) {
     return false;
 }
 
-// Barres (volume, coupure du son, progression) : affichage immédiat, commande en fond
-static bool handleBars(int x, int y) {
-    int vol;
+// Élément visé par un appui : le premier de la liste de l'écran (Ui::targets()) qui contient le point. La zone de
+// la progression suit aussi updateProgress() : hitProgress() la confirme (sinon on passe aux éléments suivants).
+static const wr::Target* tapTarget(int x, int y) {
     uint32_t pos;
-    auto& p = g_state.player;
-    if (g_ui.hitVolume(x, y, vol)) {
-        logEvent("Appui volume %d (%d,%d)", vol, x, y);
-        sound::tap();
-        p.volume = vol;
-        p.muted = false;
-        g_worker.command("setPlayerCmd:vol:" + String(vol));
-        show();
-        return true;
+    for (const wr::Target& t : g_ui.targets()) {
+        if (!t.hit.contains(x, y)) continue;
+        if (t.act == wr::Act::Progress && !g_ui.hitProgress(x, y, pos)) continue;
+        return &t;
     }
-    if (g_ui.hitMute(x, y)) {
-        if (!wiimStateKnown("son coup\xC3\xA9/r\xC3\xA9tabli")) return true;
-        logEvent("Appui son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", x, y);
-        sound::tap();
-        p.muted = !p.muted;
-        g_worker.command(String("setPlayerCmd:mute:") + (p.muted ? "1" : "0"));
-        show();
-        return true;
-    }
-    if (g_ui.hitProgress(x, y, pos)) {
-        logEvent("Appui progression %lu s (%d,%d)", (unsigned long)(pos / 1000), x, y);
-        sound::tap();
-        p.positionMs = pos;
-        g_status.at = millis();
-        g_worker.command("setPlayerCmd:seek:" + String(pos / 1000));  // secondes
-        show();
-        return true;
-    }
-    return false;
+    return nullptr;
 }
+
+// Activation d'un élément : par un appui (au point touché) ou par la touche OK (au centre de l'élément). Un appui
+// et OK sur le même élément font la même chose ; seuls la bande des presets (suivre le doigt) et l'en-tête (appui
+// long) dépendent du doigt.
+struct Press {
+    int x = 0, y = 0;
+    bool touch = true;
+    uint32_t now = 0;  // millis() du tour de boucle (l'appui long de l'en-tête se compte avec lui)
+};
 
 static void playPreset(int p) {
     if (p < 0 || p >= (int)g_tiles.list.size()) return;
@@ -628,74 +612,112 @@ static void serviceStrip(const m5::touch_detail_t& t) {
     }
 }
 
-static void handleTap(int x, int y) {
-    if (int dir = g_ui.hitDots(x, y)) {
-        g_ui.setPage(g_ui.page() + dir);
-        sound::tap();
-        show();
-        return;
-    }
-    if (g_ui.hitStrip(x, y)) {
-        g_strip.touch = true;
-        g_strip.dragged = false;
-        g_strip.startX = x;
-        g_strip.preset = g_ui.hitPreset(x, y);
-        if (g_strip.preset >= 0) show();  // tuile montrée enfoncée tant que le doigt reste
-        return;
-    }
-    if (g_ui.hitFav(x, y)) {  // ♥ : ajouter ce qui joue aux favoris, ou l'en retirer
-        if (g_jobs.favorite) return;
-        sound::tap();
-        const std::string id = currentFavorite();
-        if (!id.empty()) {
-            fav::remove(id);
-            logEvent("Favori retir\xC3\xA9 (%s)", id.c_str());
-            refreshTiles();
-            setMessage(wr::L("Removed from favorites", "Retir\xC3\xA9 des favoris"), 4000);
-        } else {
-            const UiState& st = g_state;
-            const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
-            logEvent("Appui Favori : %s", album.c_str());
-            g_jobs.favorite = true;
-            g_jobs.since = millis();
-            g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
-            setMessage(wr::L("Adding to favorites\xE2\x80\xA6", "Ajout aux favoris\xE2\x80\xA6"), 15000);
-
+// Vue commandes : un élément de Ui::targets() activé (appui ou OK)
+static void activateControls(const wr::Target& tg, const Press& at) {
+    const int x = at.x, y = at.y;
+    auto& p = g_state.player;
+    switch (tg.act) {
+        // Barres (volume, coupure du son, progression) : affichage immédiat, commande en fond
+        case wr::Act::Volume: {
+            int vol;
+            if (!g_ui.hitVolume(x, y, vol)) return;
+            logEvent("Appui volume %d (%d,%d)", vol, x, y);
+            sound::tap();
+            p.volume = vol;
+            p.muted = false;
+            g_worker.command("setPlayerCmd:vol:" + String(vol));
+            show();
+            return;
         }
-        show();
-        return;
-    }
-    if (g_ui.hitHome(x, y)) {  // Accueil (barre) : déjà ici, retour à la première page de presets
-        logEvent("Appui Accueil (%d,%d)", x, y);
-        sound::tap();
-        g_ui.setPage(0);
-        show();
-        return;
-    }
-    if (g_ui.hitSearch(x, y)) {  // Recherche (barre)
-        logEvent("Appui Recherche (%d,%d)", x, y);
-        sound::tap();
-        openSearch();
-        return;
-    }
-    if (g_ui.hitSettings(x, y)) {  // Réglages (barre)
-        logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
-        sound::tap();
-        g_view.screen = Screen::Menu;
-        g_ui.renderMenu(FW_VERSION);
-        return;
+        case wr::Act::Mute:
+            if (!wiimStateKnown("son coup\xC3\xA9/r\xC3\xA9tabli")) return;
+            logEvent("Appui son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", x, y);
+            sound::tap();
+            p.muted = !p.muted;
+            g_worker.command(String("setPlayerCmd:mute:") + (p.muted ? "1" : "0"));
+            show();
+            return;
+        case wr::Act::Progress: {
+            uint32_t pos;
+            if (!g_ui.hitProgress(x, y, pos)) return;
+            logEvent("Appui progression %lu s (%d,%d)", (unsigned long)(pos / 1000), x, y);
+            sound::tap();
+            p.positionMs = pos;
+            g_status.at = millis();
+            g_worker.command("setPlayerCmd:seek:" + String(pos / 1000));  // secondes
+            show();
+            return;
+        }
+        case wr::Act::Header:  // appui long : Réglages (loop() suit le doigt)
+            if (!at.touch) return;
+            g_header.pressed = true;
+            g_header.since = at.now;
+            return;
+        case wr::Act::Dots:  // moitié gauche : page précédente, moitié droite : suivante
+            g_ui.setPage(g_ui.page() + tg.arg);
+            sound::tap();
+            show();
+            return;
+        case wr::Act::Preset:
+        case wr::Act::Strip:
+            if (!at.touch) {  // OK : la tuile tout de suite (pas de doigt à suivre)
+                if (tg.act == wr::Act::Preset) playPreset(tg.arg);
+                return;
+            }
+            g_strip.touch = true;
+            g_strip.dragged = false;
+            g_strip.startX = x;
+            g_strip.preset = tg.act == wr::Act::Preset ? tg.arg : -1;
+            if (g_strip.preset >= 0) show();  // tuile montrée enfoncée tant que le doigt reste
+            return;
+        case wr::Act::Fav: {  // ♥ : ajouter ce qui joue aux favoris, ou l'en retirer
+            if (g_jobs.favorite) return;
+            sound::tap();
+            const std::string id = currentFavorite();
+            if (!id.empty()) {
+                fav::remove(id);
+                logEvent("Favori retir\xC3\xA9 (%s)", id.c_str());
+                refreshTiles();
+                setMessage(wr::L("Removed from favorites", "Retir\xC3\xA9 des favoris"), 4000);
+            } else {
+                const UiState& st = g_state;
+                const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
+                logEvent("Appui Favori : %s", album.c_str());
+                g_jobs.favorite = true;
+                g_jobs.since = millis();
+                g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
+                setMessage(wr::L("Adding to favorites\xE2\x80\xA6", "Ajout aux favoris\xE2\x80\xA6"), 15000);
+            }
+            show();
+            return;
+        }
+        case wr::Act::Home:  // Accueil (barre) : déjà ici, retour à la première page de presets
+            logEvent("Appui Accueil (%d,%d)", x, y);
+            sound::tap();
+            g_ui.setPage(0);
+            show();
+            return;
+        case wr::Act::Search:  // Recherche (barre)
+            logEvent("Appui Recherche (%d,%d)", x, y);
+            sound::tap();
+            openSearch();
+            return;
+        case wr::Act::Settings:  // Réglages (barre)
+            logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
+            sound::tap();
+            g_view.screen = Screen::Menu;
+            g_ui.renderMenu(FW_VERSION);
+            return;
+        case wr::Act::Transport: break;  // ci-dessous
+        default: return;
     }
 
-    int t = g_ui.hitTransport(x, y);
-    if (t < 0) {
-        logEvent("Appui hors bouton (%d,%d)", x, y);
-        return;
-    }
+    const int t = tg.arg;
+    if (t < 0 || t >= wr::kTransportCount) return;
     static const char* kNames[] = {"volume -", "pr\xC3\xA9" "c\xC3\xA9" "dent", "lecture/pause", "suivant", "volume +"};
     if ((t == wr::kVolDown || t == wr::kVolUp || t == wr::kPlayPause) && !wiimStateKnown(kNames[t])) return;
     logEvent("Appui %s (%d,%d)", kNames[t], x, y);
     sound::tap();
-    auto& p = g_state.player;
     switch (t) {
         case wr::kVolDown:
         case wr::kVolUp: {
@@ -721,6 +743,168 @@ static void handleTap(int x, int y) {
             break;
     }
     flash(-1, t);
+}
+
+// Appui sur la vue commandes. La liste des éléments doit être la sienne : juste après la fermeture d'un autre écran
+// (Journal, test tactile, recherche : leur tour de boucle se termine avant renderNow()) ou au premier tour après
+// setup(), l'écran affiché est encore l'ancien ; la vue commandes est alors dessinée d'abord (show() est déjà
+// demandé dans ces cas).
+static void tapControls(int x, int y, uint32_t now) {
+    if (!g_ui.controlsShown()) renderNow();
+    const wr::Target* tg = tapTarget(x, y);
+    if (!tg) {
+        logEvent("Appui hors bouton (%d,%d)", x, y);
+        return;
+    }
+    Press at;
+    at.x = x, at.y = y, at.now = now;
+    activateControls(*tg, at);
+}
+
+// Menu Réglages : Recherche, Accueil (fermer) ou un des choix
+static void activateMenu(const wr::Target& tg, uint32_t now) {
+    switch (tg.act) {
+        case wr::Act::Search:
+            sound::tap();
+            openSearch();
+            return;
+        case wr::Act::Home:
+            sound::tap();  // Accueil : fermer les réglages
+            g_view.screen = Screen::Controls;
+            show();
+            return;
+        case wr::Act::MenuChoice: break;  // ci-dessous
+        default: return;                  // Réglages : déjà ici
+    }
+    sound::tap();
+    switch (tg.arg) {
+        case Ui::MenuConfig:
+            restartIntoPortal(wr::L("Setup requested.", "Reconfiguration demand\xC3\xA9" "e."));  // redémarre
+            break;
+        case Ui::MenuUpdate:
+            runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
+            g_view.screen = Screen::Controls;
+            show();
+            break;
+        case Ui::MenuLog:
+            g_view.screen = Screen::Log;
+            g_view.logFrame = now;
+            g_ui.renderLog(logLines(), FW_VERSION);
+            break;
+        case Ui::MenuTouch:
+            g_view.screen = Screen::TouchTest;
+            g_view.touchCount = 0;
+            g_ui.renderTouchTest(-1, -1, 0);
+            break;
+        case Ui::MenuSleep:
+            g_view.screen = Screen::Controls;
+            goToSleep("demand\xC3\xA9" "e depuis R\xC3\xA9glages");
+            break;
+        case Ui::MenuClose:
+            g_view.screen = Screen::Controls;
+            show();
+            break;
+    }
+}
+
+// Journal : Fermer ou Accueil, File du WiiM, Recherche, Réglages. false : rien d'activé (le Journal se rafraîchit)
+static bool activateLog(const wr::Target& tg, uint32_t now) {
+    switch (tg.act) {
+        case wr::Act::LogClose:
+        case wr::Act::Home:
+            sound::tap();
+            g_view.screen = Screen::Controls;
+            g_idle.lastTouch = now;
+            show();
+            return true;
+        case wr::Act::LogQueue:
+            sound::tap();
+            logEvent("Appui File du WiiM");
+            g_worker.checkQueue();  // résultat dans le journal (tâche de fond)
+            g_view.logFrame = 0;
+            return true;
+        case wr::Act::Search:
+            sound::tap();
+            g_idle.lastTouch = now;
+            openSearch();
+            return true;
+        case wr::Act::Settings:
+            sound::tap();
+            g_view.screen = Screen::Menu;
+            g_idle.lastTouch = now;
+            g_ui.renderMenu(FW_VERSION);
+            return true;
+        default: return false;
+    }
+}
+
+// Test tactile : Fermer. true : l'écran est fermé
+static bool activateTouchTest(const wr::Target& tg, uint32_t now) {
+    if (tg.act != wr::Act::TouchClose) return false;
+    sound::tap();
+    g_view.screen = Screen::Controls;
+    g_idle.lastTouch = now;
+    show();
+    return true;
+}
+
+// Recherche : clavier (micro, sources, touches) et liste des résultats (lignes, cœurs, pages, Modifier) ; la barre
+// de gauche reste active. Pas pendant la dictée (loop() : le micro y termine l'écoute).
+static void activateSearch(const wr::Target& tg) {
+    const bool keyboard = g_view.screen == Screen::Search;
+    switch (tg.act) {
+        case wr::Act::Mic:
+            if (!g_jobs.search && !g_voice.stt.busy) startVoice();  // bip, puis écoute jusqu'au bouton rouge
+            return;
+        case wr::Act::Home:
+            sound::tap();
+            g_view.screen = Screen::Controls;
+            show();
+            return;
+        case wr::Act::Settings:
+            sound::tap();
+            g_view.screen = Screen::Menu;
+            g_ui.renderMenu(FW_VERSION);
+            return;
+        case wr::Act::Source:
+            sound::tap();
+            g_search.source = tg.arg;
+            g_search.status = "";
+            updateSearchField();
+            return;
+        case wr::Act::Key: onSearchKey(tg.arg); return;
+        case wr::Act::ResultHeart: toggleAlbumFavorite(tg.arg); return;
+        case wr::Act::ResultRow: {
+            const int r = tg.arg;
+            if (r < 0 || r >= (int)g_search.results.size()) return;
+            sound::tap();
+            renderResultsList(r);  // ligne enfoncée
+            logEvent("Recherche : lecture de %d (%s)", r + 1, g_search.results[r].title.c_str());
+            g_worker.playSearchResult(r);
+            markPending(wr::kPlayPause, Await::Music, true);
+            setMessage((std::string(wr::L("Playing: ", "Lecture : ")) + g_search.results[r].title +
+                        (loadsAlbum(g_search.resultsKind) ? wr::L(" (loading the album\xE2\x80\xA6)",
+                                                                  " (chargement de l'album\xE2\x80\xA6)")
+                                                          : ""))
+                           .c_str(),
+                       loadsAlbum(g_search.resultsKind) ? 9000 : 4000);
+            g_view.screen = Screen::Controls;
+            show();
+            return;
+        }
+        case wr::Act::ResultsPage:
+            sound::tap();
+            g_search.page += tg.arg;
+            renderResultsList();
+            return;
+        case wr::Act::ResultsEdit:
+        case wr::Act::Search:  // Recherche (barre) : depuis la liste, retour au clavier ; sur le clavier, rien
+            if (keyboard) return;
+            sound::tap();
+            openSearch();
+            return;
+        default: return;
+    }
 }
 
 // Connexion Wi-Fi ; en cas d'échec, l'écran le dit et un appui ouvre la configuration.
@@ -855,11 +1039,8 @@ void loop() {
     if (g_view.screen == Screen::TouchTest) {
         if (t.wasPressed()) {
             ++g_view.touchCount;
-            if (g_ui.hitTouchTestClose(t.x, t.y)) {
-                sound::tap();
-                g_view.screen = Screen::Controls;
-                g_idle.lastTouch = now;
-                show();
+            const wr::Target* tg = g_ui.targets().hit(t.x, t.y);
+            if (tg && activateTouchTest(*tg, now)) {
                 delay(5);
                 return;
             }
@@ -875,25 +1056,9 @@ void loop() {
 
     // Journal : rafraîchi chaque seconde ; « Fermer » pour sortir
     if (g_view.screen == Screen::Log) {
-        if (t.wasPressed() && (g_ui.hitLogClose(t.x, t.y) || g_ui.hitHome(t.x, t.y))) {
-            sound::tap();
-            g_view.screen = Screen::Controls;
-            g_idle.lastTouch = now;
-            show();
-        } else if (t.wasPressed() && g_ui.hitLogQueue(t.x, t.y)) {
-            sound::tap();
-            logEvent("Appui File du WiiM");
-            g_worker.checkQueue();  // résultat dans le journal (tâche de fond)
-            g_view.logFrame = 0;
-        } else if (t.wasPressed() && g_ui.hitSearch(t.x, t.y)) {
-            sound::tap();
-            g_idle.lastTouch = now;
-            openSearch();
-        } else if (t.wasPressed() && g_ui.hitSettings(t.x, t.y)) {
-            sound::tap();
-            g_view.screen = Screen::Menu;
-            g_idle.lastTouch = now;
-            g_ui.renderMenu(FW_VERSION);
+        const wr::Target* tg = t.wasPressed() ? g_ui.targets().hit(t.x, t.y) : nullptr;
+        if (tg && activateLog(*tg, now)) {
+            // écran quitté, ou file du WiiM demandée
         } else if (now - g_view.logFrame > 1000) {
             g_view.logFrame = now;
             g_ui.renderLog(logLines(), FW_VERSION);
@@ -916,49 +1081,8 @@ void loop() {
                 } else if (g_ui.hitHome(t.x, t.y) || g_ui.hitSettings(t.x, t.y)) {
                     finishDictation(false);
                 }
-            } else if (g_view.screen == Screen::Search && g_ui.hitMic(t.x, t.y)) {
-                if (!g_jobs.search && !g_voice.stt.busy) startVoice();  // bip, puis écoute jusqu'au bouton rouge
-            } else if (g_ui.hitHome(t.x, t.y)) {
-                sound::tap();
-                g_view.screen = Screen::Controls;
-                show();
-            } else if (g_ui.hitSettings(t.x, t.y)) {
-                sound::tap();
-                g_view.screen = Screen::Menu;
-                g_ui.renderMenu(FW_VERSION);
-            } else if (g_view.screen == Screen::Search && g_ui.hitSource(t.x, t.y) >= 0) {
-                sound::tap();
-                g_search.source = g_ui.hitSource(t.x, t.y);
-                g_search.status = "";
-                updateSearchField();
-            } else if (g_view.screen == Screen::Search) {
-                onSearchKey(g_ui.hitKey(t.x, t.y));
-            } else {
-                int r = g_ui.hitResult(t.x, t.y), pg = g_ui.hitResultsPage(t.x, t.y), h = g_ui.hitResultHeart(t.x, t.y);
-                if (h >= 0) {
-                    toggleAlbumFavorite(h);
-                } else if (r >= 0) {
-                    sound::tap();
-                    renderResultsList(r);  // ligne enfoncée
-                    logEvent("Recherche : lecture de %d (%s)", r + 1, g_search.results[r].title.c_str());
-                    g_worker.playSearchResult(r);
-                    markPending(wr::kPlayPause, Await::Music, true);
-                    setMessage((std::string(wr::L("Playing: ", "Lecture : ")) + g_search.results[r].title +
-                                (loadsAlbum(g_search.resultsKind) ? wr::L(" (loading the album\xE2\x80\xA6)",
-                                                              " (chargement de l'album\xE2\x80\xA6)")
-                                                      : ""))
-                                   .c_str(),
-                               loadsAlbum(g_search.resultsKind) ? 9000 : 4000);
-                    g_view.screen = Screen::Controls;
-                    show();
-                } else if (pg) {
-                    sound::tap();
-                    g_search.page += pg;
-                    renderResultsList();
-                } else if (g_ui.hitResultsEdit(t.x, t.y) || g_ui.hitSearch(t.x, t.y)) {
-                    sound::tap();
-                    openSearch();
-                }
+            } else if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) {
+                activateSearch(*tg);
             }
         }
         releaseKey(false);
@@ -982,49 +1106,14 @@ void loop() {
             logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_view.ambient) exitAmbient();
-        } else if (g_view.screen == Screen::Menu && g_ui.hitSearch(t.x, t.y)) {
-            sound::tap();
-            openSearch();
-        } else if (g_view.screen == Screen::Menu && g_ui.hitHome(t.x, t.y)) {
-            sound::tap();  // Accueil : fermer les réglages
-            g_view.screen = Screen::Controls;
-            show();
         } else if (g_view.screen == Screen::Menu) {
-            Ui::MenuChoice c = g_ui.hitMenu(t.x, t.y);
-            if (c != Ui::MenuNone) sound::tap();
-            if (c == Ui::MenuConfig) {
-                restartIntoPortal(wr::L("Setup requested.", "Reconfiguration demand\xC3\xA9" "e."));  // redémarre
-
-            } else if (c == Ui::MenuUpdate) {
-                runUpdateMode(g_ui);  // redémarre si une mise à jour est installée
-                g_view.screen = Screen::Controls;
-                show();
-            } else if (c == Ui::MenuLog) {
-                g_view.screen = Screen::Log;
-                g_view.logFrame = now;
-                g_ui.renderLog(logLines(), FW_VERSION);
-            } else if (c == Ui::MenuTouch) {
-                g_view.screen = Screen::TouchTest;
-                g_view.touchCount = 0;
-                g_ui.renderTouchTest(-1, -1, 0);
-            } else if (c == Ui::MenuSleep) {
-                g_view.screen = Screen::Controls;
-                goToSleep("demand\xC3\xA9" "e depuis R\xC3\xA9glages");
-            } else if (c == Ui::MenuClose) {
-                g_view.screen = Screen::Controls;
-                show();
-            }
+            if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) activateMenu(*tg, now);
         } else if (g_view.ambient) {
             logEvent("Appui en vue ambiance (%d,%d)%s", t.x, t.y, g_ui.hitHome(t.x, t.y) ? " : Accueil" : "");
             exitAmbient();  // vue ambiance : un appui ramène les commandes
             sound::tap();
-        } else if (handleBars(t.x, t.y)) {
-            // volume, coupure du son ou progression
-        } else if (g_ui.hitHeader(t.x, t.y)) {
-            g_header.pressed = true;  // appui long : Réglages
-            g_header.since = now;
         } else {
-            handleTap(t.x, t.y);
+            tapControls(t.x, t.y, now);  // y compris l'appui long de l'en-tête et la bande des presets (suivis ci-dessous)
         }
     }
     serviceStrip(t);

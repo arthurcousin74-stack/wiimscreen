@@ -239,18 +239,6 @@ void Ui::renderPicker(const std::vector<std::pair<std::string, std::string>>& de
     present();
 }
 
-int Ui::hitPicker(int x, int y) const {
-    if (const wr::Target* t = targets_.hit(wr::Act::PickDevice, x, y)) return t->arg;
-    if (targets_.hit(wr::Act::PickRetry, x, y)) return PickRetry;
-    if (targets_.hit(wr::Act::PickSetup, x, y)) return PickConfig;
-    return PickNone;
-}
-
-Ui::MenuChoice Ui::hitMenu(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::MenuChoice, x, y);
-    return t ? static_cast<MenuChoice>(t->arg) : MenuNone;
-}
-
 void Ui::showUpdate(const String& url, const String& code, const char* version, int percent, const String& status) {
     beginScreen(View::Other);
     auto& C = canvas_;

@@ -1,0 +1,180 @@
+# Taps on every element of every screen (1280x720): controls, Settings menu, Journal, touch test, update screen,
+# search keyboard (sources, keys, dictation), results (pages, Edit, a row), rail buttons on each screen, and Sleep at
+# the end (the program stops there). Run: .pio/build/sim/program --headless --reset --script tools/sim/scripts/taps.txt
+# The Journal lines on the terminal ("Appui ...", screens opened) are what a change of the tap dispatch must keep.
+wait 2000
+shot taps-01-commandes
+# Controls: transport row, mute, volume bar
+tap 643 446
+wait 300
+tap 1224 446
+wait 300
+tap 704 446
+wait 300
+tap 704 446
+wait 300
+tap 900 446
+wait 300
+tap 933 348
+wait 1500
+tap 933 348
+wait 1500
+tap 1063 348
+wait 1500
+tap 803 348
+wait 1500
+# Progress bar, header (short tap: nothing), then a long press on the cover: Settings
+tap 933 262
+wait 500
+tap 347 251
+wait 300
+press 347 251
+wait 3300
+release
+wait 300
+shot taps-02-reglages-appui-long
+# Menu: Home closes it
+tap 50 64
+wait 400
+# Page dots (right half, left half), preset tiles, a swipe on the strip
+tap 1000 685
+wait 300
+shot taps-03-page2
+tap 300 685
+wait 300
+tap 208 584
+wait 2500
+tap 400 584
+wait 2500
+press 1000 585
+move 800 585
+move 500 585
+release
+wait 400
+# Rail Home: first page again
+tap 50 64
+wait 400
+# Heart: add the album that plays, then remove it
+tap 651 348
+wait 3000
+shot taps-04-coeur
+tap 651 348
+wait 600
+# Nothing here (rail between its buttons)
+tap 30 200
+wait 300
+# Settings menu: Journal; in the Journal: WiiM queue, then Search, Settings, Close
+tap 50 656
+wait 400
+tap 690 447
+wait 1200
+shot taps-05-journal
+tap 925 79
+wait 2000
+tap 50 360
+wait 400
+tap 50 656
+wait 400
+tap 690 447
+wait 400
+tap 50 656
+wait 400
+tap 690 447
+wait 400
+tap 50 64
+wait 400
+tap 50 656
+wait 400
+tap 690 447
+wait 400
+tap 1154 79
+wait 400
+# Touch test: a touch, then Close
+tap 50 656
+wait 400
+tap 690 348
+wait 300
+tap 400 400
+wait 300
+shot taps-06-test-tactile
+tap 1154 58
+wait 400
+# Update screen (simulator): Cancel
+tap 50 656
+wait 400
+tap 690 249
+wait 400
+shot taps-07-mise-a-jour
+tap 1154 650
+wait 400
+# Menu: Close
+tap 50 656
+wait 400
+tap 690 638
+wait 400
+# Search from the menu; source chips; keys "mi", backspace, rail Search (nothing on the keyboard)
+tap 50 656
+wait 400
+tap 50 360
+wait 400
+tap 1173 143
+wait 200
+tap 998 143
+wait 200
+tap 823 143
+wait 200
+tap 861 541
+wait 150
+tap 975 330
+wait 150
+tap 50 360
+wait 150
+shot taps-08-clavier
+# Dictation: microphone, then the red button (the simulator types "Miles Davis" and searches)
+tap 1214 66
+wait 1500
+tap 1214 66
+wait 4000
+shot taps-09-dictee-resultats
+# Results: next page, previous page, Edit, Enter again, rail Search (back to the keyboard), Enter, a row
+tap 1123 659
+wait 400
+tap 300 659
+wait 400
+tap 1143 58
+wait 400
+tap 1089 647
+wait 2500
+tap 50 360
+wait 400
+tap 1089 647
+wait 2500
+tap 690 309
+wait 2500
+shot taps-10-lecture-resultat
+# Results: Settings and Home of the rail
+tap 50 360
+wait 400
+tap 1089 647
+wait 2500
+tap 50 656
+wait 400
+tap 50 360
+wait 400
+tap 50 64
+wait 400
+# Dictation cancelled by Home
+tap 50 360
+wait 400
+tap 1214 66
+wait 800
+tap 50 64
+wait 400
+tap 50 64
+wait 400
+# Sleep (the program stops)
+tap 50 656
+wait 400
+tap 690 546
+wait 4000
+quit

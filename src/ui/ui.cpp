@@ -428,8 +428,8 @@ void Ui::render(const UiState& st, int pressedPreset, int pressedTransport) {
 
 static wr::Rect padded(const wr::Rect& r, int pad) { return wr::Rect{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad}; }
 
-// Éléments touchables de la vue commandes, dans l'ordre des tests de main.cpp (le premier qui contient le point
-// l'emporte) : barres (volume, haut-parleur, progression), en-tête, points de page, tuiles puis bande, ♥, lecture.
+// Éléments touchables de la vue commandes (le premier qui contient le point l'emporte, dans l'ordre des anciens
+// tests de main.cpp) : barres (volume, haut-parleur, progression), en-tête, points de page, tuiles puis bande, ♥, lecture.
 // La barre de navigation est déjà inscrite (navRail) : elle ne touche rien d'autre. Chevauchements réels :
 // progression (agrandie de sc(10)) sur les textes et sur le bouton lecture agrandi, points de page (sc(6) de plus)
 // sur le bas des tuiles ; les tuiles sont dans la bande.
@@ -460,8 +460,6 @@ void Ui::controlsTargets() {
         targets_.add(Act::Transport, i, r, vol ? r : padded(r, pad), i == wr::kPlayPause ? wr::kTargetDefault : 0);
     }
 }
-
-bool Ui::hitFav(int x, int y) const { return targets_.hit(wr::Act::Fav, x, y) != nullptr; }
 
 // Bande des presets vide : dire pourquoi, et comment la remplir
 void Ui::emptyStrip() {
@@ -651,33 +649,8 @@ void Ui::showLevels(const std::vector<float>& levels, const std::vector<float>& 
 }
 
 // -------------------------------------------------------------------- zones
-// Les zones de la vue commandes gardent leur propre calcul (mêmes rectangles que controlsTargets()) : elles
-// répondent d'après la mise en page même quand un autre écran est affiché, et main.cpp les interroge dès que
-// g_view.screen vaut Controls, avant que la vue soit redessinée (premier tour de loop() après setup(), quand
-// l'écran montre encore « Connexion… » ou le choix du WiiM). Une recherche dans targets_ n'y répondrait rien.
-// hitVolume, hitProgress et hitDots rendent en plus une position (niveau, instant, moitié).
-
-int Ui::hitPreset(int x, int y) const {
-    for (size_t slot = 0; slot < layout_.presets.size(); ++slot) {
-        int i = page_ * layout_.perPage + (int)slot;
-        if (i < (int)presets_.size() && layout_.presets[slot].contains(x, y)) return i;
-    }
-    return -1;
-}
-
-int Ui::hitTransport(int x, int y) const {
-    // Cercles un peu agrandis : le doigt touche souvent à côté
-    const int pad = sc(10);
-    for (int i = 0; i < wr::kTransportCount; ++i) {
-        const wr::Rect& r = layout_.transport[i];
-        wr::Rect big{r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad};
-        if (i == wr::kVolDown || i == wr::kVolUp) big = r;  // collés au curseur : zone exacte
-        if (big.contains(x, y)) return i;
-    }
-    return -1;
-}
-
-bool Ui::hitHeader(int x, int y) const { return layout_.art.contains(x, y) || layout_.info.contains(x, y); }
+// Position visée par un appui sur le curseur de volume ou la barre de progression (éléments Volume / Progress de
+// targets()). La zone de la progression suit aussi updateProgress() (progHit_).
 
 bool Ui::hitVolume(int x, int y, int& volume) const {
     const wr::Rect& b = layout_.volBar;
@@ -686,21 +659,9 @@ bool Ui::hitVolume(int x, int y, int& volume) const {
     return true;
 }
 
-bool Ui::hitMute(int x, int y) const { return layout_.mute.contains(x, y); }
-
 bool Ui::hitProgress(int x, int y, uint32_t& posMs) const {
     if (!progHit_.contains(x, y) || progDuration_ == 0) return false;
     int dx = std::max(0, std::min(progHit_.w, x - progHit_.x));
     posMs = (uint32_t)((uint64_t)progDuration_ * dx / std::max(1, progHit_.w));
     return true;
-}
-
-bool Ui::hitStrip(int x, int y) const { return !presets_.empty() && layout_.strip.contains(x, y); }
-
-int Ui::hitDots(int x, int y) const {
-    if (pageCount() < 2) return 0;
-    const wr::Rect& d = layout_.dots;
-    wr::Rect zone{d.x, d.y - sc(6), d.w, d.h + sc(12)};
-    if (!zone.contains(x, y)) return 0;
-    return x < d.x + d.w / 2 ? -1 : 1;
 }

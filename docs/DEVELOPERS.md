@@ -148,29 +148,31 @@ The build finds this: a `static_assert` in `src/storage/settings.cpp` counts the
 
 ### A screen
 
-- [ ] `src/ui/ui.h` / `src/ui/ui.cpp`: add `renderXxx(…)` and its `hitXxx(x, y)` functions. Draw inside `layout_.content`
-      and call `navRail(n)` if the navigation bar shows on the screen (`hitHome()`, `hitSettings()` and
-      `hitSearch()` match only while the bar is shown). Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
+- [ ] `src/ui/ui.h` / `src/ui/ui.cpp`: add `renderXxx(…)`. Draw inside `layout_.content` and call `navRail(n)` if
+      the navigation bar shows on the screen. Use `useFont()`, never `loadFont()`. Lay out with `sc(…)`.
 - [ ] In `renderXxx(…)`, register each tappable element: `targets_.add(wr::Act::Xxx, arg, drawnRect, touchRect,
-      flags)` (add a value to `wr::Act` in `lib/core/src/focus.h` if needed). Add them in the order in which
-      `main.cpp` tests the taps: the first match wins. `hitXxx(x, y)` is then a lookup: `targets_.hit(wr::Act::Xxx,
-      x, y)`. Mark one element `wr::kTargetDefault` (first focus) and the bars and whole-screen areas
-      `wr::kTargetNoFocus`.
+      flags)` (add a value to `wr::Act` in `lib/core/src/focus.h` if needed). When two touch areas overlap, the
+      element added first wins. Mark one element `wr::kTargetDefault` (first focus) and the bars and whole-screen
+      areas `wr::kTargetNoFocus`. You do not need a `hitXxx(x, y)` function: `main.cpp` finds the element with
+      `g_ui.targets().hit(x, y)`.
 - [ ] `src/app/app_internal.h`: add a value `Xxx` to `enum class Screen`. `modalOpen()` then knows the screen: it is
       true for all values other than `Screen::Controls`. Put the state of the screen in a struct with a one-line
       comment, as the other structs in this file, and define the object in `src/main.cpp`.
 - [ ] To open the screen: set `g_view.screen = Screen::Xxx`, then draw it (`g_ui.renderXxx(…)`).
-- [ ] `src/main.cpp`: in `loop()`, add a branch `if (g_view.screen == Screen::Xxx) { … }` before the controls
-      view, as for `Screen::Log`. It handles the taps (close, `hitHome()`, `hitSettings()`, `hitSearch()`), then
-      calls `serviceWiim()`, `delay(5)` and `return`. To close the screen: set `g_view.screen = Screen::Controls`,
+- [ ] `src/main.cpp`: write `activateXxx(const wr::Target&, …)`, a `switch` on `target.act` (close, `Act::Home`,
+      `Act::Settings`, `Act::Search`, your elements), as `activateLog()`. A tap and the OK key both call it. In
+      `loop()`, add a branch `if (g_view.screen == Screen::Xxx) { … }` before the controls view, as for
+      `Screen::Log`: on a tap, it finds the element with `g_ui.targets().hit(t.x, t.y)` and calls `activateXxx()`,
+      then it calls `serviceWiim()`, `delay(5)` and `return`. To close the screen: set `g_view.screen = Screen::Controls`,
       set `g_idle.lastTouch`, call `show()`.
 - [ ] A large screen: put its functions in a new file `src/app/app_xxx.cpp` (namespace `app`, includes
       `app/app_internal.h`), and declare there the functions that `main.cpp` calls. The `sim`, `simreal` and `desktop`
       builds take `+<app/app*.cpp>`.
 - [ ] `tools/preview/preview.cpp`: draw the screen and `save()` it, in landscape and, if it is different, in
       portrait. Then run `python3 tools/preview/check_golden.py --update` and commit `tools/preview/golden.sha256`.
-- [ ] Look at the screen in English and French, at 1280×720 and 800×480 (`.pio/golden-out/`). Optional: add taps
-      and a `shot` to `tools/sim/scripts/tour.txt`.
+- [ ] Look at the screen in English and French, at 1280×720 and 800×480 (`.pio/golden-out/`). Add a tap on each element
+      to `tools/sim/scripts/taps.txt` (`tools/check.sh sim` runs it), and optionally a `shot` to
+      `tools/sim/scripts/tour.txt`.
 
 **Traps:** a separate `bool` flag for a screen (not a `Screen` value) is not in `modalOpen()`: `renderNow()` and the
 1 Hz progress tick then draw the controls view over your screen. A branch that does not call `serviceWiim()` stops

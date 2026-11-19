@@ -67,7 +67,6 @@ public:
     bool hitSettings(int x, int y) const;  // Réglages : barre de navigation
     // Bouton ♥ de la vue commandes : 0 caché, 1 vide (ajouter), 2 plein (retirer), 3 en cours
     void setFavorite(int state) { favState_ = state; }
-    bool hitFav(int x, int y) const;
     // Avance de la progression seule (zone ~3 % de l'écran) dans la vue affichée ;
     // false si elle ne s'y prête pas (autre écran) : faire un rendu complet
     bool updateProgress(const UiState& st);
@@ -78,33 +77,25 @@ public:
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
     void showLevels(const std::vector<float>& levels, const std::vector<float>& peaks);
 
-    int hitPreset(int x, int y) const;  // indice global du preset, ou -1
-    int hitTransport(int x, int y) const;
-    bool hitHeader(int x, int y) const;                    // pochette ou textes
+    // Position visée dans la vue commandes (le point d'un appui sur l'élément Volume / Progress de targets())
     bool hitVolume(int x, int y, int& volume) const;       // curseur de volume : niveau visé
-    bool hitMute(int x, int y) const;                      // icône du haut-parleur
-    bool hitProgress(int x, int y, uint32_t& posMs) const;  // barre de progression
-    bool hitStrip(int x, int y) const;                     // bande des presets (glisser)
-    int hitDots(int x, int y) const;                       // -1 / +1 : page précédente / suivante
+    bool hitProgress(int x, int y, uint32_t& posMs) const;  // barre de progression (zone suivie par updateProgress)
+    // targets() est celle de la vue commandes (dernier écran complet dessiné : render())
+    bool controlsShown() const { return view_ == View::Controls; }
 
     // Menu de l'appui long : configuration, mise à jour, fermer
     enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuTouch, MenuLog, MenuSleep, MenuClose };
-    void renderMenu(const char* version);
-    MenuChoice hitMenu(int x, int y) const;
+    void renderMenu(const char* version);  // éléments MenuChoice (arg = MenuChoice)
 
-    // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé
-    enum { PickNone = -1, PickRetry = -2, PickConfig = -3 };
+    // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé. Éléments PickDevice (arg =
+    // indice), PickRetry, PickSetup
     void renderPicker(const std::vector<std::pair<std::string, std::string>>& devices);
-    int hitPicker(int x, int y) const;  // indice du WiiM, ou PickRetry / PickConfig / PickNone
 
     // Test de l'écran tactile : un rond sous le doigt et ses coordonnées (x < 0 : aucun appui)
     void renderTouchTest(int x, int y, int count);
-    bool hitTouchTestClose(int x, int y) const { return targets_.hit(wr::Act::TouchClose, x, y) != nullptr; }
 
     // Journal : derniers évènements (appuis, commandes, erreurs) pour le diagnostic
     void renderLog(const std::vector<String>& lines, const char* version);
-    bool hitLogClose(int x, int y) const { return targets_.hit(wr::Act::LogClose, x, y) != nullptr; }
-    bool hitLogQueue(int x, int y) const { return targets_.hit(wr::Act::LogQueue, x, y) != nullptr; }
 
     // Recherche Qobuz (par le WiiM) : clavier, puis liste des morceaux trouvés
     bool hitSearch(int x, int y) const;  // bouton Recherche de la barre
@@ -112,8 +103,6 @@ public:
     // mic : 0 micro au repos, 1 écoute (level 0..1), 2 transcription en cours (si la voix est configurée)
     void renderSearch(const std::string& query, const String& status, bool busy, int pressedKey = -1, int source = 0,
                       bool sources = false, int mic = 0, float level = 0);
-    int hitSource(int x, int y) const;   // 0 Qobuz, 1 Deezer, 2 Albums, -1 ailleurs
-    int hitKey(int x, int y) const;      // indice dans keys(), ou -1
     // Mises à jour partielles (rapides) de l'écran de recherche : une touche enfoncée / relâchée, le champ
     void pressKey(int index, bool down);
     void updateSearchField(const std::string& query, const String& status, bool busy, int source, bool sources,
@@ -128,10 +117,6 @@ public:
     void updateResultCover(int index, const ArtImage* img);
     int resultsFirst() const { return resultsFirst_; }
     int resultsPerPage() const { return resultsPerPage_; }
-    int hitResult(int x, int y) const;   // indice global du morceau, ou -1
-    int hitResultHeart(int x, int y) const;  // indice global de la ligne dont le cœur est touché, ou -1
-    int hitResultsPage(int x, int y) const;  // -1 / +1 : page précédente / suivante, 0 sinon
-    bool hitResultsEdit(int x, int y) const { return targets_.hit(wr::Act::ResultsEdit, x, y) != nullptr; }
 
     // Mise à jour par le réseau : adresse à ouvrir, code à saisir, progression (-1 : en attente)
     void showUpdate(const String& url, const String& code, const char* version, int percent, const String& status);
@@ -142,10 +127,9 @@ public:
     void showPortal(const String& apName, const String& apPass, const String& url, const String& reason);
 
     // Éléments touchables de l'écran affiché (wr::TargetList), inscrits pendant son dessin complet ; les mises à
-    // jour partielles n'y touchent pas. hit() rend le premier qui contient le point : l'ordre d'inscription suit
-    // celui des tests de main.cpp. Les hitXxx() ci-dessus en sont des recherches, sauf hitMic() (voir
-    // ui_search.cpp) et ceux de la vue commandes qui répondent aussi hors de cette vue (voir ui.cpp) : hitPreset,
-    // hitTransport, hitHeader, hitVolume, hitMute, hitProgress, hitStrip, hitDots.
+    // jour partielles n'y touchent pas. hit() rend le premier qui contient le point (l'ordre d'inscription est la
+    // priorité) : main.cpp résout chaque appui ainsi, puis l'active. hitHome/hitSettings/hitSearch en sont des
+    // recherches ; hitMic() garde son calcul (voir ui_search.cpp), hitVolume/hitProgress lisent la position.
     const wr::TargetList& targets() const { return targets_; }
 
 private:

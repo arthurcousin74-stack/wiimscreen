@@ -171,16 +171,6 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
     searchArea_ = wr::Rect{A.x, A.y, A.w, fy + fh + sc(10) + C.fontHeight() + sc(14) - A.y};
 }
 
-int Ui::hitSource(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::Source, x, y);
-    return t ? t->arg : -1;
-}
-
-int Ui::hitKey(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::Key, x, y);
-    return t ? t->arg : -1;
-}
-
 // Résultats : une ligne par morceau (titre, artiste · album), par pages
 void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
                        const String& status, int pressed, const std::vector<int>& hearts,
@@ -295,11 +285,6 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     present();
 }
 
-int Ui::hitResult(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::ResultRow, x, y);
-    return t ? t->arg : -1;
-}
-
 // Pochette d'une ligne : décodée une fois (cache par adresse), case sombre tant qu'elle n'est pas arrivée
 void Ui::drawResultCover(const wr::Rect& r, const ArtImage* img) {
     auto& C = canvas_;
@@ -327,16 +312,6 @@ void Ui::updateResultCover(int index, const ArtImage* img) {
     const wr::Rect& r = coverRects_[k];
     drawResultCover(r, img);
     presentRect(r);
-}
-
-int Ui::hitResultHeart(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::ResultHeart, x, y);
-    return t ? t->arg : -1;
-}
-
-int Ui::hitResultsPage(int x, int y) const {
-    const wr::Target* t = targets_.hit(wr::Act::ResultsPage, x, y);
-    return t ? t->arg : 0;
 }
 
 // Micro de la recherche (le seul). Garde son propre calcul : micRect_ reste valable après un passage du clavier

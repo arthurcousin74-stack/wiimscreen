@@ -7,9 +7,9 @@
 #
 # Gates: native sim preview asan simreal desktop tab5
 #   native   unit tests of lib/core (AddressSanitizer + UBSan built in)      needs: a C++ compiler
-#   sim      simulator build + scripted tour of the screens + scripted keys   needs: SDL2 headers (libsdl2-dev)
+#   sim      simulator build + scripted tour, taps on every screen, keys     needs: SDL2 headers (libsdl2-dev)
 #   preview  preview build + golden screens (tools/preview/check_golden.py)   needs: SDL2 headers
-#   asan     simulator tour under AddressSanitizer/UBSan                      needs: SDL2 headers
+#   asan     simulator tour and taps under AddressSanitizer/UBSan             needs: SDL2 headers
 #   simreal  "real WiiM" simulator + relay self-test (about 2 min)            needs: SDL2 headers, openssl, python3
 #   desktop  computer build + self-test against a mock WiiM                   needs: SDL2 + OpenSSL headers (libssl-dev)
 #   tab5     Tab5 firmware                                                    needs: PlatformIO downloads the toolchain
@@ -62,7 +62,19 @@ gate_sim() {
     need sim "SDL2 headers missing (Debian/Ubuntu: sudo apt install libsdl2-dev; macOS: brew install sdl2)" have_sdl2 || return 2
     pcpio run -e sim &&
         tmo 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt &&
-        sim_keys
+        sim_taps && sim_keys
+}
+
+# Taps on every element of every screen (tools/sim/scripts/taps.txt): ends with Sleep (the program stops by itself)
+sim_taps() {
+    local out
+    out=$(tmo 180 .pio/build/sim/program --headless --reset --state .pio/taps-state --script tools/sim/scripts/taps.txt) ||
+        { echo "$out"; return 1; }
+    if ! grep -q "Mise en veille (demand" <<<"$out"; then
+        echo "check.sh: sim: the taps.txt run did not reach Sleep:"
+        echo "$out"
+        return 1
+    fi
 }
 
 # Scripted keys (tools/sim/scripts/keys.txt): the events that --log-keys prints, through takeKey() in loop()
@@ -90,11 +102,15 @@ gate_asan() {
     # Separate build folder: the normal sim build is not touched. UBSan reports inside M5GFX (libdeps) are known.
     PLATFORMIO_BUILD_DIR=.pio/build-asan \
         PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1" pcpio run -e sim || return 1
-    if ! ASAN_OPTIONS=detect_leaks=0 tmo 300 .pio/build-asan/sim/program --headless --quiet --reset \
-        --state .pio/asan-state --out .pio/asan-out --script tools/sim/scripts/tour.txt 2> .pio/asan.log; then
-        cat .pio/asan.log
-        return 1
-    fi
+    local script
+    : > .pio/asan.log
+    for script in tour taps; do
+        if ! ASAN_OPTIONS=detect_leaks=0 tmo 300 .pio/build-asan/sim/program --headless --quiet --reset \
+            --state .pio/asan-state --out .pio/asan-out --script tools/sim/scripts/$script.txt 2>> .pio/asan.log; then
+            cat .pio/asan.log
+            return 1
+        fi
+    done
     if grep -v "libdeps" .pio/asan.log | grep -E "ERROR: AddressSanitizer|runtime error"; then return 1; fi
 }
 
