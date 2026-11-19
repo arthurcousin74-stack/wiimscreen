@@ -17,7 +17,16 @@ Raspberry Pi or a Mac, nor with a real WiiM on Windows.** Please report what wor
 | Window or full screen, mouse or touch screen, any screen size (800×480 and larger) | Setup page and update page (use the settings file and `git pull`) |
 | Settings and favorites in `~/.config/wiimscreen` (Windows: `%APPDATA%\wiimscreen`) | Battery level (not shown) |
 
-Small screens show less text: the fonts do not scale with the screen (at 800×480 the artist line can be hidden).
+Small screens show less text: below 1280×720 the fonts do not get smaller (at 800×480 the artist line can be
+hidden). Above 1280×720 they grow with the picture.
+
+**Picture size.** Without `--size`, the app picture is 1280×720 times 1.25, 1.5, 1.75 or 2: the largest that fits
+90 % of the usable screen (in full screen: the whole screen), for example 1920×1080 on a 2560×1440 screen and
+1600×900 on a 1920×1080 laptop screen at 125 %. Portrait (setting `rotation` 0 or 2): 720×1280 times the same.
+The window shows the picture pixel for pixel, so lines and text are sharp, and the text keeps its proportions:
+the program makes larger fonts from `DejaVuSans.ttf` when it starts (beside the program on Windows; from the
+`fonts` folder of the project, or the system's `fonts-dejavu-core`, on Linux). Without that file, the text stays at
+its 1280×720 size. You can resize the window: the picture is scaled to it, with bars if the shape differs.
 
 ## Raspberry Pi
 
@@ -112,11 +121,17 @@ and add them at the end of *Target*, for example `...\wiimscreen.exe --wiim 192.
 | Screenshots (F12) | `%APPDATA%\wiimscreen\captures` |
 | Root certificates (Qobuz, Deezer, covers) | `cacert.pem` beside `wiimscreen.exe` |
 
+**Display scaling (125 %, 150 %).** wiimscreen is DPI aware (manifest and SDL hint): Windows does not stretch its
+window, so the picture is sharp. The window is measured in screen pixels: on a 2560×1440 screen at 125 %, the
+picture is 1920×1080 and the window shows it pixel for pixel. Moving the window to a screen with another scale
+keeps its size in pixels.
+
 Not on Windows: the microphone (voice search), sound effects, the setup page and the update page (edit
 `settings.txt`; download a new zip to update). To remove wiimscreen, delete its folder and `%APPDATA%\wiimscreen`.
 
 The zip holds `wiimscreen.exe` (SDL2, OpenSSL and the C++ runtime are linked into it: no DLL), `cacert.pem`,
-`README.txt` (the same steps, for the user) and `LICENSE.txt`.
+`DejaVuSans.ttf` (fonts of a picture larger than 1280×720) with `LICENSE-DejaVu.txt`, `README.txt` (the same
+steps, for the user) and `LICENSE.txt`.
 
 ### Build it yourself
 
@@ -170,8 +185,8 @@ pio run -e desktop && .pio/build/desktop/program
 | Option | Effect |
 |---|---|
 | `--fullscreen` | Full screen, no mouse pointer (touch screens) |
-| `--size 800x480` | Screen size of the app (default 1280×720). Taller than wide: portrait |
-| `--scale 0.75` | Window size on the computer screen (the picture is scaled) |
+| `--size 800x480` | Size of the app picture (default: fits the screen, see above; headless: 1280×720). Taller than wide: portrait |
+| `--scale 0.75` | Window size compared with the picture (default 1: pixel for pixel, smaller only when it does not fit the screen) |
 | `--wiim 192.168.1.50` | Use this WiiM (when discovery does not find it) |
 | `--state <folder>` | Settings and favorites folder (default `~/.config/wiimscreen`; Windows: `%APPDATA%\wiimscreen`) |
 | `--quiet` | No Journal on the terminal |
@@ -247,7 +262,8 @@ Stop wiimscreen before you edit the file, then start it again. The names are the
 | `pc_platform_rtos.cpp` | Time, random numbers, FreeRTOS tasks on threads |
 | `pc_platform_prefs.cpp` | Settings file (`settings.txt`), settings of a first start |
 | `pc_platform_devices.cpp` | M5, Serial, ESP and WiFi objects, network address, microphone, battery |
-| `pc_platform_screen.cpp` | SDL window, mouse/touch input, screenshots, screen size |
+| `pc_platform_screen.cpp` | SDL window, mouse/touch input, screenshots, screen size, picture size that fits the screen |
+| `pc_fonts.cpp` | Fonts of a picture larger than 1280×720, made from `DejaVuSans.ttf` with stb_truetype (`third_party/`) |
 | `pc_platform_script.cpp` | `--script` runner |
 | `pc_platform_keys.cpp` | Keys: keyboard, media keys, game controllers, joysticks and script keys → `takeKey()` |
 | `pc_platform_exit.cpp` | Restart (`pc::restart()`: `execv`; Windows: `CreateProcess` of the same command line) and power off |

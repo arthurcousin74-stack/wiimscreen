@@ -12,7 +12,8 @@ The computer and the WiiM must be on the same network.
 Start
 -----
 
-1. Unzip the whole folder. Keep wiimscreen.exe and cacert.pem together.
+1. Unzip the whole folder. Keep wiimscreen.exe, cacert.pem and DejaVuSans.ttf
+   together.
 2. Double-click wiimscreen.exe.
 3. Windows can show "Windows protected your PC" (the program is not signed).
    Click "More info", then "Run anyway".
@@ -31,8 +32,10 @@ Options (add them to the shortcut's "Target", or type them in a terminal)
 -------
 
   --fullscreen            Full screen (touch screens)
-  --size 800x480          Size of the app picture (default 1280x720)
-  --scale 0.75            Window size on the screen
+  --size 800x480          Size of the app picture (default: the largest of
+                          1280x720 x 1.25, 1.5, 1.75 or 2 that fits the screen)
+  --scale 0.75            Window size on the screen (default: the picture
+                          pixel for pixel, smaller if it does not fit)
   --wiim 192.168.1.50     Use this WiiM
   --state <folder>        Settings and favorites folder
   --console               Show the messages in a console window

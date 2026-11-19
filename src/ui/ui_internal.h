@@ -19,10 +19,17 @@ static constexpr uint32_t kAccent = 0xE8A33Du;  // accent par défaut (ambre)
 static constexpr uint32_t kRed = 0xE5484Du;
 
 // Polices VLW : les tableaux ne sont définis qu'une fois (ui_core.cpp), ici seulement leurs adresses
+#ifdef PC_SCALED_FONTS  // ordinateur : choisies selon la taille du canevas (ui_core.cpp)
+extern const uint8_t* kTiny;
+extern const uint8_t* kSmall;
+extern const uint8_t* kMid;
+extern const uint8_t* kBig;
+#else
 extern const uint8_t* const kTiny;  // noms de presets sur deux lignes
 extern const uint8_t* const kSmall;
 extern const uint8_t* const kMid;
 extern const uint8_t* const kBig;
+#endif
 
 // Charge la police sur le canevas sauf si c'est déjà la sienne (jamais C.loadFont() directement).
 // Un seul état pour tous les fichiers ui*.cpp : défini dans ui_core.cpp.

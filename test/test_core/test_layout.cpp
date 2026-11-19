@@ -68,6 +68,11 @@ static void test_layout() {
         checkLayout(800, 480, n);   // écran officiel 7" du Raspberry Pi (version ordinateur)
         checkLayout(480, 800, n);
         checkLayout(1920, 1080, n);  // écran d'ordinateur
+        // Canevas de la version ordinateur ajustés à l'écran (1280x720 fois 1,25, 1,5, 1,75, 2) et leur portrait
+        for (int k4 : {5, 6, 7, 8}) {
+            checkLayout(320 * k4, 180 * k4, n);
+            checkLayout(180 * k4, 320 * k4, n);
+        }
     }
     Layout L = computeLayout(1280, 720, 12);
     TEST_ASSERT_EQUAL(6, L.perPage);  // 12 presets : 2 pages de 6

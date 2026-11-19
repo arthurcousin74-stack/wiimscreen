@@ -29,6 +29,14 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
   `--log-keys` shows them. No change on the Tab5.
 
 ### Changed
+- Computer version, sharper picture: the app is drawn at the size of the window instead of a 1280x720 picture
+  stretched into it. Without `--size`, the picture is 1280x720 times 1.25, 1.5, 1.75 or 2, the largest that fits
+  the screen (90 % of it in a window, all of it in full screen), and the window shows it pixel for pixel; the text
+  grows with it (fonts made from DejaVu Sans when the program starts). On Windows, the program is DPI aware: at
+  125 % or 150 % display scaling, Windows no longer stretches (and blurs) the window. `--size` larger than
+  1280x720 also gets larger text now. A window made smaller than the picture is smoothed (not jagged), and an
+  unchanged picture is not copied to the window again (less CPU). The Windows zip has `DejaVuSans.ttf` beside the
+  program. No change on the Tab5.
 - Computer version and simulator: the screenshot key is now **F12** (it was `S`).
 - Computer version: `settings.txt` is written with `\n` line endings on every system, and lines ending with `\r\n`
   (a Windows editor) are read too. The log shows each public server whose certificate was verified once

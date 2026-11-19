@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
         if (a == "--headless") headless = true;
         else if (a == "--quiet") g_quiet = true;
         else if (a == "--log-keys") g_logKeys = true;
-        else if (a == "--scale") g_scale = std::max(0.25f, std::strtof(next().c_str(), nullptr));
+        else if (a == "--scale") g_scale = std::max(0.25f, std::strtof(next().c_str(), nullptr)), g_scaleGiven = true;
         else if (a == "--state") g_state = next();
         else if (a == "--out") g_out = next();
         else if (a == "--relay") g_relay = next();
@@ -102,6 +102,7 @@ int main(int argc, char** argv) {
             }
             g_long = std::max(w, h), g_short = std::min(w, h);
             portrait = h > w;
+            g_sizeGiven = true;
         } else if (a == "--wiim") wiim = next();
         else if (a == "--script") {
             if (!loadScript(next())) return 1;
@@ -144,6 +145,12 @@ int main(int argc, char** argv) {
     if (!g_quiet) printf("wiimscreen : r\xC3\xA9glages et favoris dans %s\n", g_state.c_str());
 #endif
     if (!headless) {
+#ifdef _WIN32
+        // Pixels of the screen, not the 125 % / 150 % that Windows would stretch (blurred) itself: also in the
+        // manifest (platform/windows/wiimscreen.manifest); the hint covers a build without it
+        SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+#endif
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // a window smaller than the canvas: smooth, not jagged
         if (SDL_Init(SDL_INIT_VIDEO) != 0) {
             fprintf(stderr, "SDL : %s (essaie --headless)\n", SDL_GetError());
 #ifdef _WIN32  // no terminal when started from the Explorer: say it in a window
@@ -156,9 +163,17 @@ int main(int argc, char** argv) {
 #else
         const char* title = "wiimscreen \xE2\x80\x94 simulateur";
 #endif
+        // No --size: the canvas fits the screen (portrait as in the settings); the window shows it pixel for pixel
+        if (!g_sizeGiven) {
+            loadPrefs();
+            const auto rot = prefs().find("rotation");
+            portrait = rot != prefs().end() && (rot->second == "0" || rot->second == "2");
+            fitCanvasToScreen(portrait);
+        }
         const int w0 = portrait ? g_short : g_long, h0 = portrait ? g_long : g_short;
-        g_win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)(w0 * g_scale),
-                                 (int)(h0 * g_scale),
+        const float s0 = windowScale(w0, h0);
+        g_win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)std::lround(w0 * s0),
+                                 (int)std::lround(h0 * s0),
                                  g_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : SDL_WINDOW_RESIZABLE);
         if (g_fullscreen) SDL_ShowCursor(SDL_DISABLE);  // touch screen: no mouse pointer
         g_ren = g_win ? SDL_CreateRenderer(g_win, -1, 0) : nullptr;

@@ -10,10 +10,37 @@
 
 static auto& D = M5.Display;
 
+#ifdef PC_SCALED_FONTS
+#include <cmath>
+
+// Ordinateur (simulateur, desktop, Windows) : sur un canevas plus grand que 1280x720, les polices grandissent comme
+// la mise en page (sc()), faites depuis DejaVuSans.ttf (platform/pc/pc_fonts.cpp) ; jusqu'à 1280x720, ou sans le
+// fichier TTF, les polices intégrées. Le Tab5 n'a pas ce code.
+const uint8_t* pcScaledFont(int px);
+const uint8_t* kTiny = font_ui_24;
+const uint8_t* kSmall = font_ui_28;
+const uint8_t* kMid = font_ui_40;
+const uint8_t* kBig = font_ui_56;
+
+static void scaleFonts(int w, int h) {
+    const int s = std::min(w, h);
+    const bool larger = s * 100 >= 720 * 105;  // au moins 5 % de plus que 720
+    const struct {
+        const uint8_t** font;
+        const uint8_t* builtIn;
+        int px;
+    } kFonts[] = {{&kTiny, font_ui_24, 24}, {&kSmall, font_ui_28, 28}, {&kMid, font_ui_40, 40}, {&kBig, font_ui_56, 56}};
+    for (const auto& f : kFonts) {
+        const uint8_t* scaled = larger ? pcScaledFont((int)std::lround(f.px * s / 720.0)) : nullptr;
+        *f.font = scaled ? scaled : f.builtIn;
+    }
+}
+#else
 const uint8_t* const kTiny = font_ui_24;  // noms de presets sur deux lignes
 const uint8_t* const kSmall = font_ui_28;
 const uint8_t* const kMid = font_ui_40;
 const uint8_t* const kBig = font_ui_56;
+#endif
 
 // Police chargée sur un canevas : M5GFX relit l'en-tête VLW à chaque loadFont ; on évite de recharger la même
 // (le clavier de recherche en chargeait 43 par image). Un seul canevas charge des polices sur l'appareil.
@@ -44,6 +71,9 @@ void Ui::begin(const Settings& s) {
 }
 
 void Ui::relayout() {
+#ifdef PC_SCALED_FONTS
+    scaleFonts(D.width(), D.height());
+#endif
     layout_ = wr::computeLayout(D.width(), D.height(), (int)presets_.size());
     if (art_.width() != layout_.art.w || art_.height() != layout_.art.h) {
         art_.deleteSprite();

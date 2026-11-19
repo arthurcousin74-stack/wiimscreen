@@ -9,6 +9,7 @@
 //   pc_platform_keys.cpp     key input: SDL keyboard/controllers and script keys -> wr::KeyTracker -> takeKey()
 //   pc_platform_exit.cpp     restart (execv of the same command; Windows: CreateProcess) and power off (_exit)
 //   pc_platform_windows.cpp  Windows only: settings folder (%APPDATA%\wiimscreen), console or last.log output
+//   pc_fonts.cpp             interface fonts at any size from DejaVuSans.ttf (canvas larger than 1280x720)
 #pragma once
 
 #include <SDL2/SDL.h>
@@ -33,11 +34,17 @@ void savePrefs();
 extern SDL_Window* g_win;
 extern SDL_Renderer* g_ren;
 extern float g_scale;
-extern int g_long, g_short;  // --size
+extern int g_long, g_short;           // --size, or fitCanvasToScreen()
+extern bool g_sizeGiven, g_scaleGiven;  // --size, --scale on the command line
 extern bool g_fullscreen;
 extern bool g_mouseDown, g_pressQueued, g_releaseQueued;
 extern int g_mouseX, g_mouseY;
 void shot(const std::string& name);
+// No --size: the canvas becomes 1280x720 times 1.25, 1.5, 1.75 or 2, the largest that fits the screen (90 % of the
+// usable area in a window, the whole screen in full screen; portrait: 720x1280 times it). After SDL_Init.
+void fitCanvasToScreen(bool portrait);
+// Window size / canvas size: --scale if given, else 1, or less when the canvas does not fit the screen
+float windowScale(int w, int h);
 
 // pc_platform_keys.cpp
 extern bool g_logKeys;  // --log-keys: print each event the app takes
