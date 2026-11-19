@@ -7,6 +7,10 @@ qui est en cours de lecture. **Pour l'instant, seul le M5Stack Tab5** (ESP32-P4,
 **a été testé** : c'est la carte prise en charge, et celle de ce guide. Le portage vers d'autres cartes ESP32 est
 décrit dans [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards) (en anglais).
 
+La même application existe aussi sur ordinateur, à titre expérimental : Raspberry Pi, Linux, macOS, et **Windows**
+(un simple portage pour l'instant : `wiimscreen.exe` à dézipper, sans installateur ni signature, pas encore essayé
+avec un vrai WiiM). Voir [docs/DESKTOP.md](docs/DESKTOP.md) (en anglais).
+
 > **Langue** : l'interface est en anglais par défaut. Pour l'avoir en français : page de configuration (sur le
 > téléphone) › **Language / Langue** › **Français**, puis **Save and restart**. Les noms de boutons de ce guide sont
 > ceux de l'interface en français. Le Journal reste en français dans les deux langues.

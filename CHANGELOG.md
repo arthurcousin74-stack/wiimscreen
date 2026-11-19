@@ -6,6 +6,14 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 ## [Unreleased]
 
 ### Added
+- **Windows (simple port, experimental)**: `wiimscreen-windows-x64.zip` holds `wiimscreen.exe`, a ready-made program for
+  Windows 10 (1903 or later) and 11, 64-bit: unzip it and double-click, no installation, no WSL. The same app as the
+  computer version: WiiM discovery, covers, presets, favorites, Qobuz and Deezer search, keys. Settings and favorites
+  in `%APPDATA%\wiimscreen`, the log of the last run in `last.log` there (`--console` shows a console window). It
+  is not signed (Windows: *More info*, *Run anyway*), and the firewall can ask for the network (allow private
+  networks for discovery). Built and self-tested by CI against a mock WiiM; WiiM discovery seen working on Windows 11;
+  not yet tried with a real WiiM on Windows. No microphone, no sounds, no setup page. docs/DESKTOP.md. No change on
+  the Tab5.
 - Computer version: you can use the app with a keyboard, a remote or a game controller. The arrow keys move a white
   ring between the buttons (the bar on the left, the heart, playback, volume, the preset tiles and their pages, the
   Settings menu, the Journal, the WiiM picker), OK presses the button, Back closes a screen, Space and the media keys
@@ -18,6 +26,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ### Changed
 - Computer version and simulator: the screenshot key is now **F12** (it was `S`).
+- Computer version: `settings.txt` is written with `\n` line endings on every system, and lines ending with `\r\n`
+  (a Windows editor) are read too. The log shows each public server whose certificate was verified once
+  (`[tls] host=… verified=1`).
+- For contributors: `platform/pc/net_direct.cpp` uses POSIX or Winsock sockets through `platform/pc/net_compat.h`;
+  `platform/pc/selftest.sh` takes `PROGRAM=` (the Windows exe) and `SELFTEST_ART_URL=` (a cover over HTTPS, to
+  check the root certificates); new `tools/check.sh windows` gate; `mock_wiim.py --art-url`.
 - For contributors: `src/` is split into folders by role (`app/`, `ui/`, `net/`, `device/`, `storage/`;
   `main.cpp` stays at the root), with includes written from `src/` (`#include "net/wiim_worker.h"`). File names
   and the code (apart from the include lines) are unchanged. No change for the user.

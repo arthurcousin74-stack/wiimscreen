@@ -1,10 +1,12 @@
-# wiimscreen on a computer (Raspberry Pi, Linux, macOS)
+# wiimscreen on a computer (Windows, Raspberry Pi, Linux, macOS)
 
 The `desktop` build runs the same application as the Tab5 on a computer: the same screens, and the same code for
-the WiiM, Qobuz, Deezer, covers and favorites. It connects directly to your network: no relay, no Tab5.
+the WiiM, Qobuz, Deezer, covers and favorites. It connects directly to your network: no relay, no Tab5. On Windows,
+it is a ready-made program: `wiimscreen.exe` (build `windows`).
 
-**Status:** built and tested on Linux (x86-64) against a mock WiiM (`platform/pc/selftest.sh`, run by CI). **Not yet
-tried on a Raspberry Pi or a Mac.** Please report what works.
+**Status:** built and tested on Linux (x86-64) and Windows (x86-64) against a mock WiiM (`platform/pc/selftest.sh`,
+run by CI for both). On Windows 11, the WiiM was also found on a home network (discovery). **Not yet tried on a
+Raspberry Pi or a Mac, nor with a real WiiM on Windows.** Please report what works.
 
 ## What works, what does not
 
@@ -13,7 +15,7 @@ tried on a Raspberry Pi or a Mac.** Please report what works.
 | Now playing, covers, presets and tiles, search (Qobuz, Deezer), favorites, Journal, settings menu | Microphone (voice search) |
 | WiiM discovery on the network (SSDP) and certificate pinning | Sound effects (taps, beeps) |
 | Window or full screen, mouse or touch screen, any screen size (800×480 and larger) | Setup page and update page (use the settings file and `git pull`) |
-| Settings and favorites in `~/.config/wiimscreen` | Battery level (not shown) |
+| Settings and favorites in `~/.config/wiimscreen` (Windows: `%APPDATA%\wiimscreen`) | Battery level (not shown) |
 
 Small screens show less text: the fonts do not scale with the screen (at 800×480 the artist line can be hidden).
 
@@ -81,9 +83,71 @@ Same as the Raspberry Pi steps 1 to 3. Then start it in a window:
 
 ## Windows
 
-Use WSL (Ubuntu), as for the simulator (`tools/sim/README.md`, section Windows), then the Linux steps. In the
-default WSL network mode, discovery cannot find the WiiM: start with `--wiim <WiiM address>`. A native Windows
-build is not available yet.
+**A simple port for now.** `wiimscreen.exe` is the computer version built for Windows, not a full Windows app yet:
+no installer, no icon, no code signature, no microphone or sounds, no setup or update page; updates are a new zip.
+It passed the self-test against a mock WiiM and found a real WiiM on the network, but a full session with a real
+WiiM on Windows has not been tried yet. A fuller Windows app may come later.
+
+Windows 10 (version 1903 or later) or Windows 11, 64-bit. No installation, no administrator rights.
+
+1. Download `wiimscreen-windows-x64.zip`: from the latest release on GitHub (Releases), or for a test build from
+   the Actions tab (run of the `firmware` workflow, artifact `wiimscreen-windows-x64`; you must be signed in to
+   GitHub).
+2. Unzip the whole folder (right-click, *Extract All*). Keep `wiimscreen.exe` and `cacert.pem` together.
+3. Double-click `wiimscreen.exe`.
+4. The program is not signed, so Windows can show *Windows protected your PC*. Click **More info**, then
+   **Run anyway**. Windows asks this only once.
+5. Windows Firewall can ask if wiimscreen may use the network. Allow **Private networks**. Discovery of the WiiM
+   (SSDP) needs it. If you refused, discovery can fail: start with `--wiim <address of the WiiM>`, or allow
+   wiimscreen in *Windows Security > Firewall & network protection > Allow an app through firewall*.
+6. wiimscreen finds the WiiM and asks you to confirm it (tap or click its name, as on the Tab5).
+
+Options (table below): make a shortcut to `wiimscreen.exe` (right-click, *Create shortcut*), open its *Properties*
+and add them at the end of *Target*, for example `...\wiimscreen.exe --wiim 192.168.1.50 --fullscreen`.
+
+| What | Where |
+|---|---|
+| Settings and favorites | `%APPDATA%\wiimscreen` (type it in the address bar of File Explorer): `settings.txt` and the `fs` folder |
+| Log of the last run | `%APPDATA%\wiimscreen\last.log` (the run before: `previous.log`). Send it when you report a problem. With `--console`, the messages show in a console window instead |
+| Screenshots (F12) | `%APPDATA%\wiimscreen\captures` |
+| Root certificates (Qobuz, Deezer, covers) | `cacert.pem` beside `wiimscreen.exe` |
+
+Not on Windows: the microphone (voice search), sound effects, the setup page and the update page (edit
+`settings.txt`; download a new zip to update). To remove wiimscreen, delete its folder and `%APPDATA%\wiimscreen`.
+
+The zip holds `wiimscreen.exe` (SDL2, OpenSSL and the C++ runtime are linked into it: no DLL), `cacert.pem`,
+`README.txt` (the same steps, for the user) and `LICENSE.txt`.
+
+### Build it yourself
+
+- **On Windows**: install [MSYS2](https://www.msys2.org/), open the *MSYS2 UCRT64* terminal, then:
+
+  ```bash
+  pacman -S --needed git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-python
+  ```
+
+  Install PlatformIO with the Windows Python (`pip install platformio`). Start the *MSYS2 UCRT64* terminal with the
+  Windows `PATH` too (environment variable `MSYS2_PATH_TYPE=inherit`, as CI does), so that it finds `pio`. Then, in
+  the wiimscreen folder:
+  `pio run -e windows && platform/windows/package.sh` (the folder and the zip are in `dist/`). `tools/check.sh windows`
+  also runs the self-test against a mock WiiM (as CI does).
+- **From Linux or WSL** (cross-compiling, no root needed): a MinGW-w64 toolchain such as
+  [llvm-mingw](https://github.com/mstorsjo/llvm-mingw/releases) (`ucrt` build), and the MSYS2 packages
+  `mingw-w64-ucrt-x86_64-SDL2` and `mingw-w64-ucrt-x86_64-openssl` (`.pkg.tar.zst` files from
+  `repo.msys2.org/mingw/ucrt64/`, extracted in one folder). Then:
+
+  ```bash
+  export WINDOWS_CROSS=<llvm-mingw>/bin/x86_64-w64-mingw32- WINDOWS_SYSROOT=<extracted folder>/ucrt64
+  ```
+
+  ```bash
+  tools/check.sh windows
+  ```
+
+  In WSL, the self-test starts `wiimscreen.exe` on Windows; it reaches the mock WiiM of WSL on `localhost`.
+
+Developers can also use the Linux build in WSL (Ubuntu), as for the simulator (`tools/sim/README.md`, section
+Windows). In the default WSL network mode, discovery cannot find the WiiM there: start with `--wiim <WiiM address>`.
 
 ## macOS
 
@@ -109,10 +173,11 @@ pio run -e desktop && .pio/build/desktop/program
 | `--size 800x480` | Screen size of the app (default 1280×720). Taller than wide: portrait |
 | `--scale 0.75` | Window size on the computer screen (the picture is scaled) |
 | `--wiim 192.168.1.50` | Use this WiiM (when discovery does not find it) |
-| `--state <folder>` | Settings and favorites folder (default `~/.config/wiimscreen`) |
+| `--state <folder>` | Settings and favorites folder (default `~/.config/wiimscreen`; Windows: `%APPDATA%\wiimscreen`) |
 | `--quiet` | No Journal on the terminal |
 | `--log-keys` | Show each key event on the terminal (`[key] key=ok kind=press`) |
-| `F12` key | Screenshot in `~/.config/wiimscreen/captures` |
+| `--console` | Windows only: show the messages in a console window (else they go to `last.log`) |
+| `F12` key | Screenshot in `~/.config/wiimscreen/captures` (Windows: `%APPDATA%\wiimscreen\captures`) |
 
 ### Keys
 
@@ -161,7 +226,7 @@ joystick). When the window loses the focus, the held keys are released without a
 ## Settings
 
 The setup page of the Tab5 (Wi-Fi access point for a phone) does not exist on a computer. The settings are in
-`~/.config/wiimscreen/settings.txt`: one line per setting, the name, a tab, the value. Examples: `lang` (`en` or
+`~/.config/wiimscreen/settings.txt` (Windows: `%APPDATA%\wiimscreen\settings.txt`): one line per setting, the name, a tab, the value. Examples: `lang` (`en` or
 `fr`), `deezeruser` (Deezer profile number), `qobuzdirect` (`1` for the direct Qobuz search), `rotation`, `sleep`.
 Stop wiimscreen before you edit the file, then start it again. The names are the keys used in `src/storage/settings.cpp`.
 
@@ -179,11 +244,28 @@ Stop wiimscreen before you edit the file, then start it again. The names are the
 | `pc_platform_screen.cpp` | SDL window, mouse/touch input, screenshots, screen size |
 | `pc_platform_script.cpp` | `--script` runner |
 | `pc_platform_keys.cpp` | Keys: keyboard, media keys, game controllers, joysticks and script keys → `takeKey()` |
-| `pc_platform_exit.cpp` | Restart and power off |
+| `pc_platform_exit.cpp` | Restart (`pc::restart()`: `execv`; Windows: `CreateProcess` of the same command line) and power off |
+| `pc_platform_windows.cpp` | Windows only: settings folder `%APPDATA%\wiimscreen`, output to the terminal, `--console` or `last.log` |
 | `pc_internal.h` | What the `pc_platform*.cpp` files share |
 | `pc_http_fs.cpp` | HTTP/1.1 client, LittleFS on a folder |
-| `net_direct.cpp` | TCP sockets, TLS with OpenSSL (system certificates for public servers; the app pins the WiiM certificate), UDP for SSDP |
+| `net_direct.cpp` | TCP sockets, TLS with OpenSSL (system certificates for public servers, or the bundled `cacert.pem` with `PC_BUNDLED_CA`; the app pins the WiiM certificate), UDP for SSDP |
+| `net_compat.h` | The socket calls that differ between POSIX and Windows (Winsock 2), so `net_direct.cpp` has one code path |
 | `desktop_services.cpp` | No microphone; settings and update messages |
 | `pc_sound.cpp` | Silent taps and beeps (shared with the simulator) |
 
 The simulator (`tools/sim`) uses the same `platform/pc` layer with a fake WiiM or a relay.
+
+Windows (`[env:windows]` in `platformio.ini`): the same sources as `desktop`, built with MinGW-w64 as a GUI program
+(no console window) and linked statically. `tools/windows_build.py` sets the libraries, the cross toolchain
+(`WINDOWS_CROSS`, `WINDOWS_SYSROOT`) and the resources of `platform/windows/` (manifest: UTF-8 code page so that
+paths and files are UTF-8, as on Linux; version information); `platform/windows/package.sh` makes the folder and the
+zip in `dist/`.
+
+**Root certificates.** Linux, macOS and Raspberry Pi OS give OpenSSL a certificate store; Windows does not (the store
+of Windows is not in a format OpenSSL reads, and OpenSSL's built-in folder does not exist there). With
+`PC_BUNDLED_CA`, `net_direct.cpp` loads the PEM text that `pc::bundledRootCerts()` returns: by default
+`cacert.pem` beside the program, made by `package.sh` from `certs/cacrt_all.pem` and `certs/extra_roots.pem` (the
+same sources as the Tab5's bundle; update them with the same tools). OpenSSL's configuration file is not read
+(`OPENSSL_INIT_NO_LOAD_CONFIG`): its built-in folder would be `C:\ucrt64\...`, which any user can create. A future
+Android port can return the same file from its assets. The WiiM itself is not checked against these roots: its
+certificate is self-signed, and the app pins its fingerprint.

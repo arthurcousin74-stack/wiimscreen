@@ -167,6 +167,7 @@ puts it back. To erase everything, use **Advanced** › **Erase everything** in 
 | **Board** | [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5): ESP32-P4, 5" 1280×720 touchscreen, 32 MB PSRAM. The battery is optional. This is the only tested board. |
 | **Other boards** | ESP32-S3 or ESP32-P4 boards with a touchscreen and PSRAM. A port is possible: refer to [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards). |
 | **Computers** (experimental) | Raspberry Pi, Linux and macOS: the same app in a window or full screen, with a touch screen or a mouse. Not tested on a Raspberry Pi or a Mac yet. Refer to [docs/DESKTOP.md](docs/DESKTOP.md). |
+| **Windows** (simple port, experimental) | Windows 10 and 11, 64-bit. This is a simple port of the computer version, not a full Windows app: no installer, no icon, no signature, no microphone, no sounds. Download `wiimscreen-windows-x64.zip`, unzip it and start `wiimscreen.exe`. We did not test it with a real WiiM yet. Refer to [docs/DESKTOP.md](docs/DESKTOP.md#windows). |
 
 ## Unofficial interfaces
 
@@ -199,7 +200,7 @@ More data: [SECURITY.md](SECURITY.md).
 
 - [docs/DEVELOPERS.md](docs/DEVELOPERS.md): how it works, build from source, preview, other boards.
 - [tools/sim/README.md](tools/sim/README.md): the real app on a PC, with a fake WiiM or with your real WiiM.
-- [docs/DESKTOP.md](docs/DESKTOP.md): the app on a Raspberry Pi or a computer (build `desktop`).
+- [docs/DESKTOP.md](docs/DESKTOP.md): the app on a Raspberry Pi or a computer (builds `desktop` and `windows`).
 - [docs/WIIM_API_NOTES.md](docs/WIIM_API_NOTES.md): notes about the WiiM HTTP API and its UPnP `PlayQueue` service.
 - [AGENTS.md](AGENTS.md): architecture, conventions and known problems, for humans and AI coding agents.
 

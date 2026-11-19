@@ -22,6 +22,7 @@ pio run -e sim                       # simulator: the real app + a fake WiiM in 
 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt   # scripted taps + screenshots
 pio run -e simreal && ./tools/relay/selftest.sh   # real network code of src/ -> relay -> mock WiiM (HTTPS, pinning, play queues; ~90 s)
 pio run -e desktop && ./platform/pc/selftest.sh   # computer build (Raspberry Pi/Linux/macOS): direct to a mock WiiM
+tools/check.sh windows               # wiimscreen.exe + dist/ zip + self-test (MSYS2 UCRT64, or WINDOWS_CROSS/WINDOWS_SYSROOT from Linux/WSL: docs/DESKTOP.md)
 # Sanitizers (CI runs the first): separate build folder so normal builds are not touched
 PLATFORMIO_BUILD_DIR=.pio/build-asan PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -g -O1" pio run -e sim
 PLATFORMIO_BUILD_DIR=.pio/build-tsan PLATFORMIO_BUILD_FLAGS="-fsanitize=thread -g -O1" pio run -e simreal
@@ -93,7 +94,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/storage/settings.*` | NVS-backed settings (+ LittleFS backup copy); one table `kFields` lists every setting for both |
 | `src/storage/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
-| `platform/pc/` | Computer layer shared by the simulator and the `desktop` build: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, keys (keyboard, controllers → `takeKey()`), script runner, restart/exit; list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`, desktop), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
+| `platform/pc/` | Computer layer shared by the simulator and the `desktop`/`windows` builds: stubs (Arduino, FreeRTOS, M5Unified, Wi-Fi, WiFiUDP, HTTPClient, LittleFS, Preferences), `pc_platform*.cpp` one concern per file (options/`main()`, clock + FreeRTOS on threads, Preferences file, device objects, SDL window/input/screenshots, keys (keyboard, controllers → `takeKey()`), script runner, restart/exit (`pc::restart()`, the only restart), Windows folder + log (`pc_platform_windows.cpp`); list in `pc_internal.h`), HTTP + LittleFS (`pc_http_fs.cpp`), sockets + OpenSSL + UDP (`net_direct.cpp`; POSIX/Winsock differences in `net_compat.h`; root certificates: system store, or `pc::bundledRootCerts()` with `PC_BUNDLED_CA`), desktop services, Pi service/launcher. Doc: docs/DESKTOP.md |
+| `platform/windows/` | Windows app: resources (`wiimscreen.rc`, manifest with the UTF-8 code page), `README.txt` of the zip, `package.sh` (exe + `cacert.pem` from `certs/` → `dist/`); build settings in `tools/windows_build.py` (`[env:windows]`) |
 | `tools/sim/` | PC simulator: fake WiiM (`WiimWorker`), fake data, sim services, `net_relay.cpp` (simreal: connections through the relay), scripts |
 | `tools/relay/` | `wiim_relay.py` (relay to the home network for `simreal`, stdlib only), `mock_wiim.py` (httpapi + UPnP PlayQueue on port 49152 with the behaviours seen on a real WiiM: shuffle, queues that fill step by step, `--nofill-file`) and `selftest.sh` (search through a queue, restore, album play) |
 
@@ -207,6 +209,12 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   `simreal` compiles the real `wiim_worker*.cpp` (keep `wiim_worker.h` unchanged when you move code between them; shared helpers go in `wiim_worker_internal.h`), `wiim_client.cpp`, `art.cpp`, `favorites.cpp`: Arduino network
   APIs they use must exist in `platform/pc/stubs` (WiFiClient, WiFiClientSecure, HTTPClient, LittleFS); `desktop`
   also compiles `discovery.cpp` (WiFiUDP). Fonts do not scale with the screen: check small sizes (800×480).
+- **Windows build** (`[env:windows]`, same sources as `desktop`): POSIX calls in `platform/pc` go through
+  `net_compat.h` (sockets) or `#ifdef _WIN32` (restart, folders, output); `src/` stays free of them. Windows has no
+  certificate store for OpenSSL: `cacert.pem` ships beside the exe (`PC_BUNDLED_CA`), and OpenSSL must not read its
+  config file (its built-in path is a folder any user can create). The exe is a GUI program: messages go to
+  `last.log` unless a terminal or pipe started it (CI, WSL) or `--console`. A Windows process started from WSL keeps
+  running when `timeout` stops it: the self-test ends with a `quit` step.
 - **`DeleteQueue` stops playback** (even for an unknown name): take `snapshot()` and mute before it. With
   **shuffle on**, `CreateQueue` reshuffles: find a track by title in a fresh `BrowseQueue`, never reuse an old
   index. Status `load` = loading; seek only once it plays. (Seen with `simreal` on a real WiiM, 2026-11-16.)

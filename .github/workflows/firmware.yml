@@ -1,7 +1,8 @@
 # Builds the Tab5 firmware as ONE .bin to flash at address 0x0 (USB, from the browser)
 # or to upload over Wi-Fi (Réglages > Mise à jour). See README.md / LISEZMOI.md.
-# Every push: Actions > run > artifact "wiim-remote-tab5".
-# Tag vX.Y.Z: also publishes a GitHub Release with the .bin (pre-release while < v1.0.0).
+# Also builds the Windows app (wiimscreen.exe, job "windows"). See docs/DESKTOP.md.
+# Every push: Actions > run > artifacts "wiim-remote-tab5" and "wiimscreen-windows-x64".
+# Tag vX.Y.Z: also publishes a GitHub Release with the .bin and the Windows zip (pre-release while < v1.0.0).
 name: firmware
 
 on:
@@ -120,9 +121,57 @@ jobs:
           name: wiim-remote-tab5
           path: dist/
 
+  # Windows app: wiimscreen.exe built with MSYS2 UCRT64 (gcc, SDL2, OpenSSL; linked statically), the desktop
+  # self-test against a mock WiiM (with a cover over HTTPS: checks cacert.pem), then the folder of the zip
+  windows:
+    runs-on: windows-latest
+    env:
+      CHECK_STRICT: "1"
+      CHECK_WERROR: "1"
+      SELFTEST_ART_URL: https://cdn-images.dzcdn.net/images/cover/5718f7c81c27e0b2417e2a4c45224f8a/250x250-000000-80-0-0.jpg
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      # PlatformIO on the Windows Python; MSYS2 gives the compiler, the libraries, python3 and openssl (scripts)
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Installer PlatformIO
+        shell: pwsh
+        run: pip install "platformio==6.2.0" "click==8.1.8"
+
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e  # v2.33.0
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-python
+
+      # Version shown by the app (Settings menu, file properties): the tag, or build number + commit
+      - name: Version number
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="$GITHUB_REF_NAME"; else V="${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"; fi
+          echo "PLATFORMIO_BUILD_FLAGS=-DFW_VERSION=\\\"$V\\\"" >> "$GITHUB_ENV"
+
+      # pio run -e windows, platform/windows/package.sh (dist/), platform/pc/selftest.sh on wiimscreen.exe
+      - name: wiimscreen.exe et auto-test (WiiM simulé)
+        run: tools/check.sh windows
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: wiimscreen-windows-x64
+          path: dist/wiimscreen-windows-x64/
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -132,12 +181,23 @@ jobs:
           name: wiim-remote-tab5
           path: dist
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: wiimscreen-windows-x64
+          path: dist/wiimscreen-windows-x64
+
+      # The zip holds the folder wiimscreen-windows-x64/ (exe, cacert.pem, README.txt, LICENSE.txt)
+      - name: Windows zip
+        run: |
+          cd dist && zip -r wiimscreen-windows-x64.zip wiimscreen-windows-x64
+          sha256sum wiimscreen-windows-x64.zip | tee -a SHA256SUMS.txt
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           PRE=""
           if [[ "$GITHUB_REF_NAME" == v0.* || "$GITHUB_REF_NAME" == *-* ]]; then PRE="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" dist/wiim-remote-tab5.bin dist/SHA256SUMS.txt \
+          gh release create "$GITHUB_REF_NAME" dist/wiim-remote-tab5.bin dist/wiimscreen-windows-x64.zip dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --title "wiimscreen $GITHUB_REF_NAME" $PRE \
-            --notes "Firmware for the M5Stack Tab5. Flash wiim-remote-tab5.bin at address 0x0 (see README), or install it over Wi-Fi: ⚙ button > Update. Only the Tab5 is tested so far. Changes: see CHANGELOG.md."
+            --notes "Firmware for the M5Stack Tab5. Flash wiim-remote-tab5.bin at address 0x0 (see README), or install it over Wi-Fi: ⚙ button > Update. Only the Tab5 is tested so far. Windows 10/11: unzip wiimscreen-windows-x64.zip and start wiimscreen.exe (see README.txt inside; not signed: More info > Run anyway). Changes: see CHANGELOG.md."

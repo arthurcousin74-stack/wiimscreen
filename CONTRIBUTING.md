@@ -50,6 +50,7 @@ tools/check.sh native preview        # only some gates
 | `simreal` | The real network code through the relay to a mock WiiM (HTTPS, certificate pinning, search through queues). About 2 minutes | `pio run -e simreal` then `./tools/relay/selftest.sh` | `libsdl2-dev`, `openssl`, `python3` |
 | `desktop` | The computer build, directly against a mock WiiM | `pio run -e desktop` then `./platform/pc/selftest.sh` | `libsdl2-dev`, `libssl-dev`, `openssl`, `python3` |
 | `tab5` | The Tab5 firmware | `pio run -e tab5` | nothing (PlatformIO downloads the toolchain) |
+| `windows` | The Windows app (`wiimscreen.exe`, zip in `dist/`) and the desktop self-test on it. CI runs it on Windows | `pio run -e windows`, `platform/windows/package.sh`, then `platform/pc/selftest.sh` | MSYS2 UCRT64 on Windows, or a MinGW-w64 cross toolchain on Linux (`WINDOWS_CROSS`, `WINDOWS_SYSROOT`: [docs/DESKTOP.md](docs/DESKTOP.md#build-it-yourself)); the self-test runs on Windows or in WSL only |
 
 On macOS: `brew install sdl2` (and `openssl` for the `desktop` gate).
 

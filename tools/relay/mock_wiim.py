@@ -6,6 +6,7 @@
 #   PlayQueueWithIndex follows the order BrowseQueue shows; DeleteQueue stops playback; a seek sent while a track
 #   loads is lost; BrowseQueue never gives Login_username back.
 # Usage: python mock_wiim.py <port> <cert.pem> <key.pem> [--upnp-port N] [--nofill-file PATH] [--fault-file PATH]
+#   [--art-url URL]
 #   --upnp-port 0: no PlayQueue service. While the file PATH exists, the queues stay empty (a WiiM that loads nothing).
 #   --fault-file: one rule per line, "<count> <prefix>": the next <count> requests (-1: all) whose name starts with
 #   <prefix> fail. Names: the httpapi command ("setPlayerCmd:mute:0"; answered "Failed", not applied) or
@@ -20,6 +21,7 @@ def option(name, default):
     return default
 UPNP_PORT = int(option("--upnp-port", "49152"))
 NOFILL = option("--nofill-file", "")
+ART_URL = option("--art-url", "un_known")  # cover of the playing track (an https URL tests the root certificates)
 FAULTS = option("--fault-file", "")
 PORT, CERT, KEY = int(args[0]), args[1], args[2]
 
@@ -137,7 +139,7 @@ class H(http.server.BaseHTTPRequestHandler):
                         "Title": hexs(title), "Artist": hexs(artist), "Album": hexs(album)}
             elif cmd == "getMetaInfo":
                 body = {"metaData": {"title": title or "unknow", "artist": artist or "unknow", "album": album or "unknow",
-                                     "albumArtURI": "un_known", "sampleRate": "44100", "bitDepth": "16"}}
+                                     "albumArtURI": ART_URL, "sampleRate": "44100", "bitDepth": "16"}}
             elif cmd == "getPresetInfo":
                 body = {"preset_num": 2, "preset_list": [{"number": 1, "name": "Mock Radio", "url": "x", "source": "x", "picurl": ""},
                                                          {"number": 2, "name": "Mock Album", "url": "x", "source": "x", "picurl": ""}]}

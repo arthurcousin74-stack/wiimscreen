@@ -5,7 +5,7 @@
 #   tools/check.sh                 # all gates
 #   tools/check.sh native preview  # some gates (names below)
 #
-# Gates: native sim preview asan simreal desktop tab5
+# Gates: native sim preview asan simreal desktop tab5 windows
 #   native   unit tests of lib/core (AddressSanitizer + UBSan built in)      needs: a C++ compiler
 #   sim      simulator build + scripted tour, taps, keys, D-pad              needs: SDL2 headers (libsdl2-dev)
 #   preview  preview build + golden screens (tools/preview/check_golden.py)   needs: SDL2 headers
@@ -13,16 +13,20 @@
 #   simreal  "real WiiM" simulator + relay self-test (about 2 min)            needs: SDL2 headers, openssl, python3
 #   desktop  computer build + self-test against a mock WiiM                   needs: SDL2 + OpenSSL headers (libssl-dev)
 #   tab5     Tab5 firmware                                                    needs: PlatformIO downloads the toolchain
+#   windows  wiimscreen.exe + zip (dist/) + self-test against a mock WiiM     needs: MSYS2 UCRT64 on Windows, or on Linux
+#            a MinGW-w64 cross toolchain (WINDOWS_CROSS, WINDOWS_SYSROOT: tools/windows_build.py); the self-test
+#            runs on Windows and in WSL (Windows interop), else it is skipped
 #
 # A gate whose prerequisites are missing is SKIPPED with a message (it still runs in CI).
 # Environment:
 #   CHECK_SKIP_RELAY=1  build simreal but skip tools/relay/selftest.sh (it uses fixed local ports 4443, 49152, 8799)
 #   CHECK_WERROR=1      warnings in the project's own files are errors, as in CI (PC gates only; see tools/werror.py)
 #   CHECK_STRICT=1      a missing prerequisite fails instead of skipping (CI sets it)
+#   SELFTEST_ART_URL    desktop/windows self-tests: also download this https cover (checks root certificates)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-ALL=(native sim preview asan simreal desktop tab5)
+ALL=(native sim preview asan simreal desktop tab5 windows)
 GATES=("$@")
 [ ${#GATES[@]} -eq 0 ] && GATES=("${ALL[@]}")
 RESULTS=()
@@ -150,6 +154,23 @@ gate_desktop() {
 
 gate_tab5() {
     pio run -e tab5
+}
+
+gate_windows() {
+    local native=0
+    case "$(uname -s)" in MINGW* | MSYS*) native=1 ;; esac
+    if [ $native = 0 ]; then
+        need windows "no MinGW-w64 cross toolchain (set WINDOWS_CROSS and WINDOWS_SYSROOT: see tools/windows_build.py)" \
+            eval '[ -n "${WINDOWS_CROSS:-}" ] && [ -x "${WINDOWS_CROSS}g++" ]' || return 2
+    fi
+    need windows "openssl or python3 missing (self-test)" eval 'have openssl && have python3' || return 2
+    pcpio run -e windows && platform/windows/package.sh || return 1
+    if [ $native = 0 ] && ! grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "check.sh: windows: self-test skipped (wiimscreen.exe runs on Windows or in WSL only)"
+        RESULTS+=("SKIP  windows self-test (not on Windows or WSL; build and zip passed)")
+        return 3
+    fi
+    PROGRAM=dist/wiimscreen-windows-x64/wiimscreen.exe ./platform/pc/selftest.sh
 }
 
 if ! have pio; then
