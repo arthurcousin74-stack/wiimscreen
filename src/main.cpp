@@ -918,7 +918,7 @@ static void activateSearch(const wr::Target& tg) {
             if (r < 0 || r >= (int)g_search.results.size()) return;
             sound::tap();
             renderResultsList(r);  // ligne enfoncée
-            logEvent("Recherche : lecture de %d (%s)", r + 1, g_search.results[r].title.c_str());
+            logTagged("search.play", "row=%d | Recherche : lecture de %d (%s)", r, r + 1, g_search.results[r].title.c_str());
             g_worker.playSearchResult(r);
             markPending(wr::kPlayPause, Await::Music, true);
             setMessage((std::string(wr::L("Playing: ", "Lecture : ")) + g_search.results[r].title +
@@ -959,7 +959,6 @@ static bool focusSource(wr::FocusSpot& spot) {
         spot = g_focus.picker;
         return true;
     }
-    if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) return false;  // étape suivante
     spot = g_focus.spot[(int)g_view.screen];
     return true;
 }
@@ -974,9 +973,9 @@ static void redrawForFocus() {
             g_ui.renderLog(logLines(), FW_VERSION);
             break;
         case Screen::TouchTest: g_ui.renderTouchTest(-1, -1, g_view.touchCount); break;
-        case Screen::Search:
-        case Screen::Results:
-        case Screen::Count: break;  // pas d'anneau
+        case Screen::Search: renderSearch(g_search.keyDown); break;  // la touche enfoncée le reste
+        case Screen::Results: renderResultsList(-1, g_search.results.empty() ? g_search.note : String()); break;
+        case Screen::Count: break;
     }
 }
 
@@ -1068,8 +1067,30 @@ static void backKey(uint32_t now) {
 // précédente. Voulu : sur une page après la première, Gauche depuis la première tuile revient d'une page au lieu
 // d'aller à la barre (sinon les pages précédentes seraient inatteignables au D-pad : les points ne prennent pas le
 // focus) ; la barre reste à Gauche depuis la première page, ou par Haut puis Gauche. Au bord de l'écran : rien.
+//
+// Liste des résultats : Bas depuis la dernière ligne d'une page (ou son cœur) montre la page suivante, focus sur sa
+// première ligne ; Haut depuis la première ligne, la page précédente, focus sur sa dernière ligne (wr::pageEdgeMove).
+// Sur la première page, Haut va à Modifier ; sur la dernière, Bas va à Précédents.
 static void moveFocus(const wr::Target& cur, wr::Dir d) {
     wr::FocusSpot& spot = g_focus.spot[(int)g_view.screen];
+    if (g_view.screen == Screen::Results && (cur.act == wr::Act::ResultRow || cur.act == wr::Act::ResultHeart)) {
+        const int to = wr::pageEdgeMove(cur.arg, g_ui.resultsPerPage(), (int)g_search.results.size(), d);
+        if (to >= 0) {
+            sound::tap();
+            g_search.page = to / g_ui.resultsPerPage();
+            spot = wr::FocusSpot{wr::Act::ResultRow, to};
+            renderResultsList();
+            return;
+        }
+        // Ligne ↔ son cœur (albums) : le cœur est dans le rectangle de la ligne, la géométrie seule n'y mène pas
+        const wr::Act other = cur.act == wr::Act::ResultRow ? wr::Act::ResultHeart : wr::Act::ResultRow;
+        const wr::Dir toOther = cur.act == wr::Act::ResultRow ? wr::Dir::Right : wr::Dir::Left;
+        if (d == toOther && g_ui.targets().find(other, cur.arg)) {
+            spot = wr::FocusSpot{other, cur.arg};
+            redrawForFocus();
+            return;
+        }
+    }
     const wr::NavResult r = wr::railMove(g_ui.targets(), &cur, d);
     if (g_view.screen == Screen::Controls && cur.act == wr::Act::Preset && (d == wr::Dir::Left || d == wr::Dir::Right) &&
         !(r.target && r.target->act == wr::Act::Preset)) {
@@ -1091,13 +1112,52 @@ static void moveFocus(const wr::Target& cur, wr::Dir d) {
     redrawForFocus();
 }
 
+// Clavier de l'ordinateur sur la recherche : texte tapé, Effacer, Entrée. Le texte suit les règles des touches de
+// l'écran (wr::typeText) et seul le champ est redessiné. Taper déplace l'anneau sur la touche Chercher : Entrée (OK)
+// lance alors la recherche (« taper, Entrée »). Sur la liste des résultats, taper ou effacer revient au clavier avec
+// le texte modifié (chercher autre chose) ; Entrée y est OK. Pendant la dictée : ignoré.
+static void typingKey(const wr::KeyEvent& k) {
+    using wr::NavKey;
+    if (k.key == NavKey::Enter) {  // touche Entrée distincte de OK (aucune plateforme ne l'envoie encore)
+        if (g_view.screen == Screen::Search) runSearchQuery();
+        return;
+    }
+    std::string q = k.key == NavKey::Text ? wr::typeText(g_search.query, k.text) : wr::utf8PopBack(g_search.query);
+    // Anneau sur la touche Chercher (montré : une touche le montre, seul un appui le cache)
+    // (indice de la touche dans wr::keyboardLayout : le même à toutes les tailles, aussi avant le premier rendu)
+    static int enterKey = -1;
+    if (enterKey < 0) {
+        const std::vector<wr::Key> keys = wr::keyboardLayout(wr::Rect{0, 0, 1000, 500});
+        for (size_t i = 0; i < keys.size(); ++i)
+            if (keys[i].kind == wr::Key::Enter) enterKey = (int)i;
+    }
+    wr::FocusSpot& spot = g_focus.spot[(int)Screen::Search];
+    const wr::FocusSpot want{wr::Act::Key, enterKey};
+    const bool moved = !g_focus.visible || spot.act != want.act || spot.arg != want.arg;
+    g_focus.visible = true;
+    spot = want;
+    if (g_view.screen == Screen::Results) {
+        g_search.query = q;
+        openSearch();  // rendu complet, anneau compris
+        return;
+    }
+    if (moved) {
+        g_search.query = q;
+        if (!g_jobs.search) g_search.status = String();
+        renderSearch(g_search.keyDown);
+        return;
+    }
+    editQuery(q);  // champ seul
+}
+
 static void onKey(const wr::KeyEvent& k, uint32_t now) {
     using wr::NavKey;
-    // Texte, Effacer, Entrée : pour le clavier de recherche (étape suivante) ; ignorés pour l'instant
-    if (k.key == NavKey::None || k.key == NavKey::Text || k.key == NavKey::Backspace || k.key == NavKey::Enter) return;
-    g_idle.lastTouch = now;  // activité, comme un appui (atténuation, vue ambiance, veille)
     const Screen screen = g_view.screen;
     const bool search = screen == Screen::Search || screen == Screen::Results;
+    // Texte, Effacer, Entrée : pour la recherche seulement
+    const bool typing = k.key == NavKey::Text || k.key == NavKey::Backspace || k.key == NavKey::Enter;
+    if (k.key == NavKey::None || (typing && !search)) return;
+    g_idle.lastTouch = now;  // activité, comme un appui (atténuation, vue ambiance, veille)
     // Touche de lecture, de volume ou de coupure du son : agit aussi en réveillant (sur la vue ambiance, c'est
     // l'usage principal d'une télécommande) ; les autres touches ne font que réveiller, comme un premier appui.
     const bool media = !isArrow(k.key) && k.key != NavKey::Ok && k.key != NavKey::Back && k.key != NavKey::Menu &&
@@ -1131,8 +1191,23 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
         }
         return;
     }
-    if (search) return;  // flèches, OK, lecture : clavier et résultats à l'étape suivante (Espace y sera du texte)
-    if (!isArrow(k.key) && k.key != NavKey::Ok) return mediaKey(k.key, now);
+    if (typing) {
+        if (!dictation) typingKey(k);
+        return;
+    }
+    // Recherche : les touches de lecture et de volume ne font rien (Espace y est du texte, pas lecture/pause)
+    if (!isArrow(k.key) && k.key != NavKey::Ok) {
+        if (!search) mediaKey(k.key, now);
+        return;
+    }
+    // Pendant la dictée : OK la termine (comme le bouton rouge), les flèches ne font rien
+    if (dictation) {
+        if (k.key == NavKey::Ok && screen == Screen::Search) {
+            sound::tap();
+            finishDictation(true);
+        }
+        return;
+    }
 
     if (screen == Screen::Controls && !g_ui.controlsShown()) renderNow();  // liste de la vue commandes (cf. tapControls)
     // OK tenu sur les commandes : Réglages, comme l'appui long sur l'en-tête
@@ -1161,6 +1236,8 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
         case Screen::Menu: activateMenu(tg, now); break;
         case Screen::Log: activateLog(tg, now); break;
         case Screen::TouchTest: activateTouchTest(tg, now); break;
+        case Screen::Search:
+        case Screen::Results: activateSearch(tg); break;
         default: break;
     }
 }
@@ -1294,7 +1371,7 @@ void loop() {
         if (search) {
             g_search.status = noAnswer;
             if (g_view.screen == Screen::Search) renderSearch();
-            else if (g_view.screen == Screen::Results && g_search.results.empty()) g_ui.renderResults(g_search.resultsTitle, g_search.results, 0, noAnswer);
+            else if (g_view.screen == Screen::Results && g_search.results.empty()) showResultsNote(noAnswer);
         }
         show();
     }

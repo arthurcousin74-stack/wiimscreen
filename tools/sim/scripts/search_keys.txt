@@ -1,0 +1,87 @@
+# Search with a real keyboard and the D-pad (1280x720): typed text and Backspace in the field, Enter (OK on the
+# Search key, where typing puts the ring) runs the search, arrows over the results with paging at the page edges,
+# OK plays a row, OK on an on-screen key, typing on the results goes back to the keyboard, "type, Enter, Enter".
+# Run: .pio/build/sim/program --headless --reset --script tools/sim/scripts/search_keys.txt
+# tools/check.sh (sim gate) checks the [search.run], [search.play] and [focus.ok] lines.
+wait 2000
+key search
+wait 300
+# Typed text with a mistake, two Backspace, the end of the word: "daft punk"; the ring goes to the Search key
+text daft pumk
+wait 100
+key backspace
+wait 50
+key backspace
+wait 50
+text nk
+wait 200
+shot skeys-01-saisie
+# Enter (= OK, the ring is on Search): the search runs; the results come with the ring on the first row
+key ok
+wait 2500
+shot skeys-02-resultats
+# 8 results, 4 per page: Down x4 = first row of page 2; Down x3 = its last row; Down = Previous (last page)
+key down
+wait 100
+key down
+wait 100
+key down
+wait 100
+key down
+wait 200
+shot skeys-03-page2
+key down
+wait 100
+key down
+wait 100
+key down
+wait 100
+key down
+wait 200
+shot skeys-04-precedents
+# Up = last row; Up x3 = first row of page 2; Up = last row of page 1 (row 3); OK plays it
+key up
+wait 100
+key up
+wait 100
+key up
+wait 100
+key up
+wait 100
+key up
+wait 200
+shot skeys-05-page1
+key ok
+wait 1500
+# Search key: the keyboard again, "daft punk" kept, ring on Search; Up = the erase key; OK erases the "k"
+key search
+wait 300
+key up
+wait 100
+key ok
+wait 300
+# Typed "k", Enter: the same search again
+text k
+wait 100
+key ok
+wait 2500
+# Space (playpause + text on a keyboard) does not play here. Backspace on the results goes back to the keyboard
+# with the "k" erased; typed "k rehab"; Enter searches "daft punk rehab"
+key playpause
+wait 100
+key backspace
+wait 300
+text k rehab
+wait 300
+shot skeys-06-retour-clavier
+key ok
+wait 2500
+# The ring is on the first row: Enter plays it ("type, Enter, Enter")
+key ok
+wait 1500
+# Back: results -> keyboard -> controls
+key search
+wait 300
+key back
+wait 300
+quit

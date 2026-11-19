@@ -90,7 +90,28 @@ static void test_utf8_pop_back_edges() {
     TEST_ASSERT_EQUAL_STRING("\xC3\xA9", utf8PopBack("\xC3\xA9\xE2\x80\xA6").c_str());
 }
 
+// Search field typing: on-screen keys and a real keyboard (typed text) follow the same rules
+static void test_type_text() {
+    TEST_ASSERT_EQUAL_STRING("miles davis", typeText("", "miles davis").c_str());
+    TEST_ASSERT_EQUAL_STRING("ab", typeText("a", "b").c_str());
+    TEST_ASSERT_EQUAL_STRING("a b", typeText("a", "  b").c_str());   // no double space
+    TEST_ASSERT_EQUAL_STRING("x", typeText("", " x").c_str());       // no leading space
+    TEST_ASSERT_EQUAL_STRING("a ", typeText("a", " ").c_str());      // a trailing space stays (on-screen: same)
+    TEST_ASSERT_EQUAL_STRING("ab", typeText("a", "\t\r\n\x7f\x1b" "b").c_str());  // control characters
+    TEST_ASSERT_EQUAL_STRING("caf\xC3\xA9", typeText("caf", "\xC3\xA9").c_str());
+    TEST_ASSERT_EQUAL_STRING("\xE2\x82\xAC\xF0\x9F\x8E\xB5", typeText("", "\xE2\x82\xAC\xF0\x9F\x8E\xB5").c_str());
+    TEST_ASSERT_EQUAL_STRING("ab", typeText("a", "\x80\xC3" "b").c_str());  // stray continuation, truncated lead
+    TEST_ASSERT_EQUAL_STRING("a", typeText("a", "\xE2\x82").c_str());       // truncated at the end
+    // Length: like the on-screen keys (a character while shorter than the maximum)
+    const std::string full(60, 'x');
+    TEST_ASSERT_EQUAL_STRING(full.c_str(), typeText(full, "y").c_str());
+    TEST_ASSERT_EQUAL(60u, typeText(std::string(58, 'x'), "abcd").size());
+    TEST_ASSERT_EQUAL(61u, typeText(std::string(59, 'x'), "\xC3\xA9\xC3\xA9").size());  // never cuts a character
+    TEST_ASSERT_EQUAL(5u, typeText("", "abcdefgh", 5).size());
+}
+
 void run_text_tests() {
+    RUN_TEST(test_type_text);
     RUN_TEST(test_utf8_pop_back_edges);
     RUN_TEST(test_shares_word);
     RUN_TEST(test_html_escape);

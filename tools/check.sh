@@ -7,9 +7,9 @@
 #
 # Gates: native sim preview asan simreal desktop tab5 windows
 #   native   unit tests of lib/core (AddressSanitizer + UBSan built in)      needs: a C++ compiler
-#   sim      simulator build + scripted tour, taps, keys, D-pad              needs: SDL2 headers (libsdl2-dev)
+#   sim      simulator build + scripted tour, taps, keys, D-pad, search keys needs: SDL2 headers (libsdl2-dev)
 #   preview  preview build + golden screens (tools/preview/check_golden.py)   needs: SDL2 headers
-#   asan     simulator tour, taps and D-pad under AddressSanitizer/UBSan      needs: SDL2 headers
+#   asan     simulator tour, taps, D-pad, search keys under ASan/UBSan        needs: SDL2 headers
 #   simreal  "real WiiM" simulator + relay self-test (about 2 min)            needs: SDL2 headers, openssl, python3
 #   desktop  computer build + self-test against a mock WiiM                   needs: SDL2 + OpenSSL headers (libssl-dev)
 #   tab5     Tab5 firmware                                                    needs: PlatformIO downloads the toolchain
@@ -66,7 +66,23 @@ gate_sim() {
     need sim "SDL2 headers missing (Debian/Ubuntu: sudo apt install libsdl2-dev; macOS: brew install sdl2)" have_sdl2 || return 2
     pcpio run -e sim &&
         tmo 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt &&
-        sim_taps && sim_keys && sim_dpad
+        sim_taps && sim_keys && sim_dpad && sim_search_keys
+}
+
+# Search with a real keyboard and the D-pad (tools/sim/scripts/search_keys.txt): typed query, Enter, paging, OK plays
+sim_search_keys() {
+    local out want
+    out=$(tmo 120 .pio/build/sim/program --headless --reset --state .pio/skeys-state --out .pio/skeys-out \
+        --script tools/sim/scripts/search_keys.txt) || { echo "$out"; return 1; }
+    for want in "[search.run] source=qobuz query=daft+punk |" "[search.play] row=3 |" \
+        "[focus.ok] screen=results act=resultrow arg=3 |" "[focus.ok] screen=search act=key arg=38 |" \
+        "[search.run] source=qobuz query=daft+punk+rehab |" "[search.play] row=0 |"; do
+        if ! grep -qF "$want" <<<"$out"; then
+            echo "check.sh: sim: '$want' missing in the search_keys.txt run:"
+            echo "$out"
+            return 1
+        fi
+    done
 }
 
 # D-pad (tools/sim/scripts/dpad.txt): each OK must activate the element the focus ring reached ([focus.ok] lines)
@@ -123,7 +139,7 @@ gate_asan() {
         PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1" pcpio run -e sim || return 1
     local script
     : > .pio/asan.log
-    for script in tour taps dpad; do
+    for script in tour taps dpad search_keys; do
         if ! ASAN_OPTIONS=detect_leaks=0 tmo 300 .pio/build-asan/sim/program --headless --quiet --reset \
             --state .pio/asan-state --out .pio/asan-out --script tools/sim/scripts/$script.txt 2>> .pio/asan.log; then
             cat .pio/asan.log

@@ -18,8 +18,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
   ring between the buttons (the bar on the left, the heart, playback, volume, the preset tiles and their pages, the
   Settings menu, the Journal, the WiiM picker), OK presses the button, Back closes a screen, Space and the media keys
   play, pause, skip and change the volume, Menu opens Settings, F3 opens the search. The ring shows only after a key
-  and goes away when you touch the screen. The search keyboard does not use the keys yet. No change on the Tab5.
-  Keys: docs/DESKTOP.md.
+  and goes away when you touch the screen. No change on the Tab5. Keys: docs/DESKTOP.md.
+- Computer version: search with the computer's keyboard. On the search screen, type the text, Backspace erases,
+  Enter searches; the focus then goes to the first result, so a second Enter plays it. Typing on the results list
+  goes back to the keyboard with the text changed. With a remote or a controller, the arrows move the ring over the
+  on-screen keys, the sources and the results (Down past the last result of a page shows the next page), and OK
+  presses. No change on the Tab5.
 - For contributors: key input plumbing for remotes and keyboards (not used by the app yet). The computer builds read
   the keyboard, media keys and game controllers; simulator scripts can send keys (`key`, `hold`, `text` steps) and
   `--log-keys` shows them. No change on the Tab5.

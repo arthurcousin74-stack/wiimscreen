@@ -556,7 +556,27 @@ static void test_focused_target() {
     TEST_ASSERT_EQUAL_STRING("?", actName(static_cast<Act>(200)));
 }
 
+// Results list paging with Up/Down (main.cpp moveFocus): 7 rows per page, 16 results (pages 0-6, 7-13, 14-15)
+static void test_page_edge_move() {
+    TEST_ASSERT_EQUAL(7, pageEdgeMove(6, 7, 16, Dir::Down));    // last row of page 1: first row of page 2
+    TEST_ASSERT_EQUAL(14, pageEdgeMove(13, 7, 16, Dir::Down));
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(15, 7, 16, Dir::Down));  // last page: stays (Previous button below)
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(5, 7, 16, Dir::Down));   // not the last row
+    TEST_ASSERT_EQUAL(6, pageEdgeMove(7, 7, 16, Dir::Up));      // first row of page 2: last row of page 1
+    TEST_ASSERT_EQUAL(13, pageEdgeMove(14, 7, 16, Dir::Up));
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(0, 7, 16, Dir::Up));     // first page: stays (Edit above)
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(8, 7, 16, Dir::Up));
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(6, 7, 16, Dir::Left));
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(6, 7, 7, Dir::Down));    // one full page only
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(16, 7, 16, Dir::Down));  // out of range
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(-1, 7, 16, Dir::Up));
+    TEST_ASSERT_EQUAL(-1, pageEdgeMove(3, 0, 16, Dir::Down));
+    TEST_ASSERT_EQUAL(1, pageEdgeMove(0, 1, 3, Dir::Down));     // one row per page
+    TEST_ASSERT_EQUAL(1, pageEdgeMove(2, 1, 3, Dir::Up));
+}
+
 void run_focus_tests() {
+    RUN_TEST(test_page_edge_move);
     RUN_TEST(test_targets_priority);
     RUN_TEST(test_targets_padding);
     RUN_TEST(test_targets_find_clear_flags);

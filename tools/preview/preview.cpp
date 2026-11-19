@@ -405,6 +405,17 @@ int main(int argc, char** argv) {
         spot = wr::FocusSpot{wr::Act::MenuChoice, 3};
         ui.renderMenu("57-219c0bc");
         save(out, "46-focus-menu.ppm");
+        // Recherche au clavier ou au D-pad : anneau sur une touche, puis sur une ligne des résultats
+        spot = wr::FocusSpot{wr::Act::Key, 24};
+        ui.renderSearch("daft pu", "", false, -1, 0, true);
+        save(out, "47-focus-touche.ppm");
+        spot = wr::FocusSpot{wr::Act::ResultRow, 1};
+        ui.renderResults("daft punk", {{"One More Time", "Daft Punk", "Discovery", ""},
+                                       {"Aerodynamic", "Daft Punk", "Discovery", ""},
+                                       {"Digital Love", "Daft Punk", "Discovery", ""},
+                                       {"Get Lucky", "Daft Punk", "Random Access Memories", ""}},
+                         0, "");
+        save(out, "48-focus-resultat.ppm");
         ui.setFocusSource(nullptr);
     }
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée

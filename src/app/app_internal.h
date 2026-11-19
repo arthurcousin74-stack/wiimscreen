@@ -97,6 +97,7 @@ struct SearchScreen {
     // Touche enfoncée : dessinée tout de suite, relâchée ~90 ms plus tard (mises à jour partielles de l'écran)
     int keyDown = -1;
     uint32_t keyDownAt = 0;
+    String note;  // message d'une liste vide (chargement, échec) : redessinée telle quelle quand l'anneau bouge
 };
 extern SearchScreen g_search;
 
@@ -267,6 +268,8 @@ void updateSearchField();
 void releaseKey(bool force);
 void onSearchKey(int k);
 void renderResultsList(int pressed = -1, const String& status = String());
+void showResultsNote(const String& note);   // liste vide avec un message (chargement, échec), gardé dans g_search.note
+void editQuery(const std::string& query);  // texte du champ changé : redessin partiel du champ
 void toggleAlbumFavorite(int i);
 void onSearchDone(const WiimEvent& ev);
 

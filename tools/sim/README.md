@@ -53,8 +53,10 @@ touch test, update screen, search keyboard, dictation, results), which ends with
 Journal lines show what each tap did: compare them before and after a change of the tap handling.
 `tools/sim/scripts/dpad.txt` drives the app with keys only (focus ring through the rail, the heart, the transport
 and volume buttons and the tiles with paging, OK, Back, Menu, a long OK, the media keys): the sim gate checks that
-each OK pressed the element the ring had reached (`[focus.ok] screen=... act=... arg=...` lines). The asan gate
-runs `tour.txt`, `taps.txt` and `dpad.txt`.
+each OK pressed the element the ring had reached (`[focus.ok] screen=... act=... arg=...` lines).
+`tools/sim/scripts/search_keys.txt` searches with a real keyboard and the D-pad (typed text, Backspace, Enter,
+arrows and paging over the results, OK plays a row): the sim gate checks the `[search.run]`, `[search.play]` and
+`[focus.ok]` lines. The asan gate runs `tour.txt`, `taps.txt`, `dpad.txt` and `search_keys.txt`.
 It also runs `tools/sim/scripts/keys.txt` with `--log-keys` and checks the `[key]` lines (`tools/check.sh sim`).
 
 ## Real WiiM mode (relay)

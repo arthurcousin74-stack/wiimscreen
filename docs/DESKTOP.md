@@ -187,15 +187,21 @@ click on the screen hides the ring; the next key shows it again, on the same but
 
 | Key | Controls view | Settings menu, Journal, touch test | Search keyboard and results |
 |---|---|---|---|
-| up, down, left, right | Move the ring. Left from the content goes to the bar on the left (Home, Search, Settings). Left or right past the first or last preset tile shows the previous or next page of tiles (on the first page, Left goes to the bar) | Move the ring | Not used yet |
-| ok | Press the button with the ring | Press the button with the ring | Not used yet |
-| ok, held 0.7 s | Settings menu (as a long press on the cover) | As ok | Not used yet |
+| up, down, left, right | Move the ring. Left from the content goes to the bar on the left (Home, Search, Settings). Left or right past the first or last preset tile shows the previous or next page of tiles (on the first page, Left goes to the bar) | Move the ring | Move the ring over the on-screen keys, the source buttons, the microphone, the results, their hearts, Previous, Next and Edit. Results: down from the last result of a page shows the next page (ring on its first result), up from the first result shows the previous page (ring on its last result). Album results: right goes to the heart, left back to the album |
+| ok | Press the button with the ring | Press the button with the ring | Press the key or the button with the ring (as a tap). Results: play the result. During dictation: stop it and search |
+| ok, held 0.7 s | Settings menu (as a long press on the cover) | As ok | As ok |
 | back | Nothing | Close (back to the controls view) | Results: back to the keyboard. Keyboard: back to the controls view. During dictation: stop it |
 | menu | Settings menu | Settings menu (in the menu: close it) | Settings menu |
 | search | Search keyboard | Search keyboard | Results: back to the keyboard |
-| playpause, play, pause, next, prev | As the buttons of the controls view | As the buttons of the controls view | Not used yet |
-| volup, voldown, mute | Volume +, volume −, mute (as the buttons; hold volume to keep changing it) | As the buttons | Not used yet |
-| ffwd, rewind, backspace, typed text | Not used yet | Not used yet | Not used yet |
+| playpause, play, pause, next, prev | As the buttons of the controls view | As the buttons of the controls view | Nothing (Space types a space here) |
+| volup, voldown, mute | Volume +, volume −, mute (as the buttons; hold volume to keep changing it) | As the buttons | Nothing |
+| typed text | Nothing | Nothing | Keyboard: added to the search text, and the ring goes to the Search key. Results: back to the keyboard with the text added. During dictation: nothing |
+| backspace | Nothing | Nothing | Keyboard: erase one character (held: repeat), ring on the Search key. Results: back to the keyboard with one character erased |
+| ffwd, rewind | Not used yet | Not used yet | Not used yet |
+
+**Search with a keyboard: type, Enter, Enter.** Type the text (the ring goes to the on-screen Search key), press
+Enter: the search runs. When the results come, the ring is on the first result: Enter plays it. The typed text
+follows the rules of the on-screen keys (at most about 60 characters, no space at the start, no double space).
 
 When the screen is dim or off, or shows the ambient view (large cover), a key wakes it, as a first tap does. The
 play, next, previous, volume and mute keys also do their action at the same time; the other keys only wake it.
@@ -220,7 +226,7 @@ How the computer reads the keys (`takeKey()`, `--log-keys` shows them):
 | Typed characters | text (UTF-8) |
 
 SDL starts the text input by itself when the window opens on a computer, so typed characters arrive without more
-code. Space gives `playpause` and also the text " ". A controller is read as a controller only (not also as a
+code. Space gives `playpause` and also the text " " (on the search screens only the text counts). A controller is read as a controller only (not also as a
 joystick). When the window loses the focus, the held keys are released without an event.
 
 ## Settings

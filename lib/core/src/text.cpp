@@ -174,6 +174,28 @@ std::string utf8PopBack(const std::string& s) {
     return o;
 }
 
+std::string typeText(const std::string& query, const std::string& text, size_t maxBytes) {
+    std::string q = query;
+    for (size_t i = 0; i < text.size();) {
+        const unsigned char c = (unsigned char)text[i];
+        // Longueur du caractère d'après son premier octet ; octet de suite isolé ou caractère tronqué : sauté
+        const size_t n = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 0;
+        bool ok = n > 0 && i + n <= text.size();
+        for (size_t k = 1; ok && k < n; ++k) ok = ((unsigned char)text[i + k] & 0xC0) == 0x80;
+        if (!ok) {
+            ++i;
+            continue;
+        }
+        if (c == ' ') {
+            if (!q.empty() && q.back() != ' ') q += ' ';
+        } else if (c >= 0x20 && c != 0x7F && q.size() < maxBytes) {
+            q.append(text, i, n);
+        }
+        i += n;
+    }
+    return q;
+}
+
 bool sharesWord(const std::string& query, const std::vector<std::string>& texts) {
     std::string all;
     for (auto& t : texts) all += " " + normalizeText(t) + " ";

@@ -55,7 +55,7 @@ void Ui::navRail(int active) {
 }
 
 // Anneau du focus (télécommande) : contour blanc de sc(3) à sc(3) de l'élément, halo de la couleur d'accent autour.
-// Cercle pour les boutons ronds (lecture, ♥, barre, haut-parleur), coins arrondis pour les autres (tuiles, choix).
+// Cercle pour les boutons ronds (lecture, ♥, barre, haut-parleur, micro, cœur d'un album trouvé), coins arrondis pour les autres (tuiles, choix).
 void Ui::focusRing() {
     wr::FocusSpot spot;
     if (!focusSource_ || view_ == View::Ambient || !focusSource_(spot)) return;
@@ -64,7 +64,7 @@ void Ui::focusRing() {
     using wr::Act;
     const wr::Rect& r = t->r;
     const bool round = t->act == Act::Transport || t->act == Act::Fav || t->act == Act::Mute || t->act == Act::Home ||
-                       t->act == Act::Search || t->act == Act::Settings;
+                       t->act == Act::Search || t->act == Act::Settings || t->act == Act::ResultHeart || t->act == Act::Mic;
     const int gap = sc(3), line = std::max(2, sc(3)), halo = std::max(2, sc(3));
     auto ring = [&](int o, uint32_t color) {
         const int rad = round ? std::min(r.w, r.h) / 2 + o : sc(14) + o;

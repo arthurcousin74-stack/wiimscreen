@@ -181,6 +181,18 @@ NavResult railMove(const TargetList& list, const Target* current, Dir d) {
     return pick(list, current, d, railOnly);
 }
 
+int pageEdgeMove(int index, int perPage, int count, Dir d) {
+    if (perPage < 1 || index < 0 || index >= count) return -1;
+    const int first = index / perPage * perPage;
+    if (d == Dir::Down) {
+        const int next = first + perPage;
+        const bool last = index == next - 1 || index == count - 1;
+        return last && next < count ? next : -1;
+    }
+    if (d == Dir::Up) return index == first && first > 0 ? first - 1 : -1;
+    return -1;
+}
+
 const char* actName(Act act) {
     static const char* const kNames[] = {"none", "home", "search", "settings", "header", "progress", "volume", "mute",
                                          "dots", "preset", "strip", "fav", "transport", "ambientexit", "menuchoice",

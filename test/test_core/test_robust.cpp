@@ -66,7 +66,7 @@ static void feedAll(const std::string& s) {
     g_sink += parseDeezerTracks(s).size() + parseDeezerAlbums(s).size() + jsonValuesOf(s, "a").size();
     g_sink += jsonTop(s, "a").size() + jsonText(s).size() + jsonArray(s).size();
     g_sink += normalizeText(s).size() + sharesWord(s, {s, "abc"}) + deezerUserId(s).size();
-    g_sink += cleanTranscript(s).size();
+    g_sink += cleanTranscript(s).size() + typeText(s, s).size();
     SearchUndo undo;
     g_sink += parseSearchUndo(s, undo) + searchUndoText(undo).size();
     RobustSettings rs;

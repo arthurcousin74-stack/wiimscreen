@@ -16,6 +16,11 @@ int hexVal(char c);
 void appendUtf8(std::string& out, unsigned long cp);
 // Retire le dernier caractère UTF-8 (pas seulement le dernier octet)
 std::string utf8PopBack(const std::string& s);
+// Search field typing (on-screen keyboard and a real keyboard share it): `text` (UTF-8) appended to `query`, one
+// character at a time, the way the on-screen keys do it: a character only while the query is shorter than
+// `maxBytes` (so it ends at most one character past it); a space only after a character that is not a space (no
+// leading or double space); control characters (Tab, Enter, Delete...) and malformed UTF-8 bytes skipped.
+std::string typeText(const std::string& query, const std::string& text, size_t maxBytes = 60);
 
 std::string htmlEscape(const std::string& s);
 

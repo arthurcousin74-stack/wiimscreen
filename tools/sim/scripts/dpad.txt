@@ -92,7 +92,8 @@ wait 300
 tap 30 200
 wait 400
 shot dpad-08-sans-anneau
-# Search key: the keyboard (no ring yet); arrows and OK do nothing there; Back: the controls
+# Search key: the keyboard; Down only shows the ring again (hidden by the tap), on the first letter; OK presses it
+# (search_keys.txt tests the search screens); Back: the controls
 key search
 wait 300
 key down

@@ -17,6 +17,18 @@ void renderSearch(int pressedKey) {
     g_ui.renderSearch(g_search.query, g_search.status, g_jobs.search, pressedKey, g_search.source, g_search.deezerOk);
 }
 
+// Valeur d'une ligne marquée (logTagged : ASCII, sans espace) : espace -> '+', autres octets -> %XX
+static std::string tagValue(const std::string& s) {
+    static const char* const kHex = "0123456789ABCDEF";
+    std::string o;
+    for (unsigned char c : s) {
+        if (c == ' ') o += '+';
+        else if (c > 0x20 && c < 0x7F && c != '%' && c != '|' && c != '+') o += (char)c;
+        else o += '%', o += kHex[c >> 4], o += kHex[c & 15];
+    }
+    return o;
+}
+
 // Lance la recherche du texte saisi ou dicté
 void runSearchQuery() {
     std::string q = g_search.query;
@@ -25,8 +37,10 @@ void runSearchQuery() {
         renderSearch();
         return;
     }
-    logEvent("Recherche %s : %s", g_search.source == kTabDeezer ? "Deezer" : g_search.source == kTabAlbums ? "Albums Qobuz" : "Qobuz",
-             q.c_str());
+    logTagged("search.run", "source=%s query=%s | Recherche %s : %s",
+              g_search.source == kTabDeezer ? "deezer" : g_search.source == kTabAlbums ? "albums" : "qobuz",
+              tagValue(q).c_str(),
+              g_search.source == kTabDeezer ? "Deezer" : g_search.source == kTabAlbums ? "Albums Qobuz" : "Qobuz", q.c_str());
     g_jobs.search = true;
     g_jobs.since = millis();
     g_search.resultsTitle = q;
@@ -57,9 +71,9 @@ void openFavoriteList(bool deezer) {
     g_search.results.clear();
     g_search.page = 0;
     g_view.screen = Screen::Results;
-    g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
-                       deezer ? wr::L("Loading your Deezer favorites\xE2\x80\xA6", "Chargement de tes favoris Deezer\xE2\x80\xA6")
-                              : wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
+    g_focus.spot[(int)Screen::Results] = wr::FocusSpot{};  // anneau : la première ligne quand elle arrivera
+    showResultsNote(deezer ? wr::L("Loading your Deezer favorites\xE2\x80\xA6", "Chargement de tes favoris Deezer\xE2\x80\xA6")
+                           : wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
     g_worker.search(g_search.resultsTitle.c_str(), g_search.resultsKind);
 }
 
@@ -70,6 +84,12 @@ void openSearch() {
     if (!g_settings.qobuzDirect && g_search.source == kTabAlbums) g_search.source = kTabQobuz;
     g_search.status = g_jobs.search ? String(wr::L("Searching\xE2\x80\xA6", "Recherche en cours\xE2\x80\xA6")) : String();
     renderSearch();
+}
+
+// Liste vide avec un message (chargement, échec) ; gardé pour la redessiner (anneau du focus déplacé)
+void showResultsNote(const String& note) {
+    g_search.note = note;
+    renderResultsList(-1, note);
 }
 
 void updateSearchField() {
@@ -93,19 +113,18 @@ void onSearchKey(int k) {
     sound::tap();
     switch (key.kind) {
         case wr::Key::Char:
-            if (g_search.query.size() < 60) g_search.query += key.text;
-            break;
-        case wr::Key::Space:
-            if (!g_search.query.empty() && g_search.query.back() != ' ') g_search.query += ' ';
-            break;
-        case wr::Key::Back: g_search.query = wr::utf8PopBack(g_search.query); break;
-        case wr::Key::Clear: g_search.query.clear(); break;
-        case wr::Key::Enter:
-            runSearchQuery();
-            return;
+        case wr::Key::Space: editQuery(wr::typeText(g_search.query, key.text)); break;
+        case wr::Key::Back: editQuery(wr::utf8PopBack(g_search.query)); break;
+        case wr::Key::Clear: editQuery(std::string()); break;
+        case wr::Key::Enter: runSearchQuery(); break;
     }
-    if (key.kind != wr::Key::Enter) g_search.status = g_jobs.search ? g_search.status : String();
-    updateSearchField();  // seul le champ change
+}
+
+// Texte du champ changé (touches de l'écran, clavier de l'ordinateur) : seul le champ est redessiné
+void editQuery(const std::string& query) {
+    g_search.query = query;
+    if (!g_jobs.search) g_search.status = String();
+    updateSearchField();
 }
 
 // Liste des résultats ; albums Qobuz : un cœur par ligne, plein si l'album est déjà une tuile
@@ -180,10 +199,9 @@ void onSearchDone(const WiimEvent& ev) {
                                       ev.name + wr::L("\xE2\x80\x9D", " \xC2\xBB");
         if (g_view.screen == Screen::Results) {  // liste ouverte (favoris Qobuz) : le message s'y affiche
             g_search.results.clear();
-            g_ui.renderResults(g_search.resultsTitle, g_search.results, 0,
-                               !ev.ok ? String(wr::L("Failed: ", "Impossible : ")) + ev.text
-                                      : String(wr::L("No favorite track on ", "Aucun morceau favori sur ")) +
-                                            (g_search.resultsKind == SearchKind::DeezerFavorites ? "Deezer" : "Qobuz"));
+            showResultsNote(!ev.ok ? String(wr::L("Failed: ", "Impossible : ")) + ev.text
+                                   : String(wr::L("No favorite track on ", "Aucun morceau favori sur ")) +
+                                         (g_search.resultsKind == SearchKind::DeezerFavorites ? "Deezer" : "Qobuz"));
         }
     } else {
         g_search.results = ev.tracks;
@@ -191,6 +209,11 @@ void onSearchDone(const WiimEvent& ev) {
         g_img.results.clear();  // pochettes de la liste précédente (PSRAM)
         g_img.coverRequested.clear();
         g_search.status = "";
+        g_search.note = "";
+        // Anneau du focus sur la première ligne : « taper, Entrée, Entrée » joue le premier résultat
+        g_focus.spot[(int)Screen::Results] = wr::FocusSpot{wr::Act::ResultRow, 0};
+        logTagged("search.results", "count=%u | R\xC3\xA9sultats : %u", (unsigned)g_search.results.size(),
+                  (unsigned)g_search.results.size());
         // Toujours sur le clavier ou la liste : on montre les résultats
         if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) {
             g_view.screen = Screen::Results;

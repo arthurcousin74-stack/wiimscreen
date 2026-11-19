@@ -127,6 +127,12 @@ const Target* defaultTarget(const TargetList& list);
 // A list without rail buttons follows the content rules. The orientation comes from the rail buttons' centres.
 NavResult railMove(const TargetList& list, const Target* current, Dir d);
 
+// Up/Down at the edge of a page of a paged list (search results): from the last item of a page, Down goes to the
+// first item of the next page; from the first item of a page, Up goes to the last item of the previous page.
+// Returns that global index, or -1 when the move stays on the page (not at its edge, or no page that way).
+// index: global index of the focused item; perPage >= 1; count: number of items.
+int pageEdgeMove(int index, int perPage, int count, Dir d);
+
 // What the app remembers of the focus on one screen: kind and arg, not an index (the list is rebuilt every frame)
 struct FocusSpot {
     Act act = Act::None;
