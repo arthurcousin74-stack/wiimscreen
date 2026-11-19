@@ -1,43 +1,69 @@
-// PC desktop build (Raspberry Pi, Linux, macOS): the Arduino network classes on the computer's own network.
+// PC desktop build (Raspberry Pi, Linux, macOS, Windows): the Arduino network classes on the computer's own network.
 //
 // WiFiClient = a TCP socket; WiFiClientSecure = TLS with OpenSSL: public servers (Qobuz, Deezer, covers, OpenAI)
-// are checked against the system's certificate store and host name; the WiiM has a self-signed certificate, so
+// are checked against the root certificates and the host name; the WiiM has a self-signed certificate, so
 // wiim_client.cpp calls setInsecure() and checks the SHA-256 fingerprint itself (pinning, as on the Tab5).
+// Root certificates: the system's store, or with PC_BUNDLED_CA (Windows) the PEM text that the platform gives
+// (pc::bundledRootCerts: cacert.pem beside wiimscreen.exe, made from certs/ like the Tab5's bundle).
 // WiFiUDP = a UDP socket for the SSDP discovery in src/net/discovery.cpp.
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
+// Sockets: POSIX or Winsock through net_compat.h (one code path).
+#include "net_compat.h"
+
 #include <openssl/err.h>
+#include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
-#include <poll.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <mutex>
+#include <set>
+#include <string>
 
-#ifndef MSG_NOSIGNAL  // macOS: SIGPIPE is ignored for the whole program instead (pc_platform.cpp)
-#define MSG_NOSIGNAL 0
-#endif
 #if OPENSSL_VERSION_NUMBER < 0x30000000L  // OpenSSL 1.1 (older Raspberry Pi OS / Debian)
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
 #include "WiFi.h"
 #include "WiFiUdp.h"
+#include "pc.h"
 
 namespace {
+
+#ifdef PC_BUNDLED_CA
+// Root certificates of a PEM text (certificates one after the other) into the store; returns how many
+int addPemRoots(X509_STORE* store, const std::string& pem) {
+    BIO* bio = pem.empty() ? nullptr : BIO_new_mem_buf(pem.data(), (int)pem.size());
+    int n = 0;
+    while (X509* cert = bio ? PEM_read_bio_X509(bio, nullptr, nullptr, nullptr) : nullptr) {
+        if (X509_STORE_add_cert(store, cert) == 1) ++n;
+        X509_free(cert);
+    }
+    ERR_clear_error();  // the end of the text reads as a "no start line" error
+    if (bio) BIO_free(bio);
+    return n;
+}
+#endif
 
 SSL_CTX* sslContext() {
     static std::once_flag once;
     static SSL_CTX* ctx = nullptr;
     std::call_once(once, [] {
+#ifdef PC_BUNDLED_CA
+        // No openssl.cnf: the library's built-in folder (/ucrt64/etc/ssl with MSYS2) is C:\ucrt64\... on Windows,
+        // a folder that any user can create. Must come before any other OpenSSL call.
+        OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, nullptr);
+#endif
         ctx = SSL_CTX_new(TLS_client_method());
         if (ctx) {
             SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+#ifdef PC_BUNDLED_CA
+            std::string where;
+            const std::string pem = pc::bundledRootCerts(where);
+            const int n = addPemRoots(SSL_CTX_get_cert_store(ctx), pem);
+            if (n == 0) fprintf(stderr, "[W] aucun certificat racine dans %s : HTTPS public impossible\n", where.c_str());
+            else Serial.printf("Certificats racines : %d (%s)\n", n, where.c_str());
+#else
             SSL_CTX_set_default_verify_paths(ctx);  // the system's root certificates
+#endif
         }
     });
     return ctx;
@@ -49,37 +75,26 @@ bool isIp(const char* host) {
 }
 
 // TCP connection with a time limit (non-blocking connect), then blocking reads with SO_RCVTIMEO
-int tcpConnect(const char* host, uint16_t port, uint32_t connectMs) {
+netc::sock tcpConnect(const char* host, uint16_t port, uint32_t connectMs) {
+    netc::init();
     addrinfo hints{}, *res = nullptr;
     hints.ai_socktype = SOCK_STREAM;
     if (getaddrinfo(host, std::to_string(port).c_str(), &hints, &res) != 0 || !res) return -1;
-    int fd = -1;
+    netc::sock fd = -1;
     for (addrinfo* r = res; r && fd < 0; r = r->ai_next) {
-        fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol);
+        fd = netc::open(r->ai_family, r->ai_socktype, r->ai_protocol);
         if (fd < 0) continue;
-        const int flags = fcntl(fd, F_GETFL, 0);
-        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-        int rc = ::connect(fd, r->ai_addr, r->ai_addrlen);
-        if (rc != 0 && errno == EINPROGRESS) {
-            pollfd p{fd, POLLOUT, 0};
-            int err = 0;
-            socklen_t len = sizeof err;
-            rc = poll(&p, 1, (int)connectMs) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0 && !err ? 0 : -1;
-        }
-        fcntl(fd, F_SETFL, flags);
+        netc::setBlocking(fd, false);
+        int rc = ::connect(fd, r->ai_addr, (int)r->ai_addrlen);
+        if (rc != 0 && netc::connectPending()) rc = netc::connected(fd, connectMs) ? 0 : -1;
+        netc::setBlocking(fd, true);
         if (rc != 0) {
-            close(fd);
+            netc::close(fd);
             fd = -1;
         }
     }
     freeaddrinfo(res);
     return fd;
-}
-
-void setRecvTimeout(int fd, uint32_t ms) {
-    timeval tv{(time_t)(ms / 1000), (suseconds_t)(ms % 1000) * 1000};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
 }
 
 }  // namespace
@@ -92,9 +107,9 @@ int WiFiClient::connect(const char* host, uint16_t port) {
     hasFingerprint_ = false;
     fd_ = tcpConnect(host, port, connectMs_);
     if (fd_ < 0) return 0;
-    setRecvTimeout(fd_, std::max(timeoutMs_, connectMs_));
+    netc::setTimeouts(fd_, std::max(timeoutMs_, connectMs_));
     if (!tls_) {
-        setRecvTimeout(fd_, timeoutMs_);
+        netc::setTimeouts(fd_, timeoutMs_);
         return 1;
     }
     SSL* ssl = sslContext() ? SSL_new(sslContext()) : nullptr;
@@ -102,7 +117,7 @@ int WiFiClient::connect(const char* host, uint16_t port) {
         stop();
         return 0;
     }
-    SSL_set_fd(ssl, fd_);
+    SSL_set_fd(ssl, (int)fd_);  // Windows: OpenSSL takes the SOCKET as an int as well
     if (!isIp(host)) SSL_set_tlsext_host_name(ssl, host);  // SNI
     if (insecure_) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, nullptr);
@@ -118,12 +133,18 @@ int WiFiClient::connect(const char* host, uint16_t port) {
         stop();
         return 0;
     }
+    if (!insecure_) {  // once per server: shows that the root certificates work (platform/pc/selftest.sh checks it)
+        static std::mutex m;
+        static std::set<std::string> seen;
+        std::lock_guard<std::mutex> lock(m);
+        if (seen.insert(host).second) Serial.printf("[tls] host=%s verified=1 | Certificat v\xC3\xA9rifi\xC3\xA9 : %s\n", host, host);
+    }
     if (X509* cert = SSL_get1_peer_certificate(ssl)) {
         unsigned len = 0;
         hasFingerprint_ = X509_digest(cert, EVP_sha256(), fingerprint_, &len) == 1 && len == 32;
         X509_free(cert);
     }
-    setRecvTimeout(fd_, timeoutMs_);
+    netc::setTimeouts(fd_, timeoutMs_);
     return 1;
 }
 
@@ -133,7 +154,7 @@ size_t WiFiClient::write(const uint8_t* b, size_t n) {
         const int k = SSL_write(static_cast<SSL*>(ssl_), b, (int)n);
         return k > 0 ? (size_t)k : 0;
     }
-    const ssize_t k = send(fd_, b, n, MSG_NOSIGNAL);
+    const int k = netc::sendBytes(fd_, b, n);
     return k > 0 ? (size_t)k : 0;
 }
 
@@ -152,9 +173,7 @@ int WiFiClient::available() {
         const int p = SSL_pending(static_cast<SSL*>(ssl_));
         if (p > 0) return p;
     }
-    int n = 0;
-    ioctl(fd_, FIONREAD, &n);  // TLS: encrypted bytes waiting; read() then decrypts them
-    return n;
+    return netc::pending(fd_);  // TLS: encrypted bytes waiting; read() then decrypts them
 }
 
 int WiFiClient::read(uint8_t* b, size_t n) {
@@ -164,14 +183,14 @@ int WiFiClient::read(uint8_t* b, size_t n) {
         const int k = SSL_read(ssl, b, (int)n);
         if (k <= 0) {
             const int e = SSL_get_error(ssl, k);
-            if (e == SSL_ERROR_ZERO_RETURN || (e == SSL_ERROR_SYSCALL && errno == 0)) eof_ = true;
+            if (e == SSL_ERROR_ZERO_RETURN || (e == SSL_ERROR_SYSCALL && netc::lastError() == 0)) eof_ = true;
             return -1;
         }
         return k;
     }
-    const ssize_t k = recv(fd_, b, n, 0);
+    const int k = netc::recvBytes(fd_, b, n);
     if (k == 0) eof_ = true;
-    return k > 0 ? (int)k : -1;
+    return k > 0 ? k : -1;
 }
 
 int WiFiClient::read() {
@@ -183,10 +202,9 @@ bool WiFiClient::connected() {
     if (fd_ < 0) return false;
     if (ssl_ && SSL_pending(static_cast<SSL*>(ssl_)) > 0) return true;
     if (eof_) return available() > 0;
-    pollfd p{fd_, POLLIN, 0};
-    if (poll(&p, 1, 0) > 0 && (p.revents & (POLLIN | POLLHUP))) {
+    if (netc::readable(fd_, 0)) {
         char c;
-        if (recv(fd_, &c, 1, MSG_PEEK | MSG_DONTWAIT) == 0) eof_ = true;
+        if (netc::recvBytes(fd_, &c, 1, MSG_PEEK) == 0) eof_ = true;  // readable: this peek does not wait
     }
     return !eof_ || available() > 0;
 }
@@ -194,7 +212,7 @@ bool WiFiClient::connected() {
 void WiFiClient::stop() {
     if (ssl_) SSL_free(static_cast<SSL*>(ssl_));
     ssl_ = nullptr;
-    if (fd_ >= 0) close(fd_);
+    if (fd_ >= 0) netc::close(fd_);
     fd_ = -1;
 }
 
@@ -202,19 +220,29 @@ void WiFiClient::stop() {
 
 bool WiFiUDP::begin(uint16_t port) {
     stop();
-    fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    fd_ = netc::open(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd_ < 0) return false;
     sockaddr_in me{};
     me.sin_family = AF_INET;
     me.sin_port = htons(port);
     me.sin_addr.s_addr = htonl(INADDR_ANY);
+#ifdef _WIN32
+    const DWORD ttl = 2;  // Windows: a DWORD
+    setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_TTL, reinterpret_cast<const char*>(&ttl), sizeof ttl);
+    // Windows often has virtual adapters (WSL, Hyper-V, VPN): send the search on the interface of the home
+    // network (the one that reaches the Internet, as WiFi.localIP()), not on the first one Windows picks
+    in_addr ifAddr{};
+    if (inet_pton(AF_INET, WiFi.localIP().toString().c_str(), &ifAddr) == 1)
+        setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_IF, reinterpret_cast<const char*>(&ifAddr), sizeof ifAddr);
+#else
     const unsigned char ttl = 2;
     setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof ttl);
+#endif
     if (bind(fd_, (sockaddr*)&me, sizeof me) != 0) {
         stop();
         return false;
     }
-    fcntl(fd_, F_SETFL, fcntl(fd_, F_GETFL, 0) | O_NONBLOCK);
+    netc::setBlocking(fd_, false);
     return true;
 }
 
@@ -235,16 +263,16 @@ int WiFiUDP::endPacket() {
     to.sin_family = AF_INET;
     to.sin_port = htons(toPort_);
     if (fd_ < 0 || inet_pton(AF_INET, to_.c_str(), &to.sin_addr) != 1) return 0;
-    return sendto(fd_, out_.data(), out_.size(), 0, (sockaddr*)&to, sizeof to) == (ssize_t)out_.size() ? 1 : 0;
+    return sendto(fd_, out_.data(), (int)out_.size(), 0, (sockaddr*)&to, sizeof to) == (int)out_.size() ? 1 : 0;
 }
 
 int WiFiUDP::parsePacket() {
     if (fd_ < 0) return 0;
     char buf[2048];
-    const ssize_t n = recv(fd_, buf, sizeof buf, 0);
+    const int n = netc::recvBytes(fd_, buf, sizeof buf);
     if (n <= 0) return 0;
     in_.assign(buf, n);
-    return (int)n;
+    return n;
 }
 
 int WiFiUDP::read(uint8_t* b, size_t n) {
@@ -255,6 +283,6 @@ int WiFiUDP::read(uint8_t* b, size_t n) {
 }
 
 void WiFiUDP::stop() {
-    if (fd_ >= 0) close(fd_);
+    if (fd_ >= 0) netc::close(fd_);
     fd_ = -1;
 }

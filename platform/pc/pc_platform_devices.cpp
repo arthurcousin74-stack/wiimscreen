@@ -1,10 +1,5 @@
 // Computer layer: the M5, Serial, ESP and WiFi objects of the Arduino/M5Unified stubs, the computer's network
 // address, Serial output (--quiet), microphone and battery. See pc_internal.h for the other pc_platform*.cpp files.
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
 #include "M5Unified.h"
 #include "WiFi.h"
 #include "pc.h"
@@ -12,10 +7,12 @@
 SimM5 M5;
 
 #ifdef PC_DESKTOP
+#include "net_compat.h"
+
 // Address of the computer on the network: the interface that would be used to reach the Internet (no packet sent)
 IPAddress WiFiSim::localIP() const {
     IPAddress ip;
-    const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    const netc::sock fd = netc::open(AF_INET, SOCK_DGRAM, 0);
     sockaddr_in to{};
     to.sin_family = AF_INET;
     to.sin_port = htons(53);
@@ -26,7 +23,7 @@ IPAddress WiFiSim::localIP() const {
         char s[INET_ADDRSTRLEN];
         ip.text = inet_ntop(AF_INET, &me.sin_addr, s, sizeof s);
     }
-    if (fd >= 0) close(fd);
+    if (fd >= 0) netc::close(fd);
     return ip;
 }
 #else

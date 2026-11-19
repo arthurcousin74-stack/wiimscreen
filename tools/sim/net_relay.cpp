@@ -120,7 +120,7 @@ int WiFiClient::read() {
 
 bool WiFiClient::connected() {
     if (fd_ < 0 || eof_) return available() > 0;
-    pollfd p{fd_, POLLIN, 0};
+    pollfd p{(int)fd_, POLLIN, 0};  // fd_ is intptr_t (a Windows SOCKET in the desktop build)
     if (poll(&p, 1, 0) > 0 && (p.revents & (POLLIN | POLLHUP))) {
         char c;
         if (recv(fd_, &c, 1, MSG_PEEK | MSG_DONTWAIT) == 0) eof_ = true;

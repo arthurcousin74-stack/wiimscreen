@@ -7,7 +7,8 @@
 //   pc_platform_screen.cpp   SDL window, display canvas shown in it, mouse/touch, screenshots, screen size
 //   pc_platform_script.cpp   --script runner (wait, tap, press, move, release, key, hold, text, shot, quit)
 //   pc_platform_keys.cpp     key input: SDL keyboard/controllers and script keys -> wr::KeyTracker -> takeKey()
-//   pc_platform_exit.cpp     restart (execv of the same command) and power off (_exit)
+//   pc_platform_exit.cpp     restart (execv of the same command; Windows: CreateProcess) and power off (_exit)
+//   pc_platform_windows.cpp  Windows only: settings folder (%APPDATA%\wiimscreen), console or last.log output
 #pragma once
 
 #include <SDL2/SDL.h>
@@ -51,4 +52,13 @@ void keyTick();  // repeats and long presses, once per M5.update()
 extern uint32_t g_stepAt;
 void runScript();
 bool loadScript(const std::string& path);
+
+#ifdef _WIN32
+// pc_platform_windows.cpp
+std::string windowsConfigDir();  // %APPDATA%\wiimscreen (UTF-8)
+// Where the Journal and messages go: a console window (--console), the terminal or pipe that started the
+// program, or else <state>/last.log (the previous run's log becomes previous.log)
+void windowsStartOutput(const std::string& stateDir, bool console);
+bool windowsLogsToFile();  // output goes to last.log (a restart lets the new process open it again)
+#endif
 }  // namespace pc_internal

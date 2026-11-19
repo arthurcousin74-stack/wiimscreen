@@ -51,7 +51,7 @@ public:
 
 protected:
     bool tls_ = false;
-    int fd_ = -1;
+    intptr_t fd_ = -1;  // socket (POSIX descriptor or Windows SOCKET; net_compat.h)
     bool eof_ = false;
     uint32_t timeoutMs_ = 5000, connectMs_ = 5000;
     uint8_t fingerprint_[32] = {};

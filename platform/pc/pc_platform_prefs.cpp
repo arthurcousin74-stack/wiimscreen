@@ -26,9 +26,10 @@ void loadPrefs() {
     static bool loaded = false;
     if (loaded) return;
     loaded = true;
-    std::ifstream f(prefsPath());
+    std::ifstream f(prefsPath(), std::ios::binary);
     std::string line;
     while (std::getline(f, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();  // a line ending of a Windows editor
         auto t = line.find('\t');
         if (t == std::string::npos) continue;
         std::string v = line.substr(t + 1);
@@ -37,7 +38,7 @@ void loadPrefs() {
     }
 }
 void savePrefs() {
-    std::ofstream f(prefsPath());
+    std::ofstream f(prefsPath(), std::ios::binary);  // the same file on every system (\n, also on Windows)
     for (auto& kv : prefs()) {
         std::string v = kv.second;
         for (size_t p = 0; (p = v.find('\n', p)) != std::string::npos;) v.replace(p, 1, "\\n");

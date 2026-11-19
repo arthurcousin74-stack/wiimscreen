@@ -4,11 +4,16 @@
 // app in every loop and every waiting screen) reads the mouse as the touch screen and shows the display canvas in
 // the window. With --script, taps come from a file and screenshots are written (no window needed: --headless).
 // The other concerns are in pc_platform_*.cpp (list in pc_internal.h).
+#ifndef SDL_MAIN_HANDLED
+#define SDL_MAIN_HANDLED  // Windows: our main() stays main() (SDL would rename it SDL_main); see SDL_SetMainReady
+#endif
 #include <SDL2/SDL.h>
 #include <sys/stat.h>
 
 #include <csignal>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -21,7 +26,9 @@ using namespace pc_internal;
 // ------------------------------------------------------------------ options
 
 namespace pc_internal {
-#if defined(PC_DESKTOP)
+#if defined(PC_DESKTOP) && defined(_WIN32)
+std::string g_state = windowsConfigDir(), g_out = windowsConfigDir() + "\\captures";
+#elif defined(PC_DESKTOP)
 std::string configDir() {
     const char* x = getenv("XDG_CONFIG_HOME");
     const char* h = getenv("HOME");
@@ -43,12 +50,33 @@ const std::string& pc::outDir() { return g_out; }
 const std::string& pc::relay() { return g_relay; }
 bool pc::quiet() { return g_quiet; }
 
+std::string pc::programDir() {
+    char* p = SDL_GetBasePath();  // UTF-8, ends with the separator; works without SDL_Init
+    const std::string dir = p ? p : "";
+    SDL_free(p);
+    return dir;
+}
+
+std::string pc::bundledRootCerts(std::string& where) {
+    where = programDir() + "cacert.pem";
+    std::ifstream f(where, std::ios::binary);
+    std::ostringstream s;
+    s << f.rdbuf();
+    return s.str();
+}
+
 void setup();
 void loop();
 
 int main(int argc, char** argv) {
-    signal(SIGPIPE, SIG_IGN);
-    umask(077);  // settings (OpenAI key, Wi-Fi password copy) and favorites: readable by this user only  // a closed connection must not end the program (send() returns an error instead)
+#ifndef _WIN32
+    signal(SIGPIPE, SIG_IGN);  // a closed connection must not end the program (send() returns an error instead)
+    umask(077);  // settings (OpenAI key, Wi-Fi password copy) and favorites: readable by this user only
+#else
+    // Windows: %APPDATA% is already private to the user; no SIGPIPE. SDL must not replace main() (SDL_MAIN_HANDLED)
+    SDL_SetMainReady();
+    bool console = false;
+#endif
     bool headless = false, portrait = false;
     std::string wiim;
     for (int i = 0; i < argc; ++i) g_argv.push_back(argv[i]);
@@ -63,6 +91,9 @@ int main(int argc, char** argv) {
         else if (a == "--out") g_out = next();
         else if (a == "--relay") g_relay = next();
         else if (a == "--fullscreen") g_fullscreen = true;
+#ifdef _WIN32
+        else if (a == "--console") console = true;
+#endif
         else if (a == "--size") {
             int w = 0, h = 0;
             if (sscanf(next().c_str(), "%dx%d", &w, &h) != 2 || w < 320 || h < 240 || w > 7680 || h > 7680) {
@@ -79,7 +110,11 @@ int main(int argc, char** argv) {
         } else {
             fprintf(stderr,
                     "usage: %s [--scale 0.6] [--script fichier] [--headless] [--state dossier] [--out dossier] "
-                    "[--reset] [--quiet] [--log-keys] [--relay h\xC3\xB4te:port] [--size 800x480] [--fullscreen] [--wiim adresse]\n",
+                    "[--reset] [--quiet] [--log-keys] [--relay h\xC3\xB4te:port] [--size 800x480] [--fullscreen] [--wiim adresse]"
+#ifdef _WIN32
+                    " [--console]"
+#endif
+                    "\n",
                     argv[0]);
             return a == "--help" ? 0 : 1;
         }
@@ -87,6 +122,9 @@ int main(int argc, char** argv) {
     std::error_code ec;
     std::filesystem::create_directories(g_state, ec);
     std::filesystem::create_directories(g_out, ec);
+#ifdef _WIN32
+    windowsStartOutput(g_state, console);
+#endif
     pc::defaultSettings();
     // --wiim: this WiiM (also when discovery cannot work, e.g. WSL); --size taller than wide: portrait
     if (!wiim.empty() || portrait) {
@@ -108,6 +146,9 @@ int main(int argc, char** argv) {
     if (!headless) {
         if (SDL_Init(SDL_INIT_VIDEO) != 0) {
             fprintf(stderr, "SDL : %s (essaie --headless)\n", SDL_GetError());
+#ifdef _WIN32  // no terminal when started from the Explorer: say it in a window
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "wiimscreen", SDL_GetError(), nullptr);
+#endif
             return 1;
         }
 #ifdef PC_DESKTOP
