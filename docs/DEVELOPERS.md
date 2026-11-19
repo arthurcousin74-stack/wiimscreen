@@ -205,7 +205,8 @@ We tested only the Tab5. Other ESP32 boards need a small quantity of new code.
   easiest to port. For other boards, write a display configuration (LovyanGFX or M5GFX `LGFX` class).
 - **Keys** (buttons, remote, keyboard): `src/device/key_input.h` declares `takeKey()`. The Tab5 version
   (`src/device/key_input.cpp`) gives no keys. On a board with buttons, write a version that sends the button changes
-  to a `wr::KeyTracker` (`lib/core/src/keys.h`). The app does not use the keys yet.
+  to a `wr::KeyTracker` (`lib/core/src/keys.h`). `loop()` uses them through
+  `serviceKeys()` (`src/main.cpp`): focus ring, OK, Back, media keys (docs/DESKTOP.md).
 - **Layout**: `computeLayout()` fits all screen sizes. Its tests check 1280×720, 720×1280 and 960×540. Add the size
   of your screen to these tests.
 - **Parts that are specific to the Tab5**:

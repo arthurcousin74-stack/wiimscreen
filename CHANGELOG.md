@@ -6,6 +6,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 ## [Unreleased]
 
 ### Added
+- Computer version: you can use the app with a keyboard, a remote or a game controller. The arrow keys move a white
+  ring between the buttons (the bar on the left, the heart, playback, volume, the preset tiles and their pages, the
+  Settings menu, the Journal, the WiiM picker), OK presses the button, Back closes a screen, Space and the media keys
+  play, pause, skip and change the volume, Menu opens Settings, F3 opens the search. The ring shows only after a key
+  and goes away when you touch the screen. The search keyboard does not use the keys yet. No change on the Tab5.
+  Keys: docs/DESKTOP.md.
 - For contributors: key input plumbing for remotes and keyboards (not used by the app yet). The computer builds read
   the keyboard, media keys and game controllers; simulator scripts can send keys (`key`, `hold`, `text` steps) and
   `--log-keys` shows them. No change on the Tab5.
@@ -18,7 +24,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - For contributors: each screen registers its tappable elements in one list (`wr::TargetList`, `Ui::targets()`),
   first step to a D-pad / remote-control focus; most `hitXxx()` functions are lookups in it. No change for the user.
 - For contributors: D-pad move logic over that list (`wr::nextTarget`, `wr::defaultTarget`), tested on the real
-  layouts; not used by the app yet. No change for the user.
+  layouts. No change for the user.
+- For contributors: every tap is now found in that list and handled by one function per screen
+  (`activateControls`, `activateMenu`, …), which the OK key also calls. New simulator scripts `taps.txt` (a tap on
+  every element of every screen) and `dpad.txt` (keys only), both run by `tools/check.sh`. No change for the user
+  (the Tab5 still needs a tap check on hardware).
 
 ## [0.2.0-beta] — 2026-11-18 — computer version, safer search, code split for contributors
 

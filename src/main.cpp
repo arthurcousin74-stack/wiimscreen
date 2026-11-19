@@ -73,6 +73,7 @@ IdleClock g_idle;
 StatusClock g_status;
 HeaderPress g_header;
 PendingCommand g_pending;
+FocusState g_focus;
 
 // Le WiiM charge l'album du morceau choisi (Deezer, albums) : plus long qu'une piste de la file
 static bool loadsAlbum(SearchKind k) {
@@ -507,7 +508,12 @@ static void useWiim(const WiimDevice& d) {
 // Sans adresse enregistrée : recherche sur le Wi-Fi, puis choix sur l'écran. Même pour un seul lecteur trouvé :
 // son certificat sera épinglé au premier échange, et n'importe quel appareil du réseau peut répondre à la
 // recherche. Le nom et l'adresse sont montrés, un appui confirme.
+static bool isArrow(wr::NavKey k);
+static wr::Dir dirOf(wr::NavKey k);
+
 static void chooseWiim() {
+    g_focus.picking = true;  // anneau (touches) : g_focus.picker
+    g_focus.picker = wr::FocusSpot{};
     for (;;) {
         g_ui.showInfo(wr::L("Looking for the WiiM\xE2\x80\xA6", "Recherche du WiiM\xE2\x80\xA6"),
                       wr::L("The Tab5 is looking for WiiM players on your Wi-Fi.",
@@ -520,9 +526,41 @@ static void chooseWiim() {
             M5.update();
             auto t = M5.Touch.getDetail();
             const wr::Target* tg = t.wasPressed() ? g_ui.targets().hit(t.x, t.y) : nullptr;
+            if (t.wasPressed() && g_focus.visible) {  // appui : l'anneau disparaît
+                g_focus.visible = false;
+                g_ui.renderPicker(list);
+                tg = g_ui.targets().hit(t.x, t.y);
+            }
+            // Touches : flèches entre les lecteurs et les boutons, OK comme un appui, Retour = Réessayer
+            wr::Target chosen;
+            wr::KeyEvent k;
+            while (!tg && takeKey(k)) {
+                if (k.key == wr::NavKey::Back) {
+                    chosen.act = wr::Act::PickRetry;
+                    tg = &chosen;
+                } else if (isArrow(k.key) || k.key == wr::NavKey::Ok) {
+                    if (!g_focus.visible) {  // première touche : montrer l'anneau
+                        g_focus.visible = true;
+                        g_ui.renderPicker(list);
+                        continue;
+                    }
+                    const wr::Target* cur = wr::focusedTarget(g_ui.targets(), g_focus.picker);
+                    if (!cur) continue;
+                    if (k.key == wr::NavKey::Ok) {
+                        chosen = *cur;
+                        tg = &chosen;
+                        continue;
+                    }
+                    const wr::NavResult r = wr::railMove(g_ui.targets(), cur, dirOf(k.key));
+                    if (!r.target) continue;
+                    g_focus.picker = wr::FocusSpot{r.target->act, r.target->arg};
+                    g_ui.renderPicker(list);
+                }
+            }
             if (tg && tg->act == wr::Act::PickDevice && tg->arg >= 0 && tg->arg < (int)found.size()) {
                 sound::tap();
                 useWiim(found[tg->arg]);
+                g_focus.picking = false;
                 return;
             }
             if (tg && tg->act == wr::Act::PickRetry) sound::tap(), retry = true;
@@ -615,6 +653,7 @@ static void serviceStrip(const m5::touch_detail_t& t) {
 // Vue commandes : un élément de Ui::targets() activé (appui ou OK)
 static void activateControls(const wr::Target& tg, const Press& at) {
     const int x = at.x, y = at.y;
+    const char* how = at.touch ? "Appui" : "Touche";  // Journal
     auto& p = g_state.player;
     switch (tg.act) {
         // Barres (volume, coupure du son, progression) : affichage immédiat, commande en fond
@@ -631,7 +670,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
         }
         case wr::Act::Mute:
             if (!wiimStateKnown("son coup\xC3\xA9/r\xC3\xA9tabli")) return;
-            logEvent("Appui son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", x, y);
+            logEvent("%s son coup\xC3\xA9/r\xC3\xA9tabli (%d,%d)", how, x, y);
             sound::tap();
             p.muted = !p.muted;
             g_worker.command(String("setPlayerCmd:mute:") + (p.muted ? "1" : "0"));
@@ -682,7 +721,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             } else {
                 const UiState& st = g_state;
                 const std::string album = st.player.album.empty() ? st.meta.album : st.player.album;
-                logEvent("Appui Favori : %s", album.c_str());
+                logEvent("%s Favori : %s", how, album.c_str());
                 g_jobs.favorite = true;
                 g_jobs.since = millis();
                 g_worker.saveFavorite(st.player.title.c_str(), st.player.artist.c_str(), album.c_str(), st.meta.artUrl.c_str());
@@ -692,18 +731,18 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             return;
         }
         case wr::Act::Home:  // Accueil (barre) : déjà ici, retour à la première page de presets
-            logEvent("Appui Accueil (%d,%d)", x, y);
+            logEvent("%s Accueil (%d,%d)", how, x, y);
             sound::tap();
             g_ui.setPage(0);
             show();
             return;
         case wr::Act::Search:  // Recherche (barre)
-            logEvent("Appui Recherche (%d,%d)", x, y);
+            logEvent("%s Recherche (%d,%d)", how, x, y);
             sound::tap();
             openSearch();
             return;
         case wr::Act::Settings:  // Réglages (barre)
-            logEvent("Appui R\xC3\xA9glages (%d,%d)", x, y);
+            logEvent("%s R\xC3\xA9glages (%d,%d)", how, x, y);
             sound::tap();
             g_view.screen = Screen::Menu;
             g_ui.renderMenu(FW_VERSION);
@@ -716,7 +755,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
     if (t < 0 || t >= wr::kTransportCount) return;
     static const char* kNames[] = {"volume -", "pr\xC3\xA9" "c\xC3\xA9" "dent", "lecture/pause", "suivant", "volume +"};
     if ((t == wr::kVolDown || t == wr::kVolUp || t == wr::kPlayPause) && !wiimStateKnown(kNames[t])) return;
-    logEvent("Appui %s (%d,%d)", kNames[t], x, y);
+    logEvent("%s %s (%d,%d)", how, kNames[t], x, y);
     sound::tap();
     switch (t) {
         case wr::kVolDown:
@@ -907,6 +946,221 @@ static void activateSearch(const wr::Target& tg) {
     }
 }
 
+// --------------------------------------------------------- touches (télécommande, clavier, manette)
+//
+// Lues dans loop() seulement (serviceKeys). Le Tab5 n'en reçoit aucune : rien ne change pour lui.
+// Flèches : focus d'un élément à l'autre (wr::railMove) ; OK : la même activation qu'un appui ; Retour : l'écran
+// d'avant ; touches de lecture et de volume : comme les boutons ; Menu : Réglages ; Recherche : le clavier.
+
+// Anneau du focus (Ui::setFocusSource) : montré après une touche, sur l'élément retenu pour l'écran affiché
+static bool focusSource(wr::FocusSpot& spot) {
+    if (!g_focus.visible) return false;
+    if (g_focus.picking) {
+        spot = g_focus.picker;
+        return true;
+    }
+    if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) return false;  // étape suivante
+    spot = g_focus.spot[(int)g_view.screen];
+    return true;
+}
+
+// Écran affiché redessiné (anneau montré, déplacé ou caché)
+static void redrawForFocus() {
+    switch (g_view.screen) {
+        case Screen::Controls: show(); break;
+        case Screen::Menu: g_ui.renderMenu(FW_VERSION); break;
+        case Screen::Log:
+            g_view.logFrame = millis();
+            g_ui.renderLog(logLines(), FW_VERSION);
+            break;
+        case Screen::TouchTest: g_ui.renderTouchTest(-1, -1, g_view.touchCount); break;
+        case Screen::Search:
+        case Screen::Results: break;  // pas d'anneau
+    }
+}
+
+// Premier appui sur l'écran : l'anneau disparaît (« focus-visible »)
+static void hideFocus() {
+    if (!g_focus.visible) return;
+    g_focus.visible = false;
+    redrawForFocus();
+}
+
+static wr::Dir dirOf(wr::NavKey k) {
+    switch (k) {
+        case wr::NavKey::Up: return wr::Dir::Up;
+        case wr::NavKey::Down: return wr::Dir::Down;
+        case wr::NavKey::Left: return wr::Dir::Left;
+        default: return wr::Dir::Right;
+    }
+}
+
+static bool isArrow(wr::NavKey k) {
+    return k == wr::NavKey::Up || k == wr::NavKey::Down || k == wr::NavKey::Left || k == wr::NavKey::Right;
+}
+
+// Activation au clavier : centre de l'élément, sans doigt à suivre
+static Press keyPress(const wr::Target& t, uint32_t now) {
+    Press at;
+    at.x = t.r.x + t.r.w / 2, at.y = t.r.y + t.r.h / 2, at.touch = false, at.now = now;
+    return at;
+}
+
+// Touches de lecture, de volume et de coupure du son : les boutons de la vue commandes (même chemin non bloquant)
+static void mediaKey(wr::NavKey k, uint32_t now) {
+    wr::Target t;
+    t.act = wr::Act::Transport;
+    switch (k) {
+        case wr::NavKey::PlayPause: t.arg = wr::kPlayPause; break;
+        case wr::NavKey::Play:
+            if (g_state.player.ok && g_state.player.playing) return;  // joue déjà
+            t.arg = wr::kPlayPause;
+            break;
+        case wr::NavKey::Pause:
+            if (g_state.player.ok && !g_state.player.playing) return;  // déjà en pause
+            t.arg = wr::kPlayPause;
+            break;
+        case wr::NavKey::Next: t.arg = wr::kNext; break;
+        case wr::NavKey::Prev: t.arg = wr::kPrev; break;
+        case wr::NavKey::VolUp: t.arg = wr::kVolUp; break;
+        case wr::NavKey::VolDown: t.arg = wr::kVolDown; break;
+        case wr::NavKey::Mute: t.act = wr::Act::Mute; break;
+        default: return;
+    }
+    Press at;
+    at.x = at.y = -1, at.touch = false, at.now = now;
+    activateControls(t, at);
+}
+
+static void openMenu() {
+    sound::tap();
+    g_view.screen = Screen::Menu;
+    g_ui.renderMenu(FW_VERSION);
+}
+
+// Retour : fermer Réglages, Journal, test tactile ; la liste revient au clavier, le clavier aux commandes ; pendant
+// la dictée, l'annuler. Sur les commandes : rien (la vue ambiance vient seule après 60 s).
+static void backKey(uint32_t now) {
+    switch (g_view.screen) {
+        case Screen::Controls: return;
+        case Screen::Search:
+        case Screen::Results:
+            if (g_voice.listening && g_voice.dictation) {
+                finishDictation(false);
+                return;
+            }
+            sound::tap();
+            if (g_view.screen == Screen::Results) {
+                openSearch();
+                return;
+            }
+            break;
+        default: sound::tap(); break;
+    }
+    g_view.screen = Screen::Controls;
+    g_idle.lastTouch = now;
+    show();
+}
+
+// Flèche : focus déplacé. Sur la bande des presets, Gauche / Droite sans autre tuile de ce côté changent de page
+// (comme un glissement) et gardent le focus sur une tuile : la première de la page suivante, la dernière de la
+// précédente. Au bord de l'écran : rien.
+static void moveFocus(const wr::Target& cur, wr::Dir d) {
+    wr::FocusSpot& spot = g_focus.spot[(int)g_view.screen];
+    const wr::NavResult r = wr::railMove(g_ui.targets(), &cur, d);
+    if (g_view.screen == Screen::Controls && cur.act == wr::Act::Preset && (d == wr::Dir::Left || d == wr::Dir::Right) &&
+        !(r.target && r.target->act == wr::Act::Preset)) {
+        const int before = g_ui.page();
+        g_ui.setPage(before + (d == wr::Dir::Right ? 1 : -1));
+        if (g_ui.page() != before) {
+            sound::tap();
+            const int first = g_ui.page() * g_ui.perPage();
+            const int last = std::min((int)g_tiles.list.size(), first + g_ui.perPage()) - 1;
+            spot.act = wr::Act::Preset;
+            spot.arg = d == wr::Dir::Right ? first : last;
+            show();
+            return;
+        }
+    }
+    if (!r.target) return;  // bord
+    spot.act = r.target->act;
+    spot.arg = r.target->arg;
+    redrawForFocus();
+}
+
+static void onKey(const wr::KeyEvent& k, uint32_t now) {
+    using wr::NavKey;
+    // Texte, Effacer, Entrée : pour le clavier de recherche (étape suivante) ; ignorés pour l'instant
+    if (k.key == NavKey::None || k.key == NavKey::Text || k.key == NavKey::Backspace || k.key == NavKey::Enter) return;
+    g_idle.lastTouch = now;  // activité, comme un appui (atténuation, vue ambiance, veille)
+    // Écran atténué ou éteint, ou vue ambiance : la touche ne fait que réveiller (comme un premier appui)
+    if (g_idle.brightness != kBrightOn) {
+        logEvent("Touche : r\xC3\xA9veil de l'\xC3\xA9" "cran");
+        setBrightness(kBrightOn);
+        if (g_view.ambient) exitAmbient();
+        return;
+    }
+    if (g_view.ambient && g_view.screen == Screen::Controls) {
+        logEvent("Touche en vue ambiance");
+        exitAmbient();
+        sound::tap();
+        return;
+    }
+    const Screen screen = g_view.screen;
+    const bool search = screen == Screen::Search || screen == Screen::Results;
+    const bool dictation = g_voice.listening && g_voice.dictation;
+    if (k.key == NavKey::Back) return backKey(now);
+    if (k.key == NavKey::Menu) {
+        if (screen == Screen::Menu) return backKey(now);
+        if (!dictation) openMenu();
+        return;
+    }
+    if (k.key == NavKey::Search) {
+        if (screen != Screen::Search && !dictation) {
+            sound::tap();
+            openSearch();
+        }
+        return;
+    }
+    if (search) return;  // flèches, OK, lecture : clavier et résultats à l'étape suivante (Espace y sera du texte)
+    if (!isArrow(k.key) && k.key != NavKey::Ok) return mediaKey(k.key, now);
+
+    if (screen == Screen::Controls && !g_ui.controlsShown()) renderNow();  // liste de la vue commandes (cf. tapControls)
+    // OK tenu sur les commandes : Réglages, comme l'appui long sur l'en-tête
+    if (k.key == NavKey::Ok && k.kind == wr::KeyEvent::LongPress && screen == Screen::Controls) {
+        sound::confirm();
+        g_view.screen = Screen::Menu;
+        g_ui.renderMenu(FW_VERSION);
+        return;
+    }
+    // Anneau caché : la première flèche ou OK le montre seulement (rien ne bouge, rien ne s'active)
+    if (!g_focus.visible) {
+        g_focus.visible = true;
+        redrawForFocus();
+        return;
+    }
+    const wr::Target* cur = wr::focusedTarget(g_ui.targets(), g_focus.spot[(int)screen]);
+    if (!cur) return;
+    if (isArrow(k.key)) return moveFocus(*cur, dirOf(k.key));
+    // OK : la même activation qu'un appui (copie : l'activation peut redessiner l'écran et vider la liste)
+    const wr::Target tg = *cur;
+    g_focus.spot[(int)screen] = wr::FocusSpot{tg.act, tg.arg};
+    static const char* const kScreenNames[kScreenCount] = {"controls", "menu", "touchtest", "log", "search", "results"};
+    logTagged("focus.ok", "screen=%s act=%s arg=%d | Touche OK", kScreenNames[(int)screen], wr::actName(tg.act), tg.arg);
+    switch (screen) {
+        case Screen::Controls: activateControls(tg, keyPress(tg, now)); break;
+        case Screen::Menu: activateMenu(tg, now); break;
+        case Screen::Log: activateLog(tg, now); break;
+        case Screen::TouchTest: activateTouchTest(tg, now); break;
+        default: break;
+    }
+}
+
+static void serviceKeys(uint32_t now) {
+    wr::KeyEvent k;
+    while (takeKey(k)) onKey(k, now);
+}
+
 // Connexion Wi-Fi ; en cas d'échec, l'écran le dit et un appui ouvre la configuration.
 static void connectWifi() {
     WiFi.mode(WIFI_STA);
@@ -981,6 +1235,7 @@ void setup() {
     g_ui.setVisualizer(g_settings.visualizer);
     g_ui.setVoiceEnabled(g_settings.voiceEnabled());
     g_ui.setAlbumSearch(g_settings.qobuzDirect);  // la recherche d'albums demande l'accès Qobuz direct (non officiel)
+    g_ui.setFocusSource(focusSource);              // anneau du focus (touches ; jamais sur le Tab5)
 
     String portalReason;
     if (takePortalRequest(portalReason)) runSetupPortal(g_settings, g_ui, portalReason);  // demandé avant le redémarrage
@@ -1010,10 +1265,10 @@ void setup() {
 void loop() {
     M5.update();
     auto t = M5.Touch.getDetail();
-    // Touches (télécommande, clavier) : vidées ici, pas encore utilisées (étape D-pad à venir). Rien sur le Tab5.
-    wr::KeyEvent keyEv;
-    while (takeKey(keyEv)) { /* consumed by the D-pad step */ }
     const uint32_t now = millis();
+    // Touches (télécommande, clavier, manette ; rien sur le Tab5), puis appui : l'anneau du focus disparaît
+    serviceKeys(now);
+    if (t.wasPressed()) hideFocus();
     logMemory();
     // Images arrivées (tous les écrans : la file de l'ArtFetcher est bornée, un résultat non lu serait perdu)
     checkImages();

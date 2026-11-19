@@ -1,4 +1,4 @@
-# Scripted keys (steps key, hold, text): the app does not use keys yet; --log-keys prints each event it takes.
+# Scripted keys (steps key, hold, text): --log-keys prints each event the app takes (what they do: dpad.txt).
 # Run: .pio/build/sim/program --headless --quiet --reset --log-keys --script tools/sim/scripts/keys.txt
 # tools/check.sh (sim gate) checks the [key] lines: short presses, a long OK, repeats on a held arrow, a text.
 wait 1500

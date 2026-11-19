@@ -4,6 +4,7 @@
 // - Sound: platform/pc/pc_sound.cpp (silent). - Dictation: no microphone support yet (the microphone button is not shown without
 //   an OpenAI key; with one, « Micro indisponible »).
 #include "M5Unified.h"
+#include "device/key_input.h"
 #include "device/ota.h"
 #include "pc.h"
 #include "device/portal.h"
@@ -11,11 +12,20 @@
 #include "net/voice_service.h"
 
 
+// A tap, or the OK or Back key (remote, keyboard), once the screen has shown for afterMs
+static bool okOrBack() {
+    wr::KeyEvent k;
+    bool hit = false;
+    while (takeKey(k)) hit = hit || k.key == wr::NavKey::Ok || k.key == wr::NavKey::Back;
+    return hit;
+}
+
 static void waitForTap(uint32_t afterMs) {
     const uint32_t shown = millis();
     for (;;) {
         M5.update();
-        if (millis() - shown > afterMs && M5.Touch.getDetail().wasPressed()) return;
+        const bool key = okOrBack();  // keys pressed before afterMs are dropped too
+        if (millis() - shown > afterMs && (M5.Touch.getDetail().wasPressed() || key)) return;
         delay(10);
     }
 }

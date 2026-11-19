@@ -7,9 +7,9 @@
 #
 # Gates: native sim preview asan simreal desktop tab5
 #   native   unit tests of lib/core (AddressSanitizer + UBSan built in)      needs: a C++ compiler
-#   sim      simulator build + scripted tour, taps on every screen, keys     needs: SDL2 headers (libsdl2-dev)
+#   sim      simulator build + scripted tour, taps, keys, D-pad              needs: SDL2 headers (libsdl2-dev)
 #   preview  preview build + golden screens (tools/preview/check_golden.py)   needs: SDL2 headers
-#   asan     simulator tour and taps under AddressSanitizer/UBSan             needs: SDL2 headers
+#   asan     simulator tour, taps and D-pad under AddressSanitizer/UBSan      needs: SDL2 headers
 #   simreal  "real WiiM" simulator + relay self-test (about 2 min)            needs: SDL2 headers, openssl, python3
 #   desktop  computer build + self-test against a mock WiiM                   needs: SDL2 + OpenSSL headers (libssl-dev)
 #   tab5     Tab5 firmware                                                    needs: PlatformIO downloads the toolchain
@@ -62,7 +62,22 @@ gate_sim() {
     need sim "SDL2 headers missing (Debian/Ubuntu: sudo apt install libsdl2-dev; macOS: brew install sdl2)" have_sdl2 || return 2
     pcpio run -e sim &&
         tmo 120 .pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt &&
-        sim_taps && sim_keys
+        sim_taps && sim_keys && sim_dpad
+}
+
+# D-pad (tools/sim/scripts/dpad.txt): each OK must activate the element the focus ring reached ([focus.ok] lines)
+sim_dpad() {
+    local out want
+    out=$(tmo 120 .pio/build/sim/program --headless --reset --state .pio/dpad-state --script tools/sim/scripts/dpad.txt) ||
+        { echo "$out"; return 1; }
+    for want in "screen=controls act=transport arg=2" "screen=controls act=preset arg=8" \
+        "screen=controls act=transport arg=3" "screen=menu act=menuchoice arg=3"; do
+        if ! grep -qF "[focus.ok] $want |" <<<"$out"; then
+            echo "check.sh: sim: '[focus.ok] $want' missing in the dpad.txt run:"
+            echo "$out"
+            return 1
+        fi
+    done
 }
 
 # Taps on every element of every screen (tools/sim/scripts/taps.txt): ends with Sleep (the program stops by itself)
@@ -104,7 +119,7 @@ gate_asan() {
         PLATFORMIO_BUILD_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1" pcpio run -e sim || return 1
     local script
     : > .pio/asan.log
-    for script in tour taps; do
+    for script in tour taps dpad; do
         if ! ASAN_OPTIONS=detect_leaks=0 tmo 300 .pio/build-asan/sim/program --headless --quiet --reset \
             --state .pio/asan-state --out .pio/asan-out --script tools/sim/scripts/$script.txt 2>> .pio/asan.log; then
             cat .pio/asan.log

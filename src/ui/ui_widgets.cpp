@@ -54,6 +54,26 @@ void Ui::navRail(int active) {
     targets_.add(wr::Act::Settings, 0, layout_.navSettings, navHit(layout_.rail, layout_.navSettings, sc(16)));
 }
 
+// Anneau du focus (télécommande) : contour blanc de sc(3) à sc(3) de l'élément, halo de la couleur d'accent autour.
+// Cercle pour les boutons ronds (lecture, ♥, barre, haut-parleur), coins arrondis pour les autres (tuiles, choix).
+void Ui::focusRing() {
+    wr::FocusSpot spot;
+    if (!focusSource_ || view_ == View::Ambient || !focusSource_(spot)) return;
+    const wr::Target* t = wr::focusedTarget(targets_, spot);
+    if (!t) return;
+    using wr::Act;
+    const wr::Rect& r = t->r;
+    const bool round = t->act == Act::Transport || t->act == Act::Fav || t->act == Act::Mute || t->act == Act::Home ||
+                       t->act == Act::Search || t->act == Act::Settings;
+    const int gap = sc(3), line = std::max(2, sc(3)), halo = std::max(2, sc(3));
+    auto ring = [&](int o, uint32_t color) {
+        const int rad = round ? std::min(r.w, r.h) / 2 + o : sc(14) + o;
+        canvas_.drawRoundRect(r.x - o, r.y - o, r.w + 2 * o, r.h + 2 * o, rad, color);
+    };
+    for (int i = 0; i < halo; ++i) ring(gap + line + i, mix(accent_, kBg, 0.25f + 0.25f * i / halo));
+    for (int i = 0; i < line; ++i) ring(gap + i, kText);
+}
+
 // Loupe : anneau et manche
 void Ui::searchIcon(int cx, int cy, int r, uint32_t c, uint32_t bg) {
     auto& C = canvas_;

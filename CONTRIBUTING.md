@@ -44,9 +44,9 @@ tools/check.sh native preview        # only some gates
 | Gate | What it checks | Command run by `tools/check.sh` | Needs (Debian/Ubuntu packages) |
 |---|---|---|---|
 | `native` | Unit tests of `lib/core`, under AddressSanitizer + UBSan | `pio test -e native` | a C++ compiler |
-| `sim` | The real app with a fake WiiM: scripted tour of the screens, a tap on every element of every screen (`taps.txt`), scripted keys; fails on a crash or a hang | `pio run -e sim` then `.pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt` | `libsdl2-dev` |
+| `sim` | The real app with a fake WiiM: scripted tour of the screens, a tap on every element of every screen (`taps.txt`), scripted keys and D-pad (`keys.txt`, `dpad.txt`); fails on a crash or a hang | `pio run -e sim` then `.pio/build/sim/program --headless --quiet --reset --script tools/sim/scripts/tour.txt` | `libsdl2-dev` |
 | `preview` | Preview build and **golden screens**: every screen, English and French, 1280×720 and 800×480, compared with `tools/preview/golden.sha256` | `pio run -e preview` then `python3 tools/preview/check_golden.py` | `libsdl2-dev`, `python3` |
-| `asan` | The simulator tour and taps under AddressSanitizer/UBSan (separate build folder `.pio/build-asan`) | see `gate_asan` in `tools/check.sh` | `libsdl2-dev` |
+| `asan` | The simulator tour, taps and D-pad under AddressSanitizer/UBSan (separate build folder `.pio/build-asan`) | see `gate_asan` in `tools/check.sh` | `libsdl2-dev` |
 | `simreal` | The real network code through the relay to a mock WiiM (HTTPS, certificate pinning, search through queues). About 2 minutes | `pio run -e simreal` then `./tools/relay/selftest.sh` | `libsdl2-dev`, `openssl`, `python3` |
 | `desktop` | The computer build, directly against a mock WiiM | `pio run -e desktop` then `./platform/pc/selftest.sh` | `libsdl2-dev`, `libssl-dev`, `openssl`, `python3` |
 | `tab5` | The Tab5 firmware | `pio run -e tab5` | nothing (PlatformIO downloads the toolchain) |

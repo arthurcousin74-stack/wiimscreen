@@ -5,6 +5,7 @@
 
 #include "M5Unified.h"
 #include "i18n.h"
+#include "device/key_input.h"
 #include "device/ota.h"
 #include "device/portal.h"
 #include "pc.h"
@@ -14,6 +15,14 @@
 
 // ------------------------------------------------------------------ setup portal and update page
 
+// The OK or Back key (remote, keyboard): like a tap on the screen / on Cancel
+static bool okOrBack() {
+    wr::KeyEvent k;
+    bool hit = false;
+    while (takeKey(k)) hit = hit || k.key == wr::NavKey::Ok || k.key == wr::NavKey::Back;
+    return hit;
+}
+
 void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     (void)s;
     ui.showPortal("WiiM-Remote-3F2A", "simulateur", "http://192.168.4.1",
@@ -22,7 +31,8 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
     const uint32_t shown = millis();
     for (;;) {
         M5.update();
-        if (millis() - shown > 800 && M5.Touch.getDetail().wasPressed()) ESP.restart();
+        const bool key = okOrBack();
+        if (millis() - shown > 800 && (M5.Touch.getDetail().wasPressed() || key)) ESP.restart();
         delay(10);
     }
 }
@@ -33,7 +43,7 @@ void runUpdateMode(Ui& ui) {
     for (;;) {
         M5.update();
         auto t = M5.Touch.getDetail();
-        if (t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) return;
+        if ((t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) || okOrBack()) return;
         delay(10);
     }
 }

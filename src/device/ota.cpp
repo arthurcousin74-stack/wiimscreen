@@ -11,6 +11,7 @@
 #include "firmware.h"
 #include "i18n.h"
 #include "app/version.h"
+#include "device/key_input.h"
 #include "device/web_style.h"
 
 // Corps de la page (après kWebHead, feuille de style commune). Les textes sont des repères %T_xxx%,
@@ -208,7 +209,10 @@ void runUpdateMode(Ui& ui) {
             ESP.restart();
         }
         if (result.length() && lastPercent != -1 && millis() - lastDraw > 400) draw(-1, result);
-        if ((t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) || millis() - start > 10UL * 60 * 1000)
+        wr::KeyEvent k;
+        bool keyCancel = false;  // OK ou Retour (télécommande, clavier) : comme Annuler ; jamais sur le Tab5
+        while (takeKey(k)) keyCancel = keyCancel || k.key == wr::NavKey::Ok || k.key == wr::NavKey::Back;
+        if ((t.wasPressed() && ui.hitUpdateCancel(t.x, t.y)) || keyCancel || millis() - start > 10UL * 60 * 1000)
             break;
         delay(2);
     }

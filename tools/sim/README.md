@@ -14,7 +14,7 @@ pio run -e sim
 Options: `--reset` (first start again: settings back to the defaults below), `--state <dir>` (default
 `.pio/sim-state`, holds `settings.txt`, the simulated NVS), `--out <dir>` (screenshots, default `.pio/sim-out`),
 `--headless` (no window), `--quiet` (no Journal on the terminal), `--script <file>`, `--log-keys` (show each key
-event that the app takes: `[key] key=ok kind=long`; the app does not use the keys yet, keys in docs/DESKTOP.md).
+event that the app takes: `[key] key=ok kind=long`; what each key does: docs/DESKTOP.md).
 
 ## What is real, what is fake
 
@@ -51,6 +51,10 @@ CI runs `tools/sim/scripts/tour.txt` on every push (artifact `sim-screens`): a c
 It also runs `tools/sim/scripts/taps.txt`: a tap on every element of every screen (controls, Settings, Journal,
 touch test, update screen, search keyboard, dictation, results), which ends with Sleep. Without `--quiet`, the
 Journal lines show what each tap did: compare them before and after a change of the tap handling.
+`tools/sim/scripts/dpad.txt` drives the app with keys only (focus ring through the rail, the heart, the transport
+and volume buttons and the tiles with paging, OK, Back, Menu, a long OK, the media keys): the sim gate checks that
+each OK pressed the element the ring had reached (`[focus.ok] screen=... act=... arg=...` lines). The asan gate
+runs `tour.txt`, `taps.txt` and `dpad.txt`.
 It also runs `tools/sim/scripts/keys.txt` with `--log-keys` and checks the `[key]` lines (`tools/check.sh sim`).
 
 ## Real WiiM mode (relay)

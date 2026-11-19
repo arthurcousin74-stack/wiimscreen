@@ -132,6 +132,13 @@ public:
     // recherches ; hitMic() garde son calcul (voir ui_search.cpp), hitVolume/hitProgress lisent la position.
     const wr::TargetList& targets() const { return targets_; }
 
+    // Focus de la télécommande (D-pad) : anneau autour de l'élément focalisé, dessiné en dernier par chaque écran
+    // complet (present) et par les mises à jour partielles dont la zone le touche (presentRect). `source` dit s'il
+    // est montré et sur quel élément (wr::focusedTarget : l'élément retenu, sinon celui par défaut) ; nullptr ou
+    // false : aucun anneau (le Tab5, sans touches, n'en montre jamais). Jamais sur la vue ambiance.
+    using FocusSource = bool (*)(wr::FocusSpot& spot);
+    void setFocusSource(FocusSource source) { focusSource_ = source; }
+
 private:
     int sc(int v) const { return v * ref_ / 540; }
     uint32_t bgAt(int y) const;
@@ -166,6 +173,8 @@ private:
     void heartIcon(int cx, int cy, int s, uint32_t color);
     void favButton();
     void controlsTargets();  // inscrit les éléments touchables de la vue commandes (fin de render())
+    void focusRing();        // anneau du focus sur canvas_ (ui_widgets.cpp), si la source le demande
+    FocusSource focusSource_ = nullptr;
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change

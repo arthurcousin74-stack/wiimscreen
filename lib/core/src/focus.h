@@ -1,4 +1,4 @@
-// Tappable elements of the screen shown, in one list: what a tap hits, and (later) what a D-pad focus moves over.
+// Tappable elements of the screen shown, in one list: what a tap hits, and what the D-pad focus moves over.
 // Ui fills the list while it draws a full screen (Ui::targets()); partial redraws never change it.
 #pragma once
 
@@ -114,5 +114,28 @@ struct NavResult {
 NavResult nextTarget(const TargetList& list, const Target* current, Dir d);
 // The target flagged kTargetDefault, else the first focusable one, else nullptr
 const Target* defaultTarget(const TargetList& list);
+
+// Moves on a screen with the navigation rail (Home, Search, Settings: Act::Home/Search/Settings), the app's screens:
+// nextTarget() over a part of the list, so that the focus stays in rows and columns the eye sees.
+//  - Left/Right in the content: only targets in the beam (the same row). Up/Down in the content: only the nearest
+//    row of targets beyond (the ones whose near edge comes before the far edge of the nearest one), then the usual
+//    rule (in the beam first). Without them, Left from vol- went down to a tile, and Up/Down skipped the volume row.
+//  - The rail is entered only toward it (Left when it is a column on the left, Up when it is a row on top), and
+//    only when the content has nothing in that direction: the nearest button across. (Down from a tile went to the
+//    Settings button; Up from Previous/Next to Home.)
+//  - On the rail: along it, the rail buttons only; away from it, the content; toward the screen edge, nothing.
+// A list without rail buttons follows the content rules. The orientation comes from the rail buttons' centres.
+NavResult railMove(const TargetList& list, const Target* current, Dir d);
+
+// What the app remembers of the focus on one screen: kind and arg, not an index (the list is rebuilt every frame)
+struct FocusSpot {
+    Act act = Act::None;
+    int arg = 0;
+};
+// The focused target of the list: the remembered one if it is there and focusable, else the default one
+const Target* focusedTarget(const TargetList& list, const FocusSpot& spot);
+
+// Lower-case ASCII name of a kind, for logs and self-tests ("transport", "preset", "menuchoice"...; "?" if unknown)
+const char* actName(Act act);
 
 }  // namespace wr

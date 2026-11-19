@@ -58,6 +58,10 @@ void Ui::beginScreen(View view) {
 }
 
 void Ui::presentRect(const wr::Rect& r) {
+    // Anneau du focus redessiné s'il touche la zone (elle vient d'être repeinte) ; découpé à la zone
+    canvas_.setClipRect(r.x, r.y, r.w, r.h);
+    focusRing();
+    canvas_.clearClipRect();
     D.startWrite();
     D.setClipRect(r.x, r.y, r.w, r.h);
     canvas_.pushSprite(&D, 0, 0);
@@ -66,6 +70,7 @@ void Ui::presentRect(const wr::Rect& r) {
 }
 
 void Ui::present() {
+    focusRing();  // en dernier, par-dessus l'écran
     D.startWrite();
     canvas_.pushSprite(&D, 0, 0);
     D.endWrite();

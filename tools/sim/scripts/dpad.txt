@@ -1,0 +1,104 @@
+# Remote / keyboard navigation (1280x720): focus ring through rail -> heart -> transport -> volume -> tiles, paging
+# past the strip's edge, OK, Back, Menu, long OK, media keys, a tap that hides the ring, Back from the keyboard.
+# Run: .pio/build/sim/program --headless --reset --script tools/sim/scripts/dpad.txt
+# tools/check.sh (sim gate) checks the [focus.ok] lines: each OK activated the element the ring was on.
+wait 2000
+# First key: the ring shows on play (nothing moves)
+key right
+wait 200
+shot dpad-01-lecture
+key ok
+wait 400
+# Left: previous, heart, then the rail (Search, in the heart's row)
+key left
+wait 100
+key left
+wait 100
+key left
+wait 200
+shot dpad-02-barre
+# Down the rail to Settings, Right into its row: the first tile
+key down
+wait 100
+key right
+wait 200
+shot dpad-03-tuile
+# Right along the tiles; past the last one: next page, ring on its first tile; two more Right; OK plays that tile
+key right
+wait 100
+key right
+wait 100
+key right
+wait 100
+key right
+wait 100
+key right
+wait 100
+key right
+wait 300
+shot dpad-04-page2
+key right
+wait 100
+key right
+wait 200
+key ok
+wait 2500
+# Left past the first tile: previous page, ring on its last tile; Up: volume row, then transport row; OK
+key left
+wait 100
+key left
+wait 100
+key left
+wait 300
+key up
+wait 100
+key up
+wait 200
+shot dpad-05-suivant
+key ok
+wait 1500
+# Menu key: Settings (ring on its first choice); Down three times: Log; OK opens it; Back closes it
+key menu
+wait 300
+shot dpad-06-menu
+key down
+wait 100
+key down
+wait 100
+key down
+wait 200
+key ok
+wait 600
+shot dpad-07-journal
+key back
+wait 400
+# Long OK on the controls: Settings, like the long press on the cover; Back
+hold ok 900
+wait 300
+key back
+wait 400
+# Media keys (same commands as the buttons)
+key playpause
+wait 400
+key volup
+wait 300
+key voldown
+wait 300
+key mute
+wait 300
+key mute
+wait 300
+# A tap hides the ring (rail, between its buttons: nothing else happens)
+tap 30 200
+wait 400
+shot dpad-08-sans-anneau
+# Search key: the keyboard (no ring yet); arrows and OK do nothing there; Back: the controls
+key search
+wait 300
+key down
+wait 100
+key ok
+wait 100
+key back
+wait 400
+quit

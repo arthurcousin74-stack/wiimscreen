@@ -196,7 +196,9 @@ struct NavCounts {
 // The properties that hold for every list: each move goes in its direction, never to a NoFocus target, nor to
 // itself; a chain of presses in one direction ends at an edge within size() steps; every focusable target is
 // reachable from the default one; within one row (same centre and size across the move) the opposite key returns.
-void checkList(const TargetList& L, const char* what, NavCounts& c) {
+using MoveFn = NavResult (*)(const TargetList&, const Target*, Dir);
+
+void checkList(const TargetList& L, const char* what, NavCounts& c, MoveFn move = nextTarget) {
     char msg[160];
     ++c.lists;
     const Target* def = defaultTarget(L);
@@ -205,7 +207,7 @@ void checkList(const TargetList& L, const char* what, NavCounts& c) {
     for (const Target& t : L) {
         if (!t.focusable()) continue;
         for (Dir d : kDirs) {
-            const NavResult r = nextTarget(L, &t, d);
+            const NavResult r = move(L, &t, d);
             ++c.moves;
             snprintf(msg, sizeof msg, "%s: act %d arg %d dir %d", what, (int)t.act, t.arg, (int)d);
             TEST_ASSERT_EQUAL_MESSAGE(r.target == nullptr, r.edge, msg);
@@ -223,7 +225,7 @@ void checkList(const TargetList& L, const char* what, NavCounts& c) {
             const bool horizontal = d == Dir::Left || d == Dir::Right;
             const bool sameLine = horizontal ? (a.y == b.y && a.h == b.h && a.w == b.w) : (a.x == b.x && a.w == b.w && a.h == b.h);
             if (sameLine) {
-                TEST_ASSERT_TRUE_MESSAGE(nextTarget(L, r.target, opposite(d)).target == &t, msg);
+                TEST_ASSERT_TRUE_MESSAGE(move(L, r.target, opposite(d)).target == &t, msg);
                 ++c.returns;
             }
         }
@@ -231,7 +233,7 @@ void checkList(const TargetList& L, const char* what, NavCounts& c) {
             const Target* cur = &t;
             size_t steps = 0;
             for (;;) {
-                const NavResult r = nextTarget(L, cur, d);
+                const NavResult r = move(L, cur, d);
                 if (r.edge) break;
                 cur = r.target;
                 TEST_ASSERT_TRUE_MESSAGE(++steps <= L.size(), what);
@@ -245,7 +247,7 @@ void checkList(const TargetList& L, const char* what, NavCounts& c) {
         const Target* t = todo.back();
         todo.pop_back();
         for (Dir d : kDirs) {
-            const Target* n = nextTarget(L, t, d).target;
+            const Target* n = move(L, t, d).target;
             if (n && std::find(seen.begin(), seen.end(), n) == seen.end()) {
                 seen.push_back(n);
                 todo.push_back(n);
@@ -438,6 +440,122 @@ static void test_nav_transport_row() {
     TEST_ASSERT_TRUE(nextTarget(L, L.find(Act::Preset, 5), Dir::Right).edge);
 }
 
+// Settings menu at 1280x720 (rail, six choices: five rows and Close), rectangles of Ui::renderMenu on the Tab5
+static TargetList menuList() {
+    const Layout lay = computeLayout(1280, 720, 6);
+    TargetList L;
+    addRail(L, lay, 1280, 720);
+    for (int i = 0; i < 5; ++i) L.add(Act::MenuChoice, i, Rect{317, 106 + 99 * i, 746, 89}, i == 0 ? kTargetDefault : 0);
+    L.add(Act::MenuChoice, 5, Rect{590, 609, 200, 58});
+    return L;
+}
+
+static void test_rail_moves_controls() {
+    // Controls on the Tab5 (1280x720, 6 presets): the moves the plain rule got wrong, and the path of the plan
+    const TargetList L = controlsList(1280, 720, 6);
+    auto at = [&](Act a, int arg) { return L.find(a, arg); };
+    const Target* play = at(Act::Transport, kPlayPause);
+    const Target* prev = at(Act::Transport, kPrev);
+    const Target* next = at(Act::Transport, kNext);
+    const Target* fav = at(Act::Fav, 0);
+    const Target* mute = at(Act::Mute, 0);
+    const Target* volDown = at(Act::Transport, kVolDown);
+    const Target* volUp = at(Act::Transport, kVolUp);
+    // Down from a tile: nothing (was: the rail's Settings button)
+    for (int i = 0; i < 6; ++i) TEST_ASSERT_TRUE(railMove(L, at(Act::Preset, i), Dir::Down).edge);
+    // Up from Previous / Next / play / heart: only the header (NoFocus) is above (was: Home)
+    for (const Target* t : {prev, next, play, fav}) TEST_ASSERT_TRUE(railMove(L, t, Dir::Up).edge);
+    // Left from vol-: the rail button nearest across, Search (was: a tile below)
+    TEST_ASSERT_TRUE(railMove(L, volDown, Dir::Left).target == at(Act::Search, 0));
+    // Path: rail -> heart -> previous -> play -> next; play -> volume row -> tiles
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Right).target == fav);
+    TEST_ASSERT_TRUE(railMove(L, fav, Dir::Right).target == prev);
+    TEST_ASSERT_TRUE(railMove(L, prev, Dir::Right).target == play);
+    TEST_ASSERT_TRUE(railMove(L, play, Dir::Right).target == next);
+    TEST_ASSERT_TRUE(railMove(L, next, Dir::Right).edge);
+    TEST_ASSERT_TRUE(railMove(L, play, Dir::Down).target == mute);  // the volume row, not a tile under it
+    TEST_ASSERT_TRUE(railMove(L, mute, Dir::Left).target == volDown);
+    TEST_ASSERT_TRUE(railMove(L, mute, Dir::Right).target == volUp);  // over the volume bar (NoFocus)
+    TEST_ASSERT_TRUE(railMove(L, volUp, Dir::Left).target == mute);
+    TEST_ASSERT_TRUE(railMove(L, volUp, Dir::Right).edge);
+    const Target* tile = railMove(L, mute, Dir::Down).target;
+    TEST_ASSERT_TRUE(tile && tile->act == Act::Preset);
+    const Target* back = railMove(L, tile, Dir::Up).target;
+    TEST_ASSERT_TRUE(back == mute || back == volDown || back == volUp);  // the volume row again
+    // Tiles: neighbours; the last one is an edge (the app turns it into the next page); the first one -> rail
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Preset, 1), Dir::Right).target == at(Act::Preset, 2));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Preset, 5), Dir::Right).edge);
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Preset, 0), Dir::Left).target == at(Act::Settings, 0));
+    // Heart: Left -> rail (Search, in its row)
+    TEST_ASSERT_TRUE(railMove(L, fav, Dir::Left).target == at(Act::Search, 0));
+    // On the rail: along it, the rail only; Left: nothing; Right from Settings: the first tile (same row)
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Up).target == at(Act::Home, 0));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Down).target == at(Act::Settings, 0));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Settings, 0), Dir::Down).edge);
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Home, 0), Dir::Up).edge);
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Home, 0), Dir::Left).edge);
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Settings, 0), Dir::Right).target == at(Act::Preset, 0));
+    // No current target: the default one (play)
+    TEST_ASSERT_TRUE(railMove(L, nullptr, Dir::Up).target == play);
+}
+
+static void test_rail_moves_menu_and_properties() {
+    // Settings menu: rows up and down, Close last; Left -> rail; Down from Close: nothing (not the Settings button)
+    const TargetList M = menuList();
+    TEST_ASSERT_EQUAL(1, railMove(M, M.find(Act::MenuChoice, 0), Dir::Down).target->arg);
+    TEST_ASSERT_EQUAL(5, railMove(M, M.find(Act::MenuChoice, 4), Dir::Down).target->arg);
+    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 5), Dir::Down).edge);
+    TEST_ASSERT_EQUAL(4, railMove(M, M.find(Act::MenuChoice, 5), Dir::Up).target->arg);
+    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 0), Dir::Up).edge);
+    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 0), Dir::Left).target->act == Act::Home);
+    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 2), Dir::Right).edge);
+    // The general properties (direction, no NoFocus, chains end, every target reachable, same-row returns) hold
+    // for railMove on every controls layout, on the keyboard and on the menu
+    NavCounts c;
+    char what[64];
+    const int sizes[][2] = {{1280, 720}, {720, 1280}, {960, 540}, {800, 480}};
+    for (auto& s : sizes) {
+        const bool landscape = s[0] > s[1];
+        for (int presets : {0, 3, 6, 12}) {
+            snprintf(what, sizeof what, "railMove controls %dx%d %d presets", s[0], s[1], presets);
+            const TargetList L = controlsList(s[0], s[1], presets);
+            checkList(L, what, c, railMove);
+            // Never from the content into the rail, except toward it
+            for (const Target& t : L) {
+                if (!t.focusable() || isRail(&t)) continue;
+                for (Dir d : kDirs) {
+                    const Target* n = railMove(L, &t, d).target;
+                    if (isRail(n)) TEST_ASSERT_TRUE_MESSAGE(d == (landscape ? Dir::Left : Dir::Up), what);
+                }
+            }
+        }
+        snprintf(what, sizeof what, "railMove keyboard %dx%d", s[0], s[1]);
+        checkList(searchList(s[0], s[1]), what, c, railMove);
+    }
+    checkList(M, "railMove menu", c, railMove);
+    TEST_ASSERT_EQUAL(4 * 4 + 4 + 1, c.lists);
+}
+
+static void test_focused_target() {
+    const TargetList L = controlsList(1280, 720, 6);
+    FocusSpot s;  // nothing remembered: the default (play)
+    TEST_ASSERT_TRUE(focusedTarget(L, s) == L.find(Act::Transport, kPlayPause));
+    s.act = Act::Preset, s.arg = 4;
+    TEST_ASSERT_TRUE(focusedTarget(L, s) == L.find(Act::Preset, 4));
+    s.arg = 9;  // a tile of another page: gone after the render, back to the default
+    TEST_ASSERT_TRUE(focusedTarget(L, s) == L.find(Act::Transport, kPlayPause));
+    s.act = Act::Header, s.arg = 0;  // NoFocus: never focused
+    TEST_ASSERT_TRUE(focusedTarget(L, s) == L.find(Act::Transport, kPlayPause));
+    TargetList E;
+    TEST_ASSERT_NULL(focusedTarget(E, s));
+    // Names for logs (tools/check.sh greps them)
+    TEST_ASSERT_EQUAL_STRING("transport", actName(Act::Transport));
+    TEST_ASSERT_EQUAL_STRING("menuchoice", actName(Act::MenuChoice));
+    TEST_ASSERT_EQUAL_STRING("updatecancel", actName(Act::UpdateCancel));
+    TEST_ASSERT_EQUAL_STRING("none", actName(Act::None));
+    TEST_ASSERT_EQUAL_STRING("?", actName(static_cast<Act>(200)));
+}
+
 void run_focus_tests() {
     RUN_TEST(test_targets_priority);
     RUN_TEST(test_targets_padding);
@@ -446,4 +564,7 @@ void run_focus_tests() {
     RUN_TEST(test_nav_rules);
     RUN_TEST(test_nav_layouts);
     RUN_TEST(test_nav_transport_row);
+    RUN_TEST(test_rail_moves_controls);
+    RUN_TEST(test_rail_moves_menu_and_properties);
+    RUN_TEST(test_focused_target);
 }

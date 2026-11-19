@@ -109,6 +109,7 @@ enum class Screen {
     Search,     // recherche : clavier
     Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
 };
+constexpr int kScreenCount = 6;  // nombre de valeurs de Screen (focus retenu par écran)
 
 // Écran affiché, vue ambiance, et compteurs des écrans Journal et test tactile
 struct OpenScreens {
@@ -123,6 +124,19 @@ struct OpenScreens {
     uint32_t touchFrame = 0;
 };
 extern OpenScreens g_view;
+
+// Focus de la télécommande (touches : clavier, télécommande, manette ; rien sur le Tab5). Retenu par écran comme
+// (act, arg), pas comme un indice : il survit aux rendus (la liste Ui::targets() est refaite à chaque image) ;
+// élément disparu (autre page de tuiles) : celui par défaut (wr::focusedTarget). L'anneau n'est montré qu'après
+// une touche et caché au premier appui sur l'écran (« focus-visible ») : le Tab5 reste tel quel. Pas d'anneau sur
+// le clavier ni les résultats (étape suivante), ni sur la vue ambiance.
+struct FocusState {
+    wr::FocusSpot spot[kScreenCount];  // indice : (int)Screen
+    wr::FocusSpot picker;              // choix du WiiM (chooseWiim, pendant setup())
+    bool picking = false;              // chooseWiim() en cours : l'anneau suit `picker`
+    bool visible = false;
+};
+extern FocusState g_focus;
 
 // Transcription en tâche de fond : l'appel à OpenAI (jusqu'à ~30 s si le réseau est lent) ne doit pas figer
 // l'écran (règle « jamais d'attente réseau dans la boucle »). La boucle lit le résultat quand il est prêt.

@@ -382,6 +382,31 @@ int main(int argc, char** argv) {
 
     ui.showPortal("WiiM-Remote-3F2A", "k7Qp2xRm9w", "http://192.168.4.1", wr::L("Setup requested. Touch the Tab5 screen to cancel.", "Reconfiguration demand\xC3\xA9" "e. Touche l'\xC3\xA9" "cran du Tab5 pour annuler."));
     save(out, "8-configuration.ppm");
+    {
+        // Focus de la télécommande (anneau) : sur lecture, une tuile, un bouton de la barre, un choix du menu
+        static wr::FocusSpot spot;
+        ui.setFocusSource([](wr::FocusSpot& s) {
+            s = spot;
+            return true;
+        });
+        ui.setPresets(six);
+        for (int i = 0; i < 6; ++i) ui.setPresetArt(i, &thumbs[i]);
+        ui.setActivePreset(1);
+        ui.setFavorite(1);
+        spot = wr::FocusSpot{wr::Act::Transport, wr::kPlayPause};
+        ui.render(st);
+        save(out, "43-focus-lecture.ppm");
+        spot = wr::FocusSpot{wr::Act::Preset, 2};
+        ui.render(st);
+        save(out, "44-focus-tuile.ppm");
+        spot = wr::FocusSpot{wr::Act::Search, 0};
+        ui.render(st);
+        save(out, "45-focus-barre.ppm");
+        spot = wr::FocusSpot{wr::Act::MenuChoice, 3};
+        ui.renderMenu("57-219c0bc");
+        save(out, "46-focus-menu.ppm");
+        ui.setFocusSource(nullptr);
+    }
     // Sortie immédiate : M5GFX plante en détruisant un canevas qui a une police chargée
     // (sans conséquence sur l'appareil, où l'interface n'est jamais détruite)
     fflush(stdout);

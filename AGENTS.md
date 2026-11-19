@@ -89,7 +89,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/device/portal.*` / `src/device/ota.*` | Setup portal (Wi-Fi AP + captive DNS) / OTA upload page |
 | `src/device/web_style.h` | Shared self-contained CSS for both web pages (no external resources: the phone is offline on the AP) |
 | `src/device/sound.*` | Taps and beeps on the speaker |
-| `src/device/key_input.*` | `takeKey()`: key events for the app (`loop()` drains them; not used yet). `key_input.cpp` = Tab5, none; PC: `platform/pc/pc_platform_keys.cpp` |
+| `src/device/key_input.*` | `takeKey()`: key events for the app (`loop()` reads them: `serviceKeys()` in `main.cpp`). `key_input.cpp` = Tab5, none; PC: `platform/pc/pc_platform_keys.cpp` |
 | `src/storage/settings.*` | NVS-backed settings (+ LittleFS backup copy); one table `kFields` lists every setting for both |
 | `src/storage/favorites.*` | Favorites: copies of the WiiM play queue (UPnP PlayQueue) in LittleFS, replayed with `CreateQueue`; Qobuz queue model for search |
 | `tools/preview/` | PC preview harness (stubs for Arduino/M5Unified) |
@@ -137,6 +137,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **README.md is written in ASD-STE100 Simplified Technical English** (short sentences, active voice, one
   instruction per numbered step). Keep that style when you edit it.
 - **Keys** (remote, keyboard, controller): a platform feeds raw down/up with `millis()` to one `wr::KeyTracker` (or `post()` when it has no key-up), calls `tick()` every loop, and returns its events from `takeKey()` (`src/device/key_input.h`); the app reads them only in `loop()`. Scripts: `key`, `hold`, `text` steps; `--log-keys` prints `[key] key=… kind=…`.
+- **Taps and keys go through the target list**: a tap is `g_ui.targets().hit(x, y)`, then the screen's `activateXxx()`; OK calls the same function on the focused target (`Press::touch` false), so a tap and OK do the same. **Focus**: `g_focus` (`app_internal.h`) keeps one `wr::FocusSpot` (act, arg — never an index) per `Screen`; `wr::railMove` moves it, `wr::focusedTarget` falls back to the default target when it is gone. The ring (`Ui::focusRing`, drawn by `present()`/`presentRect()`) shows only after a key and hides on the next tap ("focus-visible"): the Tab5, which gets no keys, never shows it. Search keyboard and results: no ring yet (next step).
 - Colors are RGB888 `uint32_t` (an `uint16_t` would be read as RGB565 by M5GFX).
 - UI changes: render them with `tools/preview` and look at the PNGs before committing; `docs/*.png` come from it.
 - Layout dimensions scale with `sc(v) = v * min(width, height) / 540`; `checkLayout` tests guard overlaps and
