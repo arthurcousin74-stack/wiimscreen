@@ -272,6 +272,8 @@ tile, settings menu layout (preview). Qobuz favorite albums: refused by Qobuz (4
 **Seen working on a real Tab5 + WiiM (user reports, 2026-11):** Wi-Fi via the C6, touch, WiiM status and commands,
 navigation bar, Journal, UPnP PlayQueue (`BrowseQueue`, `CreateQueue`), Qobuz search through the WiiM
 (`track/search` queue), Qobuz favorite tracks query (1 track), Deezer album queue through airable, firmware updates, the Favoris Qobuz list.
+**Windows app (user report, 2026-11-19, Windows 11, 2560×1440 at 125 %, WiiM Pro):** discovery, playback, search typed on
+the keyboard, keys, sharp picture. The Tab5 tap dispatcher of v0.3.0-beta (remote navigation 4a) is not yet checked on hardware.
 **Seen working on a real Tab5 + WiiM Pro (user report, 2026-11-18, build of v0.2.0-beta):** the WiiM picker with one WiiM, replay of a favorite tile saved
 before and after the update (saved without its tracks), the music put back after a Qobuz search left without a choice (playing, and
 paused), a search result played inside its album.

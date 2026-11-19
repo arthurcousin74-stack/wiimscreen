@@ -5,14 +5,20 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+## [0.3.0-beta] — 2026-11-19 — Windows app, keyboard and remote control on computers
+
+**Tab5:** every tap now goes through a new dispatcher (one list of buttons per screen, shared with the keys). The
+simulator shows the same behaviour on every screen, but this firmware has **not been checked on a Tab5 yet**. If a
+button does not react, report it and install v0.2.0-beta again.
+
 ### Added
 - **Windows (simple port, experimental)**: `wiimscreen-windows-x64.zip` holds `wiimscreen.exe`, a ready-made program for
   Windows 10 (1903 or later) and 11, 64-bit: unzip it and double-click, no installation, no WSL. The same app as the
   computer version: WiiM discovery, covers, presets, favorites, Qobuz and Deezer search, keys. Settings and favorites
   in `%APPDATA%\wiimscreen`, the log of the last run in `last.log` there (`--console` shows a console window). It
   is not signed (Windows: *More info*, *Run anyway*), and the firewall can ask for the network (allow private
-  networks for discovery). Built and self-tested by CI against a mock WiiM; WiiM discovery seen working on Windows 11;
-  not yet tried with a real WiiM on Windows. No microphone, no sounds, no setup page. docs/DESKTOP.md. No change on
+  networks for discovery). Built and self-tested by CI against a mock WiiM; seen working with a real WiiM Pro on
+  Windows 11 (2026-11-19: discovery, playback, search with the keyboard, sharp picture at 125 % scaling). No microphone, no sounds, no setup page. docs/DESKTOP.md. No change on
   the Tab5.
 - Computer version: you can use the app with a keyboard, a remote or a game controller. The arrow keys move a white
   ring between the buttons (the bar on the left, the heart, playback, volume, the preset tiles and their pages, the

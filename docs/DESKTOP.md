@@ -5,8 +5,8 @@ the WiiM, Qobuz, Deezer, covers and favorites. It connects directly to your netw
 it is a ready-made program: `wiimscreen.exe` (build `windows`).
 
 **Status:** built and tested on Linux (x86-64) and Windows (x86-64) against a mock WiiM (`platform/pc/selftest.sh`,
-run by CI for both). On Windows 11, the WiiM was also found on a home network (discovery). **Not yet tried on a
-Raspberry Pi or a Mac, nor with a real WiiM on Windows.** Please report what works.
+run by CI for both). On Windows 11, seen working with a real WiiM Pro (2026-11-19: discovery, playback, search with
+the keyboard, sharp picture at 125 % display scaling). **Not yet tried on a Raspberry Pi or a Mac.** Please report what works.
 
 ## What works, what does not
 
@@ -94,8 +94,8 @@ Same as the Raspberry Pi steps 1 to 3. Then start it in a window:
 
 **A simple port for now.** `wiimscreen.exe` is the computer version built for Windows, not a full Windows app yet:
 no installer, no icon, no code signature, no microphone or sounds, no setup or update page; updates are a new zip.
-It passed the self-test against a mock WiiM and found a real WiiM on the network, but a full session with a real
-WiiM on Windows has not been tried yet. A fuller Windows app may come later.
+It passed the self-test against a mock WiiM, and it works with a real WiiM Pro on Windows 11 (2026-11-19). A fuller
+Windows app may come later.
 
 Windows 10 (version 1903 or later) or Windows 11, 64-bit. No installation, no administrator rights.
 

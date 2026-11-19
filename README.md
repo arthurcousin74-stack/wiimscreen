@@ -42,6 +42,7 @@ Open source · runs on ESP32 · tested on the M5Stack Tab5
 | **Ambient view** | After 60 s without a touch: large album art and text, and an optional sound spectrum. |
 | **Setup and updates** | Set up from your phone with a QR code. Install new firmware over Wi-Fi. |
 | **Automatic** | Finds the WiiM on your network. Turns on the screen when you pick up the device. |
+| **Keyboard and remote** | Computers and Windows only. Type your search on the keyboard. Use the arrow keys, Enter and Esc to move between the buttons, or use a remote or a game controller. |
 
 ## Screenshots
 
@@ -167,7 +168,7 @@ puts it back. To erase everything, use **Advanced** › **Erase everything** in 
 | **Board** | [M5Stack Tab5](https://docs.m5stack.com/en/core/Tab5): ESP32-P4, 5" 1280×720 touchscreen, 32 MB PSRAM. The battery is optional. This is the only tested board. |
 | **Other boards** | ESP32-S3 or ESP32-P4 boards with a touchscreen and PSRAM. A port is possible: refer to [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards). |
 | **Computers** (experimental) | Raspberry Pi, Linux and macOS: the same app in a window or full screen, with a touch screen or a mouse. Not tested on a Raspberry Pi or a Mac yet. Refer to [docs/DESKTOP.md](docs/DESKTOP.md). |
-| **Windows** (simple port, experimental) | Windows 10 and 11, 64-bit. This is a simple port of the computer version, not a full Windows app: no installer, no icon, no signature, no microphone, no sounds. Download `wiimscreen-windows-x64.zip`, unzip it and start `wiimscreen.exe`. We did not test it with a real WiiM yet. Refer to [docs/DESKTOP.md](docs/DESKTOP.md#windows). |
+| **Windows** (simple port, experimental) | Windows 10 and 11, 64-bit. This is a simple port of the computer version, not a full Windows app: no installer, no icon, no signature, no microphone, no sounds. Download `wiimscreen-windows-x64.zip` from the latest release, unzip it and start `wiimscreen.exe`. Tested with a WiiM Pro on Windows 11. Refer to [docs/DESKTOP.md](docs/DESKTOP.md#windows). |
 
 ## Unofficial interfaces
 

@@ -8,8 +8,9 @@ qui est en cours de lecture. **Pour l'instant, seul le M5Stack Tab5** (ESP32-P4,
 décrit dans [docs/DEVELOPERS.md](docs/DEVELOPERS.md#other-esp32-boards) (en anglais).
 
 La même application existe aussi sur ordinateur, à titre expérimental : Raspberry Pi, Linux, macOS, et **Windows**
-(un simple portage pour l'instant : `wiimscreen.exe` à dézipper, sans installateur ni signature, pas encore essayé
-avec un vrai WiiM). Voir [docs/DESKTOP.md](docs/DESKTOP.md) (en anglais).
+(un simple portage pour l'instant : `wiimscreen.exe` à dézipper, sans installateur ni signature ; essayé avec un
+WiiM Pro sous Windows 11). Sur ordinateur, on peut taper la recherche au clavier et se déplacer avec les flèches,
+une télécommande ou une manette. Voir [docs/DESKTOP.md](docs/DESKTOP.md) (en anglais).
 
 > **Langue** : l'interface est en anglais par défaut. Pour l'avoir en français : page de configuration (sur le
 > téléphone) › **Language / Langue** › **Français**, puis **Save and restart**. Les noms de boutons de ce guide sont
