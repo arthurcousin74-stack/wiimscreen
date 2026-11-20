@@ -186,7 +186,11 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Fonts**: always `useFont(C, kX)` in the `ui*.cpp` files (declared in `ui_internal.h`, defined once in `ui_core.cpp`, the only file that includes the font headers), never `C.loadFont()` directly: M5GFX re-parses the VLW header on
   every load (the search keyboard loaded 43 fonts per frame); `useFont` skips reloading the same font.
 - **Partial redraws** keep taps responsive: a full frame pushes ~1.8 MB. `pressKey()`, `updateSearchField()`,
-  `updateTransport()` and `updateProgress()` redraw one area over `bg_` (clip) and send it with `presentRect()`.
+  `updateTransport()`, `updateVolume()`, `updateTile()` and `updateProgress()` redraw one area over `bg_` (clip) and
+  send it with `presentRect()`. On the controls view, a tap asks for its area only (`g_draw.volume`, `.transport`,
+  `.tile`; `markPending()` and `flash()` do it); `renderNow()` draws them with `renderParts()` unless `show()` asked
+  for a full image. A partial image must equal the same area of a full one (compare a screenshot after the tap with
+  one after 🏠, which redraws everything). Responsiveness is measured on the device (`[perf]` Journal line every 20 taps).
   The waiting rings animate with `updateTransport()` only.
 - **Settings survive a full USB flash**: the merged image written at `0x0` pads over the NVS (0x9000), so
   `setup()` keeps a copy in LittleFS (`fav::saveSettingsBackup`, `settingsToBackup`) and restores it when the NVS

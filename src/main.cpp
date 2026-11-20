@@ -69,6 +69,8 @@ StripTouch g_strip;
 PressFlash g_flash;
 MotionWake g_motion;
 Redraw g_draw;
+VolumeTouch g_volTouch;
+PerfStats g_perf;
 IdleClock g_idle;
 StatusClock g_status;
 HeaderPress g_header;
@@ -87,6 +89,11 @@ static constexpr uint32_t kWifiTimeoutMs = 20000;
 static constexpr uint32_t kPresetRefreshMs = 10UL * 60 * 1000;
 static constexpr uint32_t kPresetRetryMs = 30UL * 1000;
 static constexpr uint32_t kFlashMs = 150;
+// Volume au doigt : commande au plus toutes les 150 ms pendant un glissé ; −/+ maintenu répète après 400 ms
+static constexpr uint32_t kVolumeSendMs = 150;
+static constexpr uint32_t kVolumeHoldMs = 400, kVolumeRepeatMs = 150;
+// Réactivité : une ligne de Journal tous les 20 appuis
+static constexpr uint32_t kPerfEvery = 20;
 
 // Vue ambiance après 60 s ; rétroéclairage atténué après 10 min, éteint après 20 min si rien ne joue
 static constexpr uint32_t kAmbientMs = 60UL * 1000;
@@ -139,7 +146,7 @@ static void markPending(int button, Await what, bool viaEvent) {
     g_pending.title = g_state.player.title;
     g_pending.playing = g_state.player.playing;  // déjà basculé pour lecture/pause
     g_pending.pos = displayState().player.positionMs;
-    show();
+    g_draw.transport = true;  // anneau d'attente : la rangée lecture seule (les autres chemins appellent show())
 }
 
 // Affichage différé : show() marque l'écran à redessiner, renderNow() le dessine une
@@ -153,22 +160,120 @@ static bool modalOpen() { return g_view.screen != Screen::Controls; }
 // Court effet « bouton enfoncé » encore actif (différence signée : juste après 49 jours aussi)
 static bool flashActive(uint32_t now) { return g_flash.until && (int32_t)(g_flash.until - now) > 0; }
 
-static void renderNow() {
-    if (!g_draw.dirty || modalOpen()) return;  // écrans modaux : rien par-dessus (rendu à leur fermeture)
-    g_draw.dirty = false;
-    const uint32_t now = millis();
-    // Bouton enfoncé : tuile sous le doigt, ou court effet après un appui
-    int pressedPreset = (g_strip.touch && !g_strip.dragged) ? g_strip.preset : -1;
-    int pressedTransport = -1;
+// Bouton enfoncé : tuile sous le doigt, −/+ maintenu, ou court effet après un appui
+static void pressedNow(uint32_t now, int& preset, int& transport) {
+    preset = (g_strip.touch && !g_strip.dragged) ? g_strip.preset : -1;
+    transport = g_volTouch.hold;
     if (flashActive(now)) {
-        if (pressedPreset < 0) pressedPreset = g_flash.preset;
-        pressedTransport = g_flash.transport;
+        if (preset < 0) preset = g_flash.preset;
+        if (transport < 0) transport = g_flash.transport;
     }
+}
+
+// Réactivité : durées des images (complètes, partielles)
+static void notePerf(bool full, uint32_t ms) {
+    if (full) {
+        ++g_perf.fulls;
+        g_perf.fullSum += ms;
+        g_perf.fullMax = std::max(g_perf.fullMax, ms);
+    } else {
+        ++g_perf.parts;
+        g_perf.partSum += ms;
+    }
+}
+
+// Réactivité : appui → première image envoyée (complète ou partielle) ; une ligne de Journal tous les kPerfEvery
+static void servicePerf(bool pressed, uint32_t now) {
+    if (g_perf.tapAt) {
+        if (g_ui.presentCount() != g_perf.presentsAtTap) {
+            const uint32_t ms = g_ui.lastPresentMs() - g_perf.tapAt;
+            g_perf.tapAt = 0;
+            ++g_perf.taps;
+            g_perf.tapSum += ms;
+            g_perf.tapMax = std::max(g_perf.tapMax, ms);
+            if (g_perf.taps >= kPerfEvery) {
+                const uint32_t tapAvg = g_perf.tapSum / g_perf.taps;
+                const uint32_t fullAvg = g_perf.fulls ? g_perf.fullSum / g_perf.fulls : 0;
+                const uint32_t partAvg = g_perf.parts ? g_perf.partSum / g_perf.parts : 0;
+                logTagged("perf",
+                          "taps=%lu tap_avg=%lu tap_max=%lu full=%lu full_avg=%lu full_max=%lu part=%lu part_avg=%lu | "
+                          "R\xC3\xA9" "activit\xC3\xA9 : image %lu ms apr\xC3\xA8s l'appui (max %lu), image compl\xC3\xA8te "
+                          "%lu ms (max %lu), partielle %lu ms",
+                          (unsigned long)g_perf.taps, (unsigned long)tapAvg, (unsigned long)g_perf.tapMax,
+                          (unsigned long)g_perf.fulls, (unsigned long)fullAvg, (unsigned long)g_perf.fullMax,
+                          (unsigned long)g_perf.parts, (unsigned long)partAvg, (unsigned long)tapAvg,
+                          (unsigned long)g_perf.tapMax, (unsigned long)fullAvg, (unsigned long)g_perf.fullMax,
+                          (unsigned long)partAvg);
+                g_perf = PerfStats();
+            }
+        } else if (wr::expired(now, g_perf.tapAt, 1000)) {
+            g_perf.tapAt = 0;  // appui qui n'a rien redessiné (hors bouton, écran rallumé…) : pas compté
+        }
+    }
+    if (pressed) {
+        g_perf.tapAt = now ? now : 1;
+        g_perf.presentsAtTap = g_ui.presentCount();
+    }
+}
+
+static void renderNow();
+
+// Zones seules demandées (g_draw.volume, .transport, .tile) et aucune image complète prévue : chacune est redessinée
+// à part. Hors vue commandes, ou si une zone ne s'y prête pas : image complète.
+static void renderParts() {
+    if (!g_draw.volume && !g_draw.transport && g_draw.tile < 0) return;
+    const uint32_t now = millis();
+    int pressedPreset, pressedTransport;
+    pressedNow(now, pressedPreset, pressedTransport);
+    const UiState st = displayState();
+    bool ok = !g_view.ambient && g_ui.controlsShown();
+    if (ok && g_draw.volume) ok = g_ui.updateVolume(st, pressedTransport);
+    if (ok && g_draw.transport) {
+        g_ui.setFavorite(favoriteState());
+        ok = g_ui.updateTransport(st, pressedTransport);
+    }
+    if (ok && g_draw.tile >= 0) ok = g_ui.updateTile(g_draw.tile, g_draw.tile == pressedPreset);
+    g_draw.volume = g_draw.transport = false;
+    g_draw.tile = -1;
+    if (!ok) {
+        show();
+        renderNow();
+        return;
+    }
+    notePerf(false, millis() - now);
+}
+
+static void renderNow() {
+    if (modalOpen()) return;  // écrans modaux : rien par-dessus (rendu à leur fermeture)
+    if (!g_draw.dirty) {
+        renderParts();
+        return;
+    }
+    g_draw.dirty = false;
+    g_draw.volume = g_draw.transport = false;  // compris dans l'image complète
+    g_draw.tile = -1;
+    const uint32_t now = millis();
+    int pressedPreset, pressedTransport;
+    pressedNow(now, pressedPreset, pressedTransport);
     g_draw.lastTick = now;
     g_draw.progressDue = false;  // la progression fait partie de l'image complète
     g_ui.setFavorite(favoriteState());
     if (g_view.ambient) g_ui.renderAmbient(displayState());
     else g_ui.render(displayState(), pressedPreset, pressedTransport);
+    notePerf(true, millis() - now);
+}
+
+// Une tuile seule à redessiner ; deux tuiles différentes dans le même tour : image complète
+static void showTile(int index) {
+    if (index < 0) return;
+    if (g_draw.tile >= 0 && g_draw.tile != index) show();
+    else g_draw.tile = index;
+}
+
+// Bouton −/+ dans la pilule du volume, les autres dans la rangée lecture
+static void showTransport(int which) {
+    if (which == wr::kVolDown || which == wr::kVolUp) g_draw.volume = true;
+    else if (which >= 0) g_draw.transport = true;
 }
 
 // Bouton enfoncé pendant un court instant, puis relâché par la boucle
@@ -176,7 +281,8 @@ static void flash(int preset, int transport) {
     g_flash.preset = preset;
     g_flash.transport = transport;
     g_flash.until = millis() + kFlashMs;
-    show();
+    if (preset >= 0) show();  // preset lancé : tuile active, anneau, message (image complète)
+    showTransport(transport);
 }
 
 void setMessage(const String& m, uint32_t durationMs) {
@@ -307,6 +413,10 @@ static void applyReport(const WiimReport& r) {
             st.album = g_state.player.album;
         }
         next.player = st;
+        if (g_volTouch.drag || g_volTouch.hold >= 0) {  // doigt sur le volume : le niveau affiché reste le sien
+            next.player.volume = g_state.player.volume;
+            next.player.muted = g_state.player.muted;
+        }
         g_status.at = r.at;
         if (r.queueKey != g_tiles.queueKey) {
             g_tiles.queueKey = r.queueKey;
@@ -632,7 +742,7 @@ static void serviceStrip(const m5::touch_detail_t& t) {
     if (t.isPressed()) {
         if (!g_strip.dragged && abs(t.x - g_strip.startX) > kSwipePx) {
             g_strip.dragged = true;  // c'est un glissement : la tuile n'est plus enfoncée
-            show();
+            showTile(g_strip.preset);
         }
         return;
     }
@@ -647,6 +757,63 @@ static void serviceStrip(const m5::touch_detail_t& t) {
         playPreset(g_strip.preset);
     } else {
         show();
+    }
+}
+
+// −/+ : un pas de volume (réglage volStep), affiché tout de suite, commande en fond
+static void stepVolume(int which) {
+    auto& p = g_state.player;
+    const int v = constrain(p.volume + (which == wr::kVolUp ? g_settings.volStep : -g_settings.volStep), 0, 100);
+    p.volume = v;
+    p.muted = false;
+    g_worker.command("setPlayerCmd:vol:" + String(v));
+}
+
+// Doigt sur le volume, suivi après l'appui : curseur glissé, ou −/+ maintenu
+static void serviceVolumeTouch(const m5::touch_detail_t& t, uint32_t now) {
+    auto& v = g_volTouch;
+    if (!v.drag && v.hold < 0) return;
+    auto& p = g_state.player;
+    if (modalOpen() || g_view.ambient) {  // autre écran : plus rien à suivre
+        v.drag = false;
+        v.hold = -1;
+        return;
+    }
+    if (v.drag) {
+        if (t.isPressed()) {
+            const int vol = g_ui.volumeAt(t.x);
+            if (vol != p.volume || p.muted) {
+                p.volume = vol;
+                p.muted = false;
+                v.moved = true;
+                g_draw.volume = true;
+            }
+            if (vol != v.sent && wr::expired(now, v.sentAt, kVolumeSendMs)) {
+                g_worker.command("setPlayerCmd:vol:" + String(vol));  // le worker ne garde que le dernier
+                v.sent = vol;
+                v.sentAt = now;
+            }
+        } else {
+            v.drag = false;
+            if (p.volume != v.sent) g_worker.command("setPlayerCmd:vol:" + String(p.volume));
+            if (v.moved) logEvent("Volume gliss\xC3\xA9 : %d", p.volume);
+        }
+        return;
+    }
+    if (!t.isPressed()) {
+        if (v.steps) logEvent("Volume maintenu : %d", p.volume);
+        v.hold = -1;
+        g_draw.volume = true;  // bouton relâché
+        return;
+    }
+    if ((int32_t)(now - v.nextStep) < 0) return;
+    v.nextStep = now + kVolumeRepeatMs;
+    const int before = p.volume;
+    stepVolume(v.hold);
+    if (p.volume != before) {
+        sound::tap();
+        ++v.steps;
+        g_draw.volume = true;
     }
 }
 
@@ -665,7 +832,13 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             p.volume = vol;
             p.muted = false;
             g_worker.command("setPlayerCmd:vol:" + String(vol));
-            show();
+            g_draw.volume = true;
+            if (at.touch) {  // le doigt peut ensuite glisser sur le curseur (serviceVolumeTouch)
+                g_volTouch.drag = true;
+                g_volTouch.moved = false;
+                g_volTouch.sent = vol;
+                g_volTouch.sentAt = at.now;
+            }
             return;
         }
         case wr::Act::Mute:
@@ -674,7 +847,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             sound::tap();
             p.muted = !p.muted;
             g_worker.command(String("setPlayerCmd:mute:") + (p.muted ? "1" : "0"));
-            show();
+            g_draw.volume = true;
             return;
         case wr::Act::Progress: {
             uint32_t pos;
@@ -684,7 +857,8 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             p.positionMs = pos;
             g_status.at = millis();
             g_worker.command("setPlayerCmd:seek:" + String(pos / 1000));  // secondes
-            show();
+            if (playingNow()) g_draw.progressDue = true;  // la ligne de progression seule (loop())
+            else show();
             return;
         }
         case wr::Act::Header:  // appui long : Réglages (loop() suit le doigt)
@@ -707,7 +881,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             g_strip.dragged = false;
             g_strip.startX = x;
             g_strip.preset = tg.act == wr::Act::Preset ? tg.arg : -1;
-            if (g_strip.preset >= 0) show();  // tuile montrée enfoncée tant que le doigt reste
+            showTile(g_strip.preset);  // tuile montrée enfoncée tant que le doigt reste (elle seule)
             return;
         case wr::Act::Fav: {  // ♥ : ajouter ce qui joue aux favoris, ou l'en retirer
             if (g_jobs.favorite) return;
@@ -759,14 +933,14 @@ static void activateControls(const wr::Target& tg, const Press& at) {
     sound::tap();
     switch (t) {
         case wr::kVolDown:
-        case wr::kVolUp: {
-            int v = p.volume + (t == wr::kVolUp ? g_settings.volStep : -g_settings.volStep);
-            v = constrain(v, 0, 100);
-            p.volume = v;
-            p.muted = false;
-            g_worker.command("setPlayerCmd:vol:" + String(v));
+        case wr::kVolUp:
+            stepVolume(t);
+            if (at.touch) {  // doigt maintenu : répétition (serviceVolumeTouch)
+                g_volTouch.hold = t;
+                g_volTouch.nextStep = at.now + kVolumeHoldMs;
+                g_volTouch.steps = 0;
+            }
             break;
-        }
         case wr::kPrev:
         case wr::kNext:
             g_worker.command(t == wr::kPrev ? "setPlayerCmd:prev" : "setPlayerCmd:next");
@@ -1354,6 +1528,7 @@ void loop() {
     const uint32_t now = millis();
     // Touches (télécommande, clavier, manette ; rien sur le Tab5), puis appui : l'anneau du focus disparaît
     serviceKeys(now);
+    servicePerf(t.wasPressed(), now);
     if (t.wasPressed()) hideFocus();
     logMemory();
     // Images arrivées (tous les écrans : la file de l'ArtFetcher est bornée, un résultat non lu serait perdu)
@@ -1458,6 +1633,7 @@ void loop() {
         }
     }
     serviceStrip(t);
+    serviceVolumeTouch(t, now);
     if (g_header.pressed) {
         if (!t.isPressed()) g_header.pressed = false;
         else if (now - g_header.since > kLongPressMs) {
@@ -1477,7 +1653,8 @@ void loop() {
     // Fin de l'effet « bouton enfoncé »
     if (g_flash.until && (int32_t)(now - g_flash.until) >= 0) {
         g_flash.until = 0;
-        show();
+        showTile(g_flash.preset);  // bouton relâché : sa zone seule
+        showTransport(g_flash.transport);
     }
     // Progression : une image par seconde pendant la lecture (écran allumé ; WiiM joignable)
     const auto& p = g_state.player;

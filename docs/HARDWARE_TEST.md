@@ -73,6 +73,9 @@ The Journal masks tokens and passwords, but check anyway.
 | 5.1 | Search ⌕ › type fast on the keyboard. | Each key lights at once; no missed letters. |
 | 5.2 | Touch ⏮ / ⏭ / ⏯. | A ring turns on the button until the WiiM changes; the progress bar moves every second without flicker. |
 | 5.3 | ⚙ › **Test tactile**. Touch the corners. | The circle follows the finger everywhere. |
+| 5.5 | Put a finger on the volume bar and slide it left and right. | The knob follows the finger; the WiiM volume follows within about 1 s; Journal: `Volume glissé : N` once, at release. |
+| 5.6 | Touch and hold − or + of the volume for 2 s. | After a short delay the volume changes step by step and the button stays lit; Journal: `Volume maintenu : N` at release. |
+| 5.7 | Touch − / +, the speaker, ⏯, then a tile and slide off it. | Each button lights at once, without a flicker of the whole screen. After 20 touches, the Journal shows `Réactivité : image … ms après l'appui …`: note the numbers in the results. |
 | 5.4 | Navigation bar: 🏠, ⌕, ⚙ from each screen (main, search, results, Journal, menu). | 🏠 always goes to the main screen with the tiles. |
 
 ## 6. Update page (firmware `cb22222` and later)

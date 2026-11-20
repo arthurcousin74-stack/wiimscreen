@@ -33,7 +33,7 @@ Open source · runs on ESP32 · tested on the M5Stack Tab5
 | | |
 |---|---|
 | **Now playing** | Large album art, title, artist, album, source and audio quality. The colors follow the album art. Touch the progress bar to go to a position. |
-| **Control** | Play, pause, next, previous, volume and mute. A ring turns on a button until the WiiM does the command. |
+| **Control** | Play, pause, next, previous, volume and mute. Slide the volume bar, or hold − or + to change the volume step by step. A ring turns on a button until the WiiM does the command. |
 | **Tiles** | Presets of the WiiM, your favorites and a **Flow** tile, with their images. Swipe for the next page. |
 | **Favorites** | Touch the heart while an album or a playlist plays. One touch on its tile plays it again. |
 | **Qobuz** | Search tracks. Touch a result to play it. Your favorite tracks show in the **Qobuz favorites** tile. Optional: album search with a heart to add an album as a tile (see [Unofficial interfaces](#unofficial-interfaces)). |

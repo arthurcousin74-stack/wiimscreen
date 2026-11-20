@@ -72,6 +72,13 @@ public:
     bool updateProgress(const UiState& st);
     // Rangée des boutons de lecture seule (animation d'attente) ; false si la vue commandes n'est pas affichée
     bool updateTransport(const UiState& st, int pressed = -1);
+    // Pilule du volume seule (−, haut-parleur, curseur, valeur, +) : appui, glissé, son coupé ; false hors vue commandes
+    bool updateVolume(const UiState& st, int pressed = -1);
+    // Une tuile seule (enfoncée ou relâchée) ; false si elle n'est pas sur la page affichée ou hors vue commandes
+    bool updateTile(int index, bool pressed);
+    // Mesure de la réactivité : nombre d'envois à l'écran (complets ou partiels) et millis() du dernier
+    uint32_t presentCount() const { return presents_; }
+    uint32_t lastPresentMs() const { return lastPresentMs_; }
     // Visualiseur de la vue ambiance : réserve sa place si activé
     void setVisualizer(bool enabled) { visEnabled_ = enabled; }
     // Nouveaux niveaux (0..1) : seule la zone du visualiseur est redessinée
@@ -79,6 +86,7 @@ public:
 
     // Position visée dans la vue commandes (le point d'un appui sur l'élément Volume / Progress de targets())
     bool hitVolume(int x, int y, int& volume) const;       // curseur de volume : niveau visé
+    int volumeAt(int x) const;                             // glissé du curseur : niveau visé (borné, y ignoré)
     bool hitProgress(int x, int y, uint32_t& posMs) const;  // barre de progression (zone suivie par updateProgress)
     // targets() est celle de la vue commandes (dernier écran complet dessiné : render())
     bool controlsShown() const { return view_ == View::Controls; }
@@ -175,6 +183,7 @@ private:
     void controlsTargets();  // inscrit les éléments touchables de la vue commandes (fin de render())
     void focusRing();        // anneau du focus sur canvas_ (ui_widgets.cpp), si la source le demande
     FocusSource focusSource_ = nullptr;
+    uint32_t presents_ = 0, lastPresentMs_ = 0;
 
     M5Canvas canvas_;  // image complète, en PSRAM
     M5Canvas bg_;      // fond (lueur de l'accent), recalculé quand l'accent change

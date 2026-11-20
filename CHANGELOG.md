@@ -5,6 +5,17 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+### Added
+- **Volume by touch**: slide a finger on the volume bar (the WiiM follows, at most one command every 150 ms and the
+  last one at release), or hold − / + to repeat the step.
+- **Responsiveness in the Journal**: every 20 touches, one line gives the time from a touch to the first image sent
+  to the screen, and the time of full and partial images (`[perf]` on the serial port).
+
+### Changed
+- **Faster touch feedback**: −/+, the volume bar, mute, play/pause, previous/next and a pressed tile redraw only their
+  own area instead of the whole screen (two full images per touch before). A seek during playback redraws only the
+  progress line. Checked in the simulator: the partial images are identical, pixel for pixel, to a full image.
+
 ## [0.3.0-beta] — 2026-11-19 — Windows app, keyboard and remote control on computers
 
 **Tab5:** every tap now goes through a new dispatcher (one list of buttons per screen, shared with the keys). The

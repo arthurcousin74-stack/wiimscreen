@@ -97,6 +97,8 @@ void Ui::presentRect(const wr::Rect& r) {
     canvas_.pushSprite(&D, 0, 0);
     D.clearClipRect();
     D.endWrite();
+    ++presents_;
+    lastPresentMs_ = millis();
 }
 
 void Ui::present() {
@@ -104,6 +106,8 @@ void Ui::present() {
     D.startWrite();
     canvas_.pushSprite(&D, 0, 0);
     D.endWrite();
+    ++presents_;
+    lastPresentMs_ = millis();
 }
 
 // Lueur de la couleur d'accent en haut, qui se fond dans le fond sombre

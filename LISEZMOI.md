@@ -23,7 +23,7 @@ une télécommande ou une manette. Voir [docs/DESKTOP.md](docs/DESKTOP.md) (en a
 - **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur
 - **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
 - **Recherche à la voix** (facultative) : sur l'écran de recherche, touche le micro dans le champ, dis un artiste, un morceau ou un album, puis touche le bouton rouge : le texte s'écrit et la recherche part (Qobuz ou Deezer)
-- **Gestes directs** : toucher la barre de volume règle le volume, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
+- **Gestes directs** : toucher ou glisser sur la barre de volume règle le volume, maintenir − ou + le change pas à pas, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
 - **Vue ambiance** : après 60 s sans appui pendant la lecture, grande pochette et grands textes, lisibles de loin ; un appui ramène les commandes
 - **Visualiseur** (expérimental, à activer dans la configuration) : en vue ambiance, un spectre animé suit la musique, capté par les micros du Tab5. Le son est analysé sur place (24 bandes de fréquence) : rien n'est enregistré ni envoyé. Le micro ne fonctionne qu'en vue ambiance
 - **Réveil par mouvement** : soulever ou déplacer le Tab5 rallume l'écran et affiche les commandes ; les petites vibrations (enceinte sur le même meuble) sont ignorées
@@ -107,7 +107,8 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 | Zone | Action |
 |---|---|
 | Barre de progression | Avancer / reculer dans le morceau |
-| Barre de volume | Régler le volume directement |
+| Barre de volume | Régler le volume directement (toucher ou glisser) |
+| − / + maintenu | Changer le volume pas à pas |
 | Haut-parleur (à gauche du volume) | Couper / rétablir le son |
 | Tuiles du bas | Lancer le preset (au relâcher) |
 | Glisser sur les tuiles, ou toucher les points | Page de presets suivante / précédente |

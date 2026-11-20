@@ -523,6 +523,35 @@ bool Ui::updateTransport(const UiState& st, int pressed) {
     return true;
 }
 
+// Pilule du volume seule : un appui sur −/+, le curseur glissé ou le son coupé ne renvoient pas l'écran entier
+bool Ui::updateVolume(const UiState& st, int pressed) {
+    if (view_ != View::Controls) return false;
+    const wr::Rect& r = layout_.volume;
+    if (r.w <= 0 || r.h <= 0) return false;
+    auto& C = canvas_;
+    C.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&C, 0, 0);
+    volumePill(st, pressed);
+    C.clearClipRect();
+    presentRect(r);
+    return true;
+}
+
+// Une tuile seule : enfoncée sous le doigt, puis relâchée (le reste de l'écran ne change pas)
+bool Ui::updateTile(int index, bool pressed) {
+    if (view_ != View::Controls || layout_.perPage <= 0 || index < 0 || index >= (int)presets_.size()) return false;
+    const int slot = index - page_ * layout_.perPage;
+    if (slot < 0 || slot >= (int)layout_.presets.size()) return false;
+    const wr::Rect& r = layout_.presets[slot];
+    auto& C = canvas_;
+    C.setClipRect(r.x, r.y, r.w, r.h);
+    bg_.pushSprite(&C, 0, 0);
+    tile(slot, index, pressed);
+    C.clearClipRect();
+    presentRect(r);
+    return true;
+}
+
 void Ui::renderAmbient(const UiState& st) {
     beginScreen(View::Ambient);
     auto& C = canvas_;
@@ -657,6 +686,11 @@ bool Ui::hitVolume(int x, int y, int& volume) const {
     if (!b.contains(x, y)) return false;
     volume = std::max(0, std::min(100, (x - b.x) * 100 / std::max(1, b.w)));
     return true;
+}
+
+int Ui::volumeAt(int x) const {
+    const wr::Rect& b = layout_.volBar;
+    return std::max(0, std::min(100, (x - b.x) * 100 / std::max(1, b.w)));
 }
 
 bool Ui::hitProgress(int x, int y, uint32_t& posMs) const {

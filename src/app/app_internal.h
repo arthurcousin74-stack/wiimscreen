@@ -201,8 +201,37 @@ struct Redraw {
     bool dirty = false;
     uint32_t lastTick = 0;                         // dernière image (complète, progression ou anneau)
     bool progressDue = false;                      // saut de position (avance, retour) : ligne de progression redessinée sans attendre
+    // Zones seules à redessiner au prochain renderNow() (si aucune image complète n'est prévue) : un appui ne
+    // renvoie que ce qu'il change (~1,8 Mo pour l'écran entier)
+    bool volume = false;                           // pilule du volume
+    bool transport = false;                        // rangée lecture (et ♥)
+    int tile = -1;                                 // une tuile (indice du preset)
 };
 extern Redraw g_draw;
+
+// Doigt sur le volume : curseur glissé (commande au plus toutes les kVolumeSendMs, la dernière au relâchement),
+// ou −/+ maintenu (répétition)
+struct VolumeTouch {
+    bool drag = false;
+    bool moved = false;
+    int sent = -1;                                 // dernier niveau envoyé au WiiM
+    uint32_t sentAt = 0;
+    int hold = -1;                                 // wr::kVolDown / wr::kVolUp maintenu, -1 aucun
+    uint32_t nextStep = 0;
+    int steps = 0;
+};
+extern VolumeTouch g_volTouch;
+
+// Réactivité mesurée sur l'appareil : appui → première image envoyée, durée des images complètes et partielles ;
+// une ligne de Journal tous les kPerfEvery appuis (tag perf)
+struct PerfStats {
+    uint32_t tapAt = 0;                            // millis() de l'appui en attente d'une image, 0 aucun
+    uint32_t presentsAtTap = 0;
+    uint32_t taps = 0, tapSum = 0, tapMax = 0;
+    uint32_t fulls = 0, fullSum = 0, fullMax = 0;
+    uint32_t parts = 0, partSum = 0;
+};
+extern PerfStats g_perf;
 
 // Écran et veille : dernier appui, dernière lecture vue, rétroéclairage
 struct IdleClock {
