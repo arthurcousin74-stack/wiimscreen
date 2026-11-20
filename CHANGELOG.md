@@ -5,6 +5,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+## [0.3.1-beta] — 2026-11-20 — Faster touch feedback, volume by touch
+
+**Tab5:** checked in the simulator only, like v0.3.0-beta: this firmware has **not been checked on a Tab5 yet**. If a
+button does not react, report it and install v0.2.0-beta again. After about 20 touches, *Settings › Journal* shows a
+"Réactivité" line: please send it with your report.
+
 ### Added
 - **Volume by touch**: slide a finger on the volume bar (the WiiM follows, at most one command every 150 ms and the
   last one at release), or hold − / + to repeat the step.
