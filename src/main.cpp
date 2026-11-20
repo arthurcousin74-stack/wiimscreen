@@ -1588,8 +1588,11 @@ void loop() {
     if (g_view.screen == Screen::Search || g_view.screen == Screen::Results) {
         if (t.wasPressed()) {
             g_idle.lastTouch = now;
-            if (g_idle.brightness != kBrightOn) setBrightness(kBrightOn);
-            else if (g_voice.listening && g_voice.dictation) {
+            const bool dark = g_idle.brightness == 0;  // écran éteint : ce premier appui ne fait que le rallumer
+            setBrightness(kBrightOn);                  // atténué : on voit l'écran, l'appui agit aussi
+            if (dark) {
+                // rien d'autre : rallumé seulement
+            } else if (g_voice.listening && g_voice.dictation) {
                 // Pendant la dictée : ■ termine ; Accueil ou Réglages annulent ; le reste est ignoré
                 if (g_ui.hitMic(t.x, t.y)) {
                     sound::tap();
@@ -1617,8 +1620,15 @@ void loop() {
 
     if (t.wasPressed()) {
         g_idle.lastTouch = now;
+        // Écran éteint, ou vue ambiance atténuée : ce premier appui ne fait que rallumer. Écran atténué sur les
+        // commandes ou le menu : on y voit les boutons, l'appui rallume et agit.
+        const bool dimOnly = g_idle.brightness > 0 && g_idle.brightness != kBrightOn && !g_view.ambient;
+        if (dimOnly) {
+            logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran att\xC3\xA9nu\xC3\xA9, l'appui agit (%d,%d)", t.x, t.y);
+            setBrightness(kBrightOn);
+        }
         if (g_idle.brightness != kBrightOn) {
-            // Écran atténué ou éteint : ce premier appui ne fait que le rallumer
+            // Écran éteint (ou vue ambiance atténuée) : ce premier appui ne fait que le rallumer
             logEvent("Appui : r\xC3\xA9veil de l'\xC3\xA9" "cran (%d,%d)", t.x, t.y);
             setBrightness(kBrightOn);
             if (g_view.ambient) exitAmbient();

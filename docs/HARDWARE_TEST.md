@@ -76,6 +76,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 5.5 | Put a finger on the volume bar and slide it left and right. | The knob follows the finger; the WiiM volume follows within about 1 s; Journal: `Volume glissé : N` once, at release. |
 | 5.6 | Touch and hold − or + of the volume for 2 s. | After a short delay the volume changes step by step and the button stays lit; Journal: `Volume maintenu : N` at release. |
 | 5.7 | Touch − / +, the speaker, ⏯, then a tile and slide off it. | Each button lights at once, without a flicker of the whole screen. After 20 touches, the Journal shows `Réactivité : image … ms après l'appui …`: note the numbers in the results. |
+| 5.8 | Pause the music. Wait until the screen dims (10 min without a touch), then touch ⏯. | The light comes back and the music plays with the same touch. While music plays, the ambient view shows instead: a touch there only brings back the controls. When the screen is off (20 min, nothing playing), a touch only turns it on. |
 | 5.4 | Navigation bar: 🏠, ⌕, ⚙ from each screen (main, search, results, Journal, menu). | 🏠 always goes to the main screen with the tiles. |
 
 ## 6. Update page (firmware `cb22222` and later)

@@ -15,6 +15,9 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 - **Faster touch feedback**: −/+, the volume bar, mute, play/pause, previous/next and a pressed tile redraw only their
   own area instead of the whole screen (two full images per touch before). A seek during playback redraws only the
   progress line. Checked in the simulator: the partial images are identical, pixel for pixel, to a full image.
+- **Dimmed screen**: a touch on the dimmed controls (or menu, search) turns the light on **and** does what it touches;
+  before, it only turned the light on (seen when nothing plays: with music, the ambient view shows first). A screen
+  that is off, or the dimmed ambient view, still only wakes up.
 
 ## [0.3.0-beta] — 2026-11-19 — Windows app, keyboard and remote control on computers
 
