@@ -5,6 +5,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+## [0.4.1-beta] — 2026-11-21 — Library fixes
+
+**Tab5:** checked in the simulator only, like v0.4.0-beta: not checked on a Tab5 yet. If something does not work,
+report it and install v0.3.1-beta again.
+
 ### Fixed
 - **Library**: on a narrow screen (portrait, 800×480) the filters go on a second line instead of losing the last
   ones, so a chosen filter always stays visible. A tile picture that arrives, or a finger on a tile, now redraws
