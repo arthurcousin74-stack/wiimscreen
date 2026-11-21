@@ -61,6 +61,13 @@ std::string tileKey(const Preset& p) {
     return storableKey(k) ? k : std::string();
 }
 
+TileKind tileKind(const Preset& p) {
+    if (p.favId.empty()) return TileKind::Preset;
+    if (p.favId.rfind("qobuz-", 0) == 0) return TileKind::Qobuz;
+    if (p.favId.rfind("deezer-", 0) == 0) return TileKind::Deezer;
+    return TileKind::Favorite;
+}
+
 std::string tileStatsToText(const TileStats& s) {
     std::string out = "seq\t" + std::to_string(s.seq) + "\n";
     for (const TileUse& u : s.uses) {

@@ -66,6 +66,7 @@ OpenScreens g_view;
 VoiceInput g_voice;
 MicInput g_mic;
 StripTouch g_strip;
+LibraryView g_lib;
 PressFlash g_flash;
 MotionWake g_motion;
 Redraw g_draw;
@@ -739,6 +740,7 @@ static void renderTileMenu() {
 static void openTileMenu(int index) {
     if (index < 0 || index >= (int)g_tiles.list.size() || wr::tileKey(g_tiles.list[index]).empty()) return;
     g_view.tileKey = wr::tileKey(g_tiles.list[index]);
+    g_view.tileMenuBack = g_view.screen == Screen::Library ? Screen::Library : Screen::Controls;
     logEvent("Menu de la tuile : %s", g_tiles.list[index].label.c_str());
     g_view.screen = Screen::TileMenu;
     g_focus.spot[(int)Screen::TileMenu] = wr::FocusSpot{};
@@ -754,7 +756,11 @@ static void activateTileMenu(const wr::Target& tg, uint32_t now) {
             openSearch();
             return;
         case wr::Act::Settings: openMenu(); return;
-        case wr::Act::Home: break;  // Accueil : fermer, vers les commandes
+        case wr::Act::Library:
+            sound::tap();
+            openLibrary();
+            return;
+        case wr::Act::Home: g_view.tileMenuBack = Screen::Controls; break;  // Accueil : fermer, vers les commandes
         case wr::Act::TileChoice: break;
         default: return;
     }
@@ -780,6 +786,11 @@ static void activateTileMenu(const wr::Target& tg, uint32_t now) {
     }
     g_view.tileKey.clear();
     g_idle.lastTouch = now;
+    if (g_view.tileMenuBack == Screen::Library) {  // ouvert depuis la Bibliothèque : on y revient (même filtre, page)
+        g_view.screen = Screen::Library;
+        renderLibrary();
+        return;
+    }
     g_view.screen = Screen::Controls;
     show();
 }
@@ -832,6 +843,76 @@ static void serviceStrip(const m5::touch_detail_t& t, uint32_t now) {
         playPreset(g_strip.preset);
     } else {
         show();
+    }
+}
+
+// Bibliothèque : barre, filtres, pages ; une tuile se joue au relâcher du doigt (appui long : son menu,
+// serviceLibraryTouch), tout de suite avec OK. Après le lancement : retour aux commandes (ce qui joue)
+static void activateLibrary(const wr::Target& tg, const Press& at) {
+    switch (tg.act) {
+        case wr::Act::Home:
+            sound::tap();
+            g_view.screen = Screen::Controls;
+            show();
+            return;
+        case wr::Act::Search:
+            sound::tap();
+            openSearch();
+            return;
+        case wr::Act::Settings: openMenu(); return;
+        case wr::Act::Library:  // déjà ici : tous les filtres, première page
+            sound::tap();
+            g_lib.filter = -1;
+            g_lib.page = 0;
+            renderLibrary();
+            return;
+        case wr::Act::LibFilter:
+            sound::tap();
+            g_lib.filter = tg.arg;
+            g_lib.page = 0;
+            renderLibrary();
+            return;
+        case wr::Act::LibPage:
+            sound::tap();
+            g_lib.page += tg.arg;
+            renderLibrary();
+            return;
+        case wr::Act::LibTile:
+            if (tg.arg < 0 || tg.arg >= (int)g_tiles.list.size()) return;
+            if (at.touch) {  // doigt suivi : relâché = jouer, tenu = menu
+                g_lib.touch = tg.arg;
+                g_lib.since = at.now;
+                renderLibrary(tg.arg);  // tuile enfoncée
+                return;
+            }
+            g_view.screen = Screen::Controls;
+            playPreset(tg.arg);
+            show();
+            return;
+        default: return;
+    }
+}
+
+static void serviceLibraryTouch(const m5::touch_detail_t& t, uint32_t now) {
+    if (g_lib.touch < 0 || g_view.screen != Screen::Library) return;
+    const int i = g_lib.touch;
+    if (t.isPressed()) {
+        if (wr::expired(now, g_lib.since, kTileHoldMs)) {
+            g_lib.touch = -1;  // appui long : menu ; le doigt relevé ne lance rien
+            sound::confirm();
+            openTileMenu(i);
+        }
+        return;
+    }
+    g_lib.touch = -1;
+    // Relâché sur la tuile : elle joue ; ailleurs (doigt glissé) : rien
+    const wr::Target* on = g_ui.targets().hit(t.x, t.y);
+    if (on && on->act == wr::Act::LibTile && on->arg == i) {
+        g_view.screen = Screen::Controls;
+        playPreset(i);
+        show();
+    } else {
+        renderLibrary();
     }
 }
 
@@ -991,6 +1072,11 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             sound::tap();
             openSearch();
             return;
+        case wr::Act::Library:  // Bibliothèque (barre)
+            logEvent("%s Biblioth\xC3\xA8que (%d,%d)", how, x, y);
+            sound::tap();
+            openLibrary();
+            return;
         case wr::Act::Settings:  // Réglages (barre)
             logEvent("%s R\xC3\xA9glages (%d,%d)", how, x, y);
             sound::tap();
@@ -1062,6 +1148,10 @@ static void activateMenu(const wr::Target& tg, uint32_t now) {
             g_view.screen = Screen::Controls;
             show();
             return;
+        case wr::Act::Library:
+            sound::tap();
+            openLibrary();
+            return;
         case wr::Act::MenuChoice: break;  // ci-dessous
         default: return;                  // Réglages : déjà ici
     }
@@ -1123,6 +1213,11 @@ static bool activateLog(const wr::Target& tg, uint32_t now) {
             g_idle.lastTouch = now;
             g_ui.renderMenu(FW_VERSION);
             return true;
+        case wr::Act::Library:
+            sound::tap();
+            g_idle.lastTouch = now;
+            openLibrary();
+            return true;
         default: return false;
     }
 }
@@ -1154,6 +1249,10 @@ static void activateSearch(const wr::Target& tg) {
             sound::tap();
             g_view.screen = Screen::Menu;
             g_ui.renderMenu(FW_VERSION);
+            return;
+        case wr::Act::Library:
+            sound::tap();
+            openLibrary();
             return;
         case wr::Act::Source:
             sound::tap();
@@ -1226,6 +1325,7 @@ static void redrawForFocus() {
         case Screen::Search: renderSearch(g_search.keyDown); break;  // la touche enfoncée le reste
         case Screen::Results: renderResultsList(-1, g_search.results.empty() ? g_search.note : String()); break;
         case Screen::TileMenu: renderTileMenu(); break;
+        case Screen::Library: renderLibrary(); break;
         case Screen::Count: break;
     }
 }
@@ -1303,6 +1403,15 @@ static void backKey(uint32_t now) {
             sound::tap();
             if (g_view.screen == Screen::Results) {
                 openSearch();
+                return;
+            }
+            break;
+        case Screen::TileMenu:
+            sound::tap();
+            if (g_view.tileMenuBack == Screen::Library) {
+                g_view.screen = Screen::Library;
+                g_idle.lastTouch = now;
+                renderLibrary();
                 return;
             }
             break;
@@ -1461,6 +1570,15 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
     }
 
     if (screen == Screen::Controls && !g_ui.controlsShown()) renderNow();  // liste de la vue commandes (cf. tapControls)
+    // OK tenu sur une tuile de la Bibliothèque : son menu (comme le doigt tenu)
+    if (k.key == NavKey::Ok && k.kind == wr::KeyEvent::LongPress && screen == Screen::Library && g_focus.visible) {
+        const wr::Target* on = wr::focusedTarget(g_ui.targets(), g_focus.spot[(int)screen]);
+        if (on && on->act == wr::Act::LibTile) {
+            sound::confirm();
+            openTileMenu(on->arg);
+        }
+        return;
+    }
     // OK tenu sur les commandes : Réglages, comme l'appui long sur l'en-tête
     if (k.key == NavKey::Ok && k.kind == wr::KeyEvent::LongPress && screen == Screen::Controls) {
         // … sauf sur une tuile : son menu, comme l'appui long du doigt
@@ -1487,12 +1605,13 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
     // OK : la même activation qu'un appui (copie : l'activation peut redessiner l'écran et vider la liste)
     const wr::Target tg = *cur;
     g_focus.spot[(int)screen] = wr::FocusSpot{tg.act, tg.arg};
-    static const char* const kScreenNames[kScreenCount] = {"controls", "menu", "touchtest", "log", "search", "results", "tilemenu"};
+    static const char* const kScreenNames[kScreenCount] = {"controls", "menu", "touchtest", "log", "search", "results", "tilemenu", "library"};
     logTagged("focus.ok", "screen=%s act=%s arg=%d | Touche OK", kScreenNames[(int)screen], wr::actName(tg.act), tg.arg);
     switch (screen) {
         case Screen::Controls: activateControls(tg, keyPress(tg, now)); break;
         case Screen::Menu: activateMenu(tg, now); break;
         case Screen::TileMenu: activateTileMenu(tg, now); break;
+        case Screen::Library: activateLibrary(tg, keyPress(tg, now)); break;
         case Screen::Log: activateLog(tg, now); break;
         case Screen::TouchTest: activateTouchTest(tg, now); break;
         case Screen::Search:
@@ -1723,6 +1842,12 @@ void loop() {
             if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) activateMenu(*tg, now);
         } else if (g_view.screen == Screen::TileMenu) {
             if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) activateTileMenu(*tg, now);
+        } else if (g_view.screen == Screen::Library) {
+            if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) {
+                Press at;
+                at.x = t.x, at.y = t.y, at.touch = true, at.now = now;
+                activateLibrary(*tg, at);
+            }
         } else if (g_view.ambient) {
             logEvent("Appui en vue ambiance (%d,%d)%s", t.x, t.y, g_ui.hitHome(t.x, t.y) ? " : Accueil" : "");
             exitAmbient();  // vue ambiance : un appui ramène les commandes
@@ -1732,6 +1857,7 @@ void loop() {
         }
     }
     serviceStrip(t, now);
+    serviceLibraryTouch(t, now);
     serviceVolumeTouch(t, now);
     if (g_header.pressed) {
         if (!t.isPressed()) g_header.pressed = false;

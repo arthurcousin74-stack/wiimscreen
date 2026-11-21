@@ -42,6 +42,7 @@ struct Layout {
     Rect navHome;      // Accueil (écran principal)
     Rect navSettings;  // Réglages
     Rect navSearch;    // Recherche (au milieu)
+    Rect navLibrary;   // Bibliothèque (toutes les tuiles) : à mi-chemin entre Accueil et Recherche
     Rect content;      // reste de l'écran, à côté de la barre
 };
 

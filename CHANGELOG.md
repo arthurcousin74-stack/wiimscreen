@@ -6,6 +6,10 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 ## [Unreleased]
 
 ### Added
+- **Library**: a new button in the side bar (grid, between Home and Search) shows all the tiles on one screen, in the
+  order of the strip, with filters for the kinds you have (*Presets*, *Favorites*, *Qobuz*, *Deezer*) and pages. A
+  touch plays the tile and goes back to the main screen; a long press opens the tile menu, which comes back to the
+  Library. The grid is redrawn when the tiles or their pictures change while it is open.
 - **Tile menu**: hold a finger on a tile (or hold OK on a focused tile) to pin it at the front of the tiles, unpin it,
   or remove a favorite saved on the remote. The Journal shows `Menu de la tuile : …` and `Tuile épinglée : …`.
 - **Last played tiles first**: the remote keeps a short history of the tiles you start (`/fav/tiles.txt`: last play,

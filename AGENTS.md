@@ -55,7 +55,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/catalog.h` | `QobuzAlbum`, shared by the Qobuz and Deezer album parsers |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | WAV header for the dictation; still declares the text and Deezer functions through its includes |
-| `lib/core/src/tiles.*` | Tile history and order: `TileStats` (last play as a counter, play count, pins; `played`, `setPin`), `tileKey`, text file format, `tileOrder` (pinned, then last played, then the given order) |
+| `lib/core/src/tiles.*` | Tile kind (`tileKind`: Library filters) and tile history and order: `TileStats` (last play as a counter, play count, pins; `played`, `setPin`), `tileKey`, text file format, `tileOrder` (pinned, then last played, then the given order) |
 | `lib/core/src/appstate.*` | Main-loop timing decisions without hardware: wrap-safe `expired`, `idleAction` (ambient, dim, screen off, sleep), `musicSettled` |
 | `lib/core/src/keys.*` | Key input without hardware: `NavKey`, `KeyEvent`, `KeyTracker` (raw down/up → press, long press on OK, repeat on arrows/Backspace; wrap-safe), key names for scripts |
 | `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
@@ -66,6 +66,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/main.cpp` | Setup, main loop (tap dispatch per screen, drawing, applying WiiM reports and events), ambient view, menus; defines all the app state objects |
 | `src/app/app_internal.h` | Internal to `main.cpp` and `app_*.cpp` only (namespace `app`): `enum class Screen` (`g_view.screen`), the app state grouped in structs (`g_pending`, `g_search`, `g_voice`, `g_tiles`, `g_img`…, one comment each), shared constants and the functions one file calls in another |
 | `src/app/app_search.cpp` | Search keyboard and results list (`openSearch`, `runSearchQuery`, `onSearchKey`, `renderResultsList`, `onSearchDone`), album hearts, "Qobuz/Deezer favorites" lists (`openFavoriteList`) |
+| `src/app/app_library.cpp` | Library screen (all the tiles in a grid, filters by `wr::TileKind`): `openLibrary`, `renderLibrary`; taps and long press in `main.cpp` (`activateLibrary`, `serviceLibraryTouch`) |
 | `src/app/app_voice.cpp` | Dictation in the search field: microphone, ducking, `sttTask` (OpenAI transcription in its own task), `serviceTranscription` |
 | `src/app/app_tiles.cpp` | Preset and favorite tiles (`refreshTiles`, `onPresets`, `currentFavorite`, `favoriteState`), tile history and order (`noteTilePlayed`, `pinTile`, `serviceTileOrder`), image downloads for the cover, tiles and result rows (`checkImages`, `retryImages`, `knownImage`) |
 | `src/app/log.*` | Journal: last 40 events in RAM, also on the serial port (`logEvent`) |
@@ -74,7 +75,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/ui/ui_core.cpp` | Canvases (off-screen M5Canvas in PSRAM → display), `present`/`presentRect`, background gradient, cover decoding, `beginScreen`, fonts (VLW arrays included only here) and `useFont` |
 | `src/ui/ui_widgets.cpp` | Shared icons (heart, mic, home, gear, search) and the navigation rail with its hit tests |
 | `src/ui/ui_search.cpp` | Search keyboard, field, source chips, results list; `pressKey`, `updateSearchField`, `updateResultCover`; hit tests |
-| `src/ui/ui_screens.cpp` | Full-page screens: Settings menu, tile menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
+| `src/ui/ui_screens.cpp` | Full-page screens: Settings menu, tile menu, Library grid, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
 | `src/ui/ui_internal.h` | Internal to `ui*.cpp` only: colours, font pointers, `useFont`, `mix` (never include it elsewhere; do not widen `ui.h`) |
 | `src/ui/fonts/` | Generated VLW fonts (`tools/make_vlw.py`), included only by `ui_core.cpp` |
 | `src/net/wiim_worker.*` | Background task that owns all WiiM networking: `begin`, request mailbox (`command`, `search`, `playFavorite`…), `run`, polling (`pollOnce`), command queue, `pause`, events, rediscovery, identity |
@@ -180,7 +181,8 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 - **Deep sleep cannot wake on touch on the Tab5**: the touch INT is GPIO23 and only GPIO0–15 wake the ESP32-P4 from
   deep sleep (M5Unified defines no Tab5 wake pin). `goToSleep()` uses `M5.Power.powerOff()`: PWROFF pulse (true off
   on battery, power button turns it on), else deep sleep with no wake source. Wake behaviour on USB: not verified.
-- Navigation bar: `Layout::rail/navHome/navSettings/content`; each full screen starts with `beginScreen(View)`; screens that show the bar call `Ui::navRail()` and lay
+- Navigation bar: `Layout::rail/navHome/navLibrary/navSearch/navSettings/content` (Library halfway between Home and
+  Search, so Search stays centred); each full screen starts with `beginScreen(View)`; screens that show the bar call `Ui::navRail()` and lay
   out their content inside `layout_.content`. `hitHome()`/`hitSettings()` only match while it is shown.
 - **Every tappable element is registered in `Ui::targets_` while its screen is drawn** (`beginScreen()` clears it;
   partial redraws never change it); a new button = one `targets_.add(...)`, placed in the order main.cpp tests taps.

@@ -27,7 +27,8 @@ inline void checkLayout(int W, int H, int n) {
     auto inside = [&](const Rect& r) { return r.x >= 0 && r.y >= 0 && r.right() <= W && r.bottom() <= H; };
     // Blocs principaux : dans l'écran, sans chevauchement
     std::vector<Rect> blocks = {L.art, L.info, L.progress, L.transport[kPrev], L.transport[kPlayPause],
-                                L.transport[kNext], L.fav, L.volume, L.navHome, L.navSettings, L.navSearch};
+                                L.transport[kNext], L.fav, L.volume, L.navHome, L.navSettings, L.navSearch,
+                                L.navLibrary};
     blocks.push_back(L.strip);  // toujours là, même sans preset
     for (size_t i = 0; i < blocks.size(); ++i) {
         TEST_ASSERT_TRUE(inside(blocks[i]));
@@ -36,12 +37,21 @@ inline void checkLayout(int W, int H, int n) {
     }
     TEST_ASSERT_EQUAL(L.art.w, L.art.h);
     // Barre de navigation : boutons dedans, rien d'autre ne la touche
-    for (const Rect& r : {L.navHome, L.navSettings, L.navSearch}) {
+    for (const Rect& r : {L.navHome, L.navSettings, L.navSearch, L.navLibrary}) {
         TEST_ASSERT_TRUE(r.x >= L.rail.x && r.right() <= L.rail.right() && r.y >= L.rail.y && r.bottom() <= L.rail.bottom());
         TEST_ASSERT_TRUE(r.h >= 44 * std::min(W, H) / 540);
     }
     for (const Rect& r : {L.art, L.info, L.progress, L.volume, L.strip, L.transport[kPrev]})
         TEST_ASSERT_FALSE(r.intersects(L.rail));
+    // Zones tactiles des boutons de la barre (bouton + sc(16) de chaque côté, Ui::navRail) : sans chevauchement
+    {
+        const int pad = 16 * std::min(W, H) / 540;
+        const bool column = L.rail.h > L.rail.w;
+        auto lo = [&](const Rect& r) { return (column ? r.y : r.x) - pad; };
+        auto hi = [&](const Rect& r) { return (column ? r.bottom() : r.right()) + pad; };
+        const Rect order[] = {L.navHome, L.navLibrary, L.navSearch, L.navSettings};
+        for (int i = 0; i + 1 < 4; ++i) TEST_ASSERT_TRUE(hi(order[i]) <= lo(order[i + 1]));
+    }
     // Éléments de la pilule de volume : dedans, dans l'ordre, sans chevauchement
     for (const Rect& r : {L.transport[kVolDown], L.mute, L.volBar, L.transport[kVolUp]}) {
         TEST_ASSERT_TRUE(r.x >= L.volume.x && r.right() <= L.volume.right());

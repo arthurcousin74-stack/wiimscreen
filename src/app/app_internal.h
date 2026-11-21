@@ -114,6 +114,7 @@ enum class Screen {
     Search,     // recherche : clavier
     Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
     TileMenu,   // menu d'une tuile (appui long) : épingler, retirer ; OpenScreens::tileKey
+    Library,    // Bibliothèque : toutes les tuiles en grille, filtres (g_lib)
     Count,      // nombre d'écrans (pas un écran) : toujours en dernier
 };
 constexpr int kScreenCount = (int)Screen::Count;  // tableaux indexés par (int)Screen (focus retenu par écran)
@@ -122,6 +123,7 @@ constexpr int kScreenCount = (int)Screen::Count;  // tableaux indexés par (int)
 struct OpenScreens {
     Screen screen = Screen::Controls;
     std::string tileKey;  // menu d'une tuile : sa clé (wr::tileKey ; l'indice peut changer si la liste change)
+    Screen tileMenuBack = Screen::Controls;  // écran d'où le menu de la tuile a été ouvert (commandes, Bibliothèque)
     // Vue ambiance : façon de dessiner les commandes (micro du visualiseur ouvert). Drapeau à part, pas une valeur
     // de Screen : elle commence seulement sur les commandes, mais une tuile « Favoris » relâchée dans le tour
     // de boucle où elle commence ouvre la liste par-dessus (Results), et Accueil y ramène ensuite ; exitAmbient()
@@ -188,6 +190,15 @@ struct StripTouch {
     uint32_t since = 0;  // doigt posé : appui long sur une tuile = son menu
 };
 extern StripTouch g_strip;
+
+// Bibliothèque : filtre (wr::TileKind, -1 toutes), page ; doigt posé sur une tuile (appui long = son menu)
+struct LibraryView {
+    int filter = -1;
+    int page = 0;
+    int touch = -1;      // tuile sous le doigt (indice global), -1 aucune
+    uint32_t since = 0;  // doigt posé
+};
+extern LibraryView g_lib;
 
 // Bouton montré enfoncé un court instant après un appui
 struct PressFlash {
@@ -294,6 +305,9 @@ void loadTileStats();
 void noteTilePlayed(int index);
 void pinTile(int index, bool on);
 void serviceTileOrder(uint32_t now, bool touching);
+// Bibliothèque (app_library.cpp) : ouverte depuis la barre ; redessinée quand les tuiles ou leurs images changent
+void openLibrary();
+void renderLibrary(int pressed = -1);  // touching : doigt posé dans ce tour de boucle
 std::string currentFavorite();
 int favoriteState();
 void onPresets(bool ok, const std::vector<wr::Preset>& fromWiim);

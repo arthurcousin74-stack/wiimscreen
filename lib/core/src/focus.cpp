@@ -124,7 +124,9 @@ NavResult pick(const TargetList& list, const Target* current, Dir d, Accept acce
     return res;
 }
 
-bool onRail(const Target& t) { return t.act == Act::Home || t.act == Act::Search || t.act == Act::Settings; }
+bool onRail(const Target& t) {
+    return t.act == Act::Home || t.act == Act::Search || t.act == Act::Settings || t.act == Act::Library;
+}
 
 }  // namespace
 
@@ -194,8 +196,8 @@ int pageEdgeMove(int index, int perPage, int count, Dir d) {
 }
 
 const char* actName(Act act) {
-    static const char* const kNames[] = {"none", "home", "search", "settings", "header", "progress", "volume", "mute",
-                                         "dots", "preset", "strip", "fav", "transport", "ambientexit", "menuchoice", "tilechoice",
+    static const char* const kNames[] = {"none", "home", "search", "settings", "library", "header", "progress", "volume", "mute",
+                                         "dots", "preset", "strip", "fav", "transport", "ambientexit", "menuchoice", "tilechoice", "libfilter", "libtile", "libpage",
                                          "pickdevice", "pickretry", "picksetup", "logclose", "logqueue", "touchclose",
                                          "source", "mic", "key", "resultrow", "resultheart", "resultspage",
                                          "resultsedit", "updatecancel"};

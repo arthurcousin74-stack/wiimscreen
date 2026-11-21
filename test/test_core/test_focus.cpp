@@ -113,6 +113,7 @@ Rect navHitOf(const Rect& rail, const Rect& b, int pad) {
 void addRail(TargetList& L, const Layout& lay, int W, int H) {
     const int p = scOf(W, H, 16);
     L.add(Act::Home, 0, lay.navHome, navHitOf(lay.rail, lay.navHome, p));
+    L.add(Act::Library, 0, lay.navLibrary, navHitOf(lay.rail, lay.navLibrary, p));
     L.add(Act::Search, 0, lay.navSearch, navHitOf(lay.rail, lay.navSearch, p));
     L.add(Act::Settings, 0, lay.navSettings, navHitOf(lay.rail, lay.navSettings, p));
 }
@@ -175,7 +176,9 @@ TargetList searchList(int W, int H, std::vector<Key>* keysOut = nullptr) {
     return L;
 }
 
-bool isRail(const Target* t) { return t && (t->act == Act::Home || t->act == Act::Search || t->act == Act::Settings); }
+bool isRail(const Target* t) {
+    return t && (t->act == Act::Home || t->act == Act::Search || t->act == Act::Settings || t->act == Act::Library);
+}
 int cx(const Target* t) { return t->r.x + t->r.w / 2; }
 int cy(const Target* t) { return t->r.y + t->r.h / 2; }
 const Dir kDirs[] = {Dir::Up, Dir::Down, Dir::Left, Dir::Right};
@@ -489,7 +492,9 @@ static void test_rail_moves_controls() {
     // Heart: Left -> rail (Search, in its row)
     TEST_ASSERT_TRUE(railMove(L, fav, Dir::Left).target == at(Act::Search, 0));
     // On the rail: along it, the rail only; Left: nothing; Right from Settings: the first tile (same row)
-    TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Up).target == at(Act::Home, 0));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Up).target == at(Act::Library, 0));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Library, 0), Dir::Up).target == at(Act::Home, 0));
+    TEST_ASSERT_TRUE(railMove(L, at(Act::Home, 0), Dir::Down).target == at(Act::Library, 0));
     TEST_ASSERT_TRUE(railMove(L, at(Act::Search, 0), Dir::Down).target == at(Act::Settings, 0));
     TEST_ASSERT_TRUE(railMove(L, at(Act::Settings, 0), Dir::Down).edge);
     TEST_ASSERT_TRUE(railMove(L, at(Act::Home, 0), Dir::Up).edge);
@@ -507,7 +512,7 @@ static void test_rail_moves_menu_and_properties() {
     TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 5), Dir::Down).edge);
     TEST_ASSERT_EQUAL(4, railMove(M, M.find(Act::MenuChoice, 5), Dir::Up).target->arg);
     TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 0), Dir::Up).edge);
-    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 0), Dir::Left).target->act == Act::Home);
+    TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 0), Dir::Left).target->act == Act::Library);  // nearest across
     TEST_ASSERT_TRUE(railMove(M, M.find(Act::MenuChoice, 2), Dir::Right).edge);
     // The general properties (direction, no NoFocus, chains end, every target reachable, same-row returns) hold
     // for railMove on every controls layout, on the keyboard and on the menu

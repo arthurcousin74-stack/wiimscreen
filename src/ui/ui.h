@@ -100,6 +100,11 @@ public:
     enum TileChoice { TilePin = 0, TileRemove, TileClose };
     void renderTileMenu(int index, bool pinned, bool removable);
 
+    // Bibliothèque : toutes les tuiles en grille. shown : indices des tuiles à montrer (filtre appliqué, dans l'ordre
+    // de la bande) ; filters : filtres proposés (wr::TileKind, -1 = toutes) ; filter : le choisi ; pressed : tuile
+    // enfoncée (-1). Éléments LibFilter, LibTile (arg = indice global), LibPage. Rend la page montrée (bornée).
+    int renderLibrary(const std::vector<int>& shown, const std::vector<int>& filters, int filter, int page, int pressed = -1);
+
     // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé. Éléments PickDevice (arg =
     // indice), PickRetry, PickSetup
     void renderPicker(const std::vector<std::pair<std::string, std::string>>& devices);
@@ -171,7 +176,7 @@ private:
     void transport(const UiState& st, int pressed);
     void volumePill(const UiState& st, int pressed);
     void tile(int slot, int index, bool pressed);
-    void tileAt(const wr::Rect& r, int index, bool pressed);  // tuile `index` dans le rectangle r
+    void tileAt(const wr::Rect& r, int index, bool pressed);  // tuile `index` dans le rectangle r (bande, Bibliothèque)
     void tileArt(int index, int x, int y, uint32_t bg);  // image de la tuile (ou monogramme, grand cœur), côté thumbSide()
     void pageDots();
     void toast(const String& msg);
@@ -179,7 +184,8 @@ private:
     void micIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void homeIcon(int cx, int cy, int s, uint32_t color, uint32_t bg);
     void gearIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
-    void navRail(int active);  // 0 Accueil, 1 Réglages, 2 Recherche
+    void navRail(int active);  // 0 Accueil, 1 Réglages, 2 Recherche, 3 Bibliothèque
+    void libraryIcon(int cx, int cy, int r, uint32_t color);
     void searchIcon(int cx, int cy, int r, uint32_t color, uint32_t bg);
     void searchField(const std::string& query, const String& status, bool busy, int source, bool sources, int mic,
                      float level);

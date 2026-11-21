@@ -36,6 +36,11 @@ std::string tileKey(const Preset& p);
 std::string tileStatsToText(const TileStats& s);
 TileStats tileStatsFromText(const std::string& text);
 
+// Kind of a tile, for the Library filters: a WiiM preset, a favorite saved on the remote (♥, Flow), or a tile of a
+// streaming account (album or favorites list: ids "qobuz-…", "deezer-…").
+enum class TileKind { Preset = 0, Favorite, Qobuz, Deezer, Count };
+TileKind tileKind(const Preset& p);
+
 // Display order of the tiles (indexes into keys): pinned tiles first (by pin), then, with recentFirst, the played
 // ones (most recent first), then the others in their given order. Every index appears once.
 std::vector<size_t> tileOrder(const std::vector<std::string>& keys, const TileStats& s, bool recentFirst);

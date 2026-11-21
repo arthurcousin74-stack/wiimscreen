@@ -69,6 +69,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 4.5 | In that menu, touch **Pin to the front**. | Back to the main screen; the tile is first. Hold it again: the menu says **Unpin**. | `Tuile épinglée : …` |
 | 4.6 | Touch a tile on page 2, then do not touch the screen for 1 min. | The tile does not move at once; after 1 min it is first after the pinned tiles. Restart the Tab5: the order stays. | |
 | 4.7 | Hold a favorite tile (small ♥ in its corner) › **Remove from favorites**. | The tile goes away. A Qobuz/Deezer album tile or a WiiM preset has no Remove choice. | `Favori retiré depuis sa tuile (…) : OK` |
+| 4.8 | Touch the grid button (2nd in the side bar). Touch each filter; hold a tile, then **Close**; touch a tile. | All the tiles on one screen, same order as the strip; each filter shows only its kind. After Close: back in the Library, same filter. The touched tile plays and the main screen comes back. | `Bibliothèque : N tuile(s)`, `Menu de la tuile : …`, `Preset … : …` |
 
 ## 5. Screen and touch
 
@@ -136,7 +137,7 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 | 3.3–3.5 Deezer favorites (profile) | | |
 | 3.6 Deezer Flow tile | | |
 | 4.1–4.3 Tab5 favorites | | |
-| 4.4–4.7 tile menu, order | | |
+| 4.4–4.8 tile menu, order, Library | | |
 | 5.x screen and touch | | |
 | 6.x update page from phone | | |
 | 7.x microphone and sound | | |

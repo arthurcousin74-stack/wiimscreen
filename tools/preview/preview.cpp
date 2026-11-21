@@ -171,6 +171,11 @@ int main(int argc, char** argv) {
         save(out, "49-menu-tuile.ppm");
         ui.renderTileMenu(0, true, false);
         save(out, "50-menu-tuile-epinglee.ppm");
+        // Bibliothèque : toutes les tuiles, filtres des sortes présentes (presets, favoris, Qobuz)
+        ui.renderLibrary({0, 1, 2, 3, 4}, {-1, 0, 1, 2}, -1, 0);
+        save(out, "51-bibliotheque.ppm");
+        ui.renderLibrary({2, 3}, {-1, 0, 1, 2}, 1, 0, 2);  // filtre Favoris, tuile enfoncée
+        save(out, "52-bibliotheque-favoris.ppm");
         UiState wait = st;
         wait.pending = wr::kNext;  // ⏭ envoyé, le WiiM n'a pas encore changé de morceau
         ui.render(wait);

@@ -156,6 +156,94 @@ void Ui::renderTileMenu(int index, bool pinned, bool removable) {
     present();
 }
 
+// Bibliothèque : filtres en haut (pastilles), toutes les tuiles en grille (même taille et même ordre que la bande),
+// pages en bas si besoin. Un appui joue la tuile, un appui long ouvre son menu (main.cpp)
+int Ui::renderLibrary(const std::vector<int>& shown, const std::vector<int>& filters, int filter, int page, int pressed) {
+    beginScreen(View::Other);
+    auto& C = canvas_;
+    background();
+    navRail(3);
+    const wr::Rect& A = layout_.content;
+    const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
+    // Grille : tuiles de la taille de celles de la bande (calculée d'abord : les filtres s'alignent dessus)
+    const int chipH = sc(48);
+    const wr::Rect t0 = layout_.presets.empty() ? wr::Rect{0, 0, sc(150), sc(150)} : layout_.presets[0];
+    const int tw = t0.w, th = t0.h, g = sc(12), navH = sc(56);
+    const int top = A.y + m + chipH + sc(16);
+    const int cols = std::max(1, (W + g) / (tw + g));
+    const int gx = X + (W - (cols * tw + (cols - 1) * g)) / 2;
+    auto rowsFor = [&](int bottom) { return std::max(1, (bottom - top + g) / (th + g)); };
+    int rows = rowsFor(A.bottom() - m);
+    if ((int)shown.size() > cols * rows) rows = rowsFor(A.bottom() - m - navH - sc(10));  // place des pages
+    const int per = cols * rows;
+    const int pages = std::max(1, ((int)shown.size() + per - 1) / per);
+    page = std::max(0, std::min(pages - 1, page));
+    // Pastilles des filtres, à la largeur de leur texte
+    static const char* const kEn[] = {"Presets", "Favorites", "Qobuz", "Deezer"};
+    static const char* const kFr[] = {"Presets", "Favoris", "Qobuz", "Deezer"};
+    const int pad = sc(20), cg = sc(10);
+    useFont(C, kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    auto chipText = [&](int f) { return f < 0 ? wr::L("All", "Tout") : (f < 4 ? wr::L(kEn[f], kFr[f]) : "?"); };
+    int total = 0;
+    for (int f : filters) total += (int)C.textWidth(chipText(f)) + 2 * pad + cg;
+    int cx = gx + total - cg <= X + W ? gx : X;  // alignées sur la grille, sinon depuis la marge
+    std::vector<std::pair<int, wr::Rect>> chips;
+    for (int f : filters) {
+        const char* t = chipText(f);
+        const int w = (int)C.textWidth(t) + 2 * pad;
+        if (cx + w > X + W) break;  // plus de place : les derniers filtres ne sont pas montrés
+        const wr::Rect r{cx, A.y + m, w, chipH};
+        const bool on = f == filter;
+        C.fillRoundRect(r.x, r.y, r.w, r.h, r.h / 2, on ? accent_ : kCard);
+        C.setTextColor(on ? kBg : kText);
+        C.drawString(t, r.x + r.w / 2, r.y + r.h / 2 + 1);
+        chips.push_back({f, r});
+        cx += w + cg;
+    }
+    std::vector<std::pair<int, wr::Rect>> tiles;
+    for (int k = 0; k < per && page * per + k < (int)shown.size(); ++k) {
+        const int i = shown[page * per + k];
+        if (i < 0 || i >= (int)presets_.size()) continue;
+        const wr::Rect r{gx + (k % cols) * (tw + g), top + (k / cols) * (th + g), tw, th};
+        tileAt(r, i, i == pressed);
+        tiles.push_back({i, r});
+    }
+    if (shown.empty()) {
+        C.setTextDatum(textdatum_t::middle_center);
+        C.setTextColor(kText2);
+        C.drawString(wr::L("No tile here yet", "Aucune tuile ici pour l'instant"), A.x + A.w / 2, top + sc(80));
+    }
+    // Pages
+    wr::Rect prev, next;
+    if (pages > 1) {
+        const int ny = A.bottom() - m - navH, nw = sc(200);
+        C.setTextDatum(textdatum_t::middle_center);
+        if (page > 0) {
+            prev = wr::Rect{X, ny, nw, navH};
+            C.fillRoundRect(prev.x, prev.y, prev.w, prev.h, navH / 2, kCard);
+            C.setTextColor(kText);
+            C.drawString(wr::L("Previous", "Pr\xC3\xA9" "c\xC3\xA9" "dents"), prev.x + nw / 2, ny + navH / 2 + 1);
+        }
+        if (page < pages - 1) {
+            next = wr::Rect{X + W - nw, ny, nw, navH};
+            C.fillRoundRect(next.x, next.y, next.w, next.h, navH / 2, kCard);
+            C.setTextColor(kText);
+            C.drawString(wr::L("Next", "Suivants"), next.x + nw / 2, ny + navH / 2 + 1);
+        }
+        C.setTextColor(kText2);
+        C.drawString((String(page + 1) + " / " + String(pages)).c_str(), X + W / 2, ny + navH / 2 + 1);
+    }
+    // Touchables (la barre est inscrite par navRail) : filtres, tuiles (la première par défaut), pages
+    for (auto& c : chips) targets_.add(wr::Act::LibFilter, c.first, c.second);
+    for (size_t k = 0; k < tiles.size(); ++k)
+        targets_.add(wr::Act::LibTile, tiles[k].first, tiles[k].second, k == 0 ? wr::kTargetDefault : 0);
+    if (prev.w > 0) targets_.add(wr::Act::LibPage, -1, prev);
+    if (next.w > 0) targets_.add(wr::Act::LibPage, 1, next);
+    present();
+    return page;
+}
+
 // Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin
 void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     beginScreen(View::Other);

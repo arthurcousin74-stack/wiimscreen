@@ -36,8 +36,8 @@ void Ui::navRail(int active) {
     C.fillRect(r.x, r.y, r.w, r.h, 0x0A0B0Eu);
     if (r.h > r.w) C.drawFastVLine(r.right() - 1, r.y, r.h, kCard);
     else C.drawFastHLine(r.x, r.bottom() - 1, r.w, kCard);
-    const wr::Rect* items[] = {&layout_.navHome, &layout_.navSettings, &layout_.navSearch};
-    for (int i = 0; i < 3; ++i) {
+    const wr::Rect* items[] = {&layout_.navHome, &layout_.navSettings, &layout_.navSearch, &layout_.navLibrary};
+    for (int i = 0; i < 4; ++i) {
         const wr::Rect& b = *items[i];
         const int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
         const bool on = i == active;
@@ -45,11 +45,13 @@ void Ui::navRail(int active) {
         C.fillCircle(cx, cy, b.w / 2, bg);
         if (i == 0) homeIcon(cx, cy, b.w / 4, fg, bg);
         else if (i == 1) gearIcon(cx, cy, b.w / 4, fg, bg);
-        else searchIcon(cx, cy, b.w / 4, fg, bg);
+        else if (i == 2) searchIcon(cx, cy, b.w / 4, fg, bg);
+        else libraryIcon(cx, cy, b.w / 4, fg);
     }
     // Zones tactiles : toute la largeur (la hauteur en portrait) de la barre, et sc(16) autour du bouton. Elles ne
     // touchent aucun autre élément (la barre est à part : wr::computeLayout), leur place dans la liste est donc libre.
     targets_.add(wr::Act::Home, 0, layout_.navHome, navHit(layout_.rail, layout_.navHome, sc(16)));
+    targets_.add(wr::Act::Library, 0, layout_.navLibrary, navHit(layout_.rail, layout_.navLibrary, sc(16)));
     targets_.add(wr::Act::Search, 0, layout_.navSearch, navHit(layout_.rail, layout_.navSearch, sc(16)));
     targets_.add(wr::Act::Settings, 0, layout_.navSettings, navHit(layout_.rail, layout_.navSettings, sc(16)));
 }
@@ -64,7 +66,7 @@ void Ui::focusRing() {
     using wr::Act;
     const wr::Rect& r = t->r;
     const bool round = t->act == Act::Transport || t->act == Act::Fav || t->act == Act::Mute || t->act == Act::Home ||
-                       t->act == Act::Search || t->act == Act::Settings || t->act == Act::ResultHeart || t->act == Act::Mic;
+                       t->act == Act::Search || t->act == Act::Settings || t->act == Act::Library || t->act == Act::ResultHeart || t->act == Act::Mic;
     const int gap = sc(3), line = std::max(2, sc(3)), halo = std::max(2, sc(3));
     auto ring = [&](int o, uint32_t color) {
         const int rad = round ? std::min(r.w, r.h) / 2 + o : sc(14) + o;
@@ -72,6 +74,13 @@ void Ui::focusRing() {
     };
     for (int i = 0; i < halo; ++i) ring(gap + line + i, mix(accent_, kBg, 0.25f + 0.25f * i / halo));
     for (int i = 0; i < line; ++i) ring(gap + i, kText);
+}
+
+// Bibliothèque : quatre petites tuiles (r : demi-côté de l'icône)
+void Ui::libraryIcon(int cx, int cy, int r, uint32_t c) {
+    auto& C = canvas_;
+    const int g = std::max(2, r / 4), s = r - g / 2, rad = std::max(1, s / 4);
+    for (int k = 0; k < 4; ++k) C.fillRoundRect(cx - r + (k % 2) * (s + g), cy - r + (k / 2) * (s + g), s, s, rad, c);
 }
 
 // Loupe : anneau et manche

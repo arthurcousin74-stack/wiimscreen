@@ -89,7 +89,23 @@ static void test_tile_stats_full() {
     TEST_ASSERT_NOT_NULL(s.find("k209"));
 }
 
+static void test_tile_kind() {
+    Preset p;
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Preset);
+    p.favId = "0a1b2c3d";  // favori enregistré (♥, Flow)
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Favorite);
+    p.favId = "qobuz-album:42";
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Qobuz);
+    p.favId = "qobuz-favoris";
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Qobuz);
+    p.favId = "deezer-album:7";
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Deezer);
+    p.favId = "deezer-favoris";
+    TEST_ASSERT_TRUE(tileKind(p) == TileKind::Deezer);
+}
+
 void run_tiles_tests() {
+    RUN_TEST(test_tile_kind);
     RUN_TEST(test_tile_key);
     RUN_TEST(test_tile_played_and_order);
     RUN_TEST(test_tile_stats_text);

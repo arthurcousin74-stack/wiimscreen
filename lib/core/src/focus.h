@@ -17,6 +17,7 @@ enum class Act : uint8_t {
     Home,
     Search,
     Settings,
+    Library,  // all the tiles (rail)
     // Controls view
     Header,     // cover art (arg 0) or texts (arg 1): long press opens Settings
     Progress,   // progress bar (the tap position is the seek target)
@@ -33,6 +34,10 @@ enum class Act : uint8_t {
     MenuChoice,  // arg = Ui::MenuChoice
     // Tile menu (long press on a tile)
     TileChoice,  // arg = Ui::TileChoice
+    // Library (all the tiles)
+    LibFilter,  // arg = wr::TileKind filter (-1 = all)
+    LibTile,    // arg = global tile index
+    LibPage,    // arg -1 previous page, +1 next page
     // WiiM picker
     PickDevice,  // arg = index in the list of players
     PickRetry,
