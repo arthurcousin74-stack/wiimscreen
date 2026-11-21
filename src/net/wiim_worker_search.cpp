@@ -518,15 +518,14 @@ void WiimWorker::runQobuzFavoriteList(const String& title) {
     deleteQueue(control, name);
     const int c = createQueue(
         control,
-        wr::queueFromTemplate(templ, name,
-                              "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100"));
+        wr::queueFromTemplate(templ, name, wiimq::kQobuzFavoritesUrl));
     wr::QueueInfo q;
     const bool loaded = c == 200 && readQueueStable(this, control, name, 8, q);
     searchGuardEnd(control, guard, error);
     logEvent("Favoris Qobuz (file) : CreateQueue %d, %d morceau(x)", c, loaded ? q.tracks : 0);
     resultsFrom_ = ResultsFrom::WiimQueue;
     searchQueue_ = name;
-    searchUrl_ = "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100";
+    searchUrl_ = wiimq::kQobuzFavoritesUrl;
     ev.ok = loaded;
     ev.tracks = q.items;
     searchTitles_.clear();

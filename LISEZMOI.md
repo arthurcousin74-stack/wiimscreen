@@ -113,6 +113,7 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 | Tuiles du bas | Lancer le preset (au relâcher) |
 | Doigt tenu sur une tuile | Menu de la tuile : épingler en tête / désépingler, retirer des favoris |
 | Grille (2ᵉ bouton de la barre de gauche) | Bibliothèque : toutes les tuiles sur un écran, filtres Presets / Favoris / Qobuz / Deezer ; toucher une tuile la lance, doigt tenu : son menu |
+| Tuiles « Favoris Qobuz » / « Favoris Deezer » | Liste des morceaux favoris : toucher un morceau, **Tout lire** ou **Aléatoire** (Deezer : pas encore vérifié sur un WiiM) |
 | Glisser sur les tuiles, ou toucher les points | Page de presets suivante / précédente |
 | − / + (bouts de la barre de volume) | Volume (pas réglable) |
 | ◀◀ / ▶▶ | Piste précédente / suivante |

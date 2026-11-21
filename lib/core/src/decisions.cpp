@@ -78,6 +78,18 @@ int loopWithoutShuffle(int loop) {
     }
 }
 
+int loopWithShuffle(int loop) {
+    switch (loop) {
+        case 0: return 2;
+        case 4: return 3;
+        case 1: return 5;
+        case 2:
+        case 3:
+        case 5: return -1;
+        default: return 3;
+    }
+}
+
 int queueIndexOf(const QueueInfo& q, const std::string& title, bool loose) {
     if (title.empty()) return 0;
     const std::string want = loose ? normalizeText(title) : title;

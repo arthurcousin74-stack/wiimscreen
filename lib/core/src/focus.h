@@ -56,6 +56,7 @@ enum class Act : uint8_t {
     ResultHeart,  // arg = global index of the result whose heart it is
     ResultsPage,  // arg -1 previous page, +1 next page
     ResultsEdit,  // "Edit" (back to the keyboard)
+    ResultsPlayAll,  // favorites list: arg 0 "Play all" (in order), 1 "Shuffle"
     // Update screen
     UpdateCancel,
 };

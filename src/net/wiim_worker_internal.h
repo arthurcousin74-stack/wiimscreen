@@ -15,6 +15,9 @@ namespace wiimq {
 
 extern const char* const kPlayQueue;  // "urn:schemas-wiimu-com:service:PlayQueue:1"
 extern const size_t kMaxBody;         // taille maximale d'un corps de réponse gardé
+// Morceaux favoris Qobuz du compte : adresse que le WiiM remplit lui-même (liste « Favoris Qobuz », tout lire)
+constexpr const char* kQobuzFavoritesUrl =
+    "https://www.qobuz.com/api.json/0.2/favorite/getUserFavorites?type=tracks&offset=0&limit=100";
 
 // Flux qui garde au plus `cap` octets (HTTPClient gère « chunked » et Content-Length)
 class CapStream : public Stream {

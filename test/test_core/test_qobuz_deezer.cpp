@@ -74,6 +74,11 @@ static void test_qobuz_json() {
     TEST_ASSERT_EQUAL_STRING("Daft Punk", dz[0].artist.c_str());
     TEST_ASSERT_EQUAL_STRING("https://e-cdns/c.jpg", dz[0].image.c_str());
     TEST_ASSERT_EQUAL(14, dz[0].tracks);
+    TEST_ASSERT_EQUAL_STRING("908622995", deezerLovedPlaylist(
+        "{\"data\":[{\"id\":11,\"title\":\"Road\",\"is_loved_track\":false},"
+        "{\"id\":908622995,\"title\":\"Loved tracks\",\"is_loved_track\":true,\"nb_tracks\":42}],\"total\":2}").c_str());
+    TEST_ASSERT_EQUAL_STRING("", deezerLovedPlaylist("{\"data\":[{\"id\":11,\"is_loved_track\":false}]}").c_str());
+    TEST_ASSERT_EQUAL_STRING("", deezerLovedPlaylist("{\"data\":[{\"id\":\"1/2\",\"is_loved_track\":true}]}").c_str());
     auto names = jsonValuesOf("[{\"source\":\"Qobuz\",\"showName\":\"Qobuz\"},{\"showName\":\"Deezer\"}]", "showName");
     TEST_ASSERT_EQUAL(2, (int)names.size());
     TEST_ASSERT_EQUAL_STRING("Deezer", names[1].c_str());

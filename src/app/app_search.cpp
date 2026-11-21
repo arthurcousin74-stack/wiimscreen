@@ -158,7 +158,8 @@ void renderResultsList(int pressed, const String& status) {
     }
     std::vector<const ArtImage*> covers;
     for (auto& t : g_search.results) covers.push_back(knownImage(t.art));
-    g_ui.renderResults(g_search.resultsTitle, g_search.results, g_search.page, sub, pressed, hearts, covers);
+    const bool favList = g_search.resultsKind == SearchKind::QobuzFavorites || g_search.resultsKind == SearchKind::DeezerFavorites;
+    g_ui.renderResults(g_search.resultsTitle, g_search.results, g_search.page, sub, pressed, hearts, covers, favList);
     requestCovers();
 }
 

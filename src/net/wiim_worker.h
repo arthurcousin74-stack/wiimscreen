@@ -116,8 +116,12 @@ private:
     std::vector<wr::QobuzAlbum> qobuzAlbums_;  // ResultsFrom::QobuzAlbums : albums trouvés
     void runPlayFavorite(const String& id);
     void runQobuzFavoriteList(const String& title);
+    // randomStart (title vide) : un morceau au hasard au lieu du premier
     bool playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
-                     const std::string& title, const char* label);
+                     const std::string& title, const char* label, bool randomStart = false);
+    // Liste des morceaux favoris (Qobuz, Deezer) lue en entier, dans l'ordre ou en aléatoire (ids
+    // « qobuz-favoris:all|shuffle », « deezer-favoris:all|shuffle » de playFavorite)
+    void runPlayFavoriteList(bool deezer, bool shuffle);
     bool qobuzAccess(const std::string& control, bool refresh);
     int qobuzGet(const std::string& control, const std::string& path, std::string& out);
     void runQobuzFavorites();

@@ -355,9 +355,9 @@ int main(int argc, char** argv) {
         save(out, "29-dictee.ppm");
         ui.renderResults("aretha franklin", found, 0, "");
         save(out, "25-resultats.ppm");
-        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), {}, 0, wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"));
+        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), {}, 0, wr::L("Loading your Qobuz favorites\xE2\x80\xA6", "Chargement de tes favoris Qobuz\xE2\x80\xA6"), -1, {}, {}, true);
         save(out, "31-favoris-qobuz-chargement.ppm");
-        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), found, 0, "");
+        ui.renderResults(wr::L("Qobuz favorites", "Favoris Qobuz"), found, 0, "", -1, {}, {}, true);  // Tout lire, Aléatoire
         save(out, "32-favoris-qobuz.ppm");
         ui.renderSearch("miles", "", false, -1, 2, false);  // Qobuz | Albums (pas de Deezer)
         save(out, "35-albums.ppm");

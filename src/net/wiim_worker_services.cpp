@@ -7,6 +7,8 @@
 
 #include <algorithm>
 
+#include "decisions.h"
+#include "deezer.h"
 #include "net/ca_bundle.h"
 #include "storage/favorites.h"
 #include "i18n.h"
@@ -324,4 +326,56 @@ bool WiimWorker::qobuzModel(const std::string& control, std::string& templ, bool
         return true;
     }
     return false;
+}
+
+// Tout lire / aléatoire depuis la liste des favoris. Lecture aléatoire retirée avant CreateQueue (sinon le WiiM
+// remélange la file et le premier morceau n'est pas celui choisi), remise après PlayQueueWithIndex si demandée : le
+// morceau en cours reste, la suite est mélangée. Deezer : playlist « coups de cœur » du profil par airable
+// (/deezer/playlist/<id>, même passerelle que les albums ; pas encore vérifié sur un WiiM).
+void WiimWorker::runPlayFavoriteList(bool deezer, bool shuffle) {
+    WiimEvent ev;
+    ev.kind = WiimEvent::FavPlayed;
+    std::string control, templ, url;
+    if (!findPlayQueue(control, false)) {
+        ev.text = wr::L("the WiiM does not accept a play queue", "le WiiM n'accepte pas de file de lecture");
+    } else if (deezer) {
+        std::string body, err;
+        const std::string user = deezerUserPath();
+        if (user.empty() || !deezerModel(control, templ)) {
+            ev.text = wr::L("first start a Deezer album from the WiiM Home app", "lance d'abord un album Deezer depuis l'app WiiM Home");
+        } else {
+            const int code = deezerGet(user + "/playlists?limit=100", body, err);
+            const std::string id = code == 200 && err.empty() ? wr::deezerLovedPlaylist(body) : std::string();
+            logEvent("Favoris Deezer : playlist des coups de c\xC5\x93ur %d %s%s%s", code, id.empty() ? "introuvable" : id.c_str(),
+                     err.empty() ? "" : " : ", err.c_str());
+            if (code != 200) ev.text = wr::L("Deezer is not responding", "Deezer ne r\xC3\xA9pond pas");
+            else if (!err.empty()) ev.text = wr::L("Deezer profile private or not found (", "profil Deezer priv\xC3\xA9 ou introuvable (") + String(err.c_str()) + ")";
+            else if (id.empty()) ev.text = wr::L("no favorite tracks playlist on this Deezer profile", "pas de playlist de coups de c\xC5\x93ur sur ce profil Deezer");
+            else url = wr::urlOrigin(wr::parseQueueContext(templ).searchUrl) + "/deezer/playlist/" + id;
+        }
+    } else if (!qobuzModel(control, templ)) {
+        ev.text = wr::L("first start a Qobuz album from the WiiM Home app", "lance d'abord un album Qobuz depuis l'app WiiM Home");
+    } else {
+        url = wiimq::kQobuzFavoritesUrl;
+    }
+    if (url.empty()) {
+        push(std::move(ev));
+        return;
+    }
+    wr::PlayerStatus st;
+    const int loop = client_.status(st) == WiimError::None ? st.loop : -1;
+    const int plain = wr::loopWithoutShuffle(loop);
+    if (plain >= 0) client_.command("setPlayerCmd:loopmode:" + String(plain));
+    const char* label = deezer ? "Favoris Deezer" : "Favoris Qobuz";
+    ev.ok = playAlbumAt(control, templ, url, "", label, shuffle);
+    if (ev.ok && shuffle) {
+        const int mixed = wr::loopWithShuffle(plain >= 0 ? plain : loop);
+        if (mixed >= 0) client_.command("setPlayerCmd:loopmode:" + String(mixed));
+    } else if (!ev.ok && plain >= 0) {
+        client_.command("setPlayerCmd:loopmode:" + String(loop));  // rien n'a démarré : le mode d'avant revient
+    }
+    logTagged("favlist.play", "deezer=%d shuffle=%d ok=%d | %s : %s%s", deezer ? 1 : 0, shuffle ? 1 : 0, ev.ok ? 1 : 0,
+              label, shuffle ? "lecture al\xC3\xA9" "atoire" : "tout lire", ev.ok ? "" : " (\xC3\xA9" "chec)");
+    if (!ev.ok) ev.text = wr::L("the WiiM did not start the list", "le WiiM n'a pas lanc\xC3\xA9 la liste");
+    push(std::move(ev));
 }

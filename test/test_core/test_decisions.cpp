@@ -94,6 +94,16 @@ static void test_decisions() {
     TEST_ASSERT_EQUAL(1, loopWithoutShuffle(5));
     TEST_ASSERT_EQUAL(-1, loopWithoutShuffle(4));
     TEST_ASSERT_EQUAL(-1, loopWithoutShuffle(-1));
+    TEST_ASSERT_EQUAL(2, loopWithShuffle(0));
+    TEST_ASSERT_EQUAL(3, loopWithShuffle(4));
+    TEST_ASSERT_EQUAL(5, loopWithShuffle(1));
+    TEST_ASSERT_EQUAL(-1, loopWithShuffle(2));
+    TEST_ASSERT_EQUAL(-1, loopWithShuffle(3));
+    TEST_ASSERT_EQUAL(-1, loopWithShuffle(5));
+    TEST_ASSERT_EQUAL(3, loopWithShuffle(-1));
+    TEST_ASSERT_EQUAL(3, loopWithShuffle(9));
+    for (int l = 0; l <= 5; ++l)  // aller-retour : même répétition
+        if (loopWithShuffle(l) >= 0) TEST_ASSERT_EQUAL(l, loopWithoutShuffle(loopWithShuffle(l)));
 
     QueueStability st;
     TEST_ASSERT_FALSE(st.feed(0, 700));

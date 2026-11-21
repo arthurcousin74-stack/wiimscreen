@@ -116,11 +116,11 @@ void WiimWorker::autoFlowTile(const wr::QueueInfo& q, const std::string& current
 // File d'un album (le WiiM lit les pistes depuis `searchUrl`), lancée au morceau `title` (trouvé dans la file
 // relue : l'ordre peut être mélangé) ; le premier morceau si `title` est vide ou introuvable.
 bool WiimWorker::playAlbumAt(const std::string& control, const std::string& templ, const std::string& url,
-                             const std::string& title, const char* label) {
+                             const std::string& title, const char* label, bool randomStart) {
     const std::string name = std::string("wiimscreen-album-") + std::to_string(++searchCount_ % 2);
     deleteQueue(control, name);
     const int create = createQueue(control, wr::queueFromTemplate(templ, name, url));
-    int index = 0;
+    int index = 0, lastCount = -1;
     const uint32_t t0 = millis();
     if (create == 200) {
         while (index == 0 && millis() - t0 < 12000) {
@@ -128,7 +128,12 @@ bool WiimWorker::playAlbumAt(const std::string& control, const std::string& temp
             std::string back;
             if (browseQueue(control, name, back) != 200 || back.empty()) continue;
             const wr::QueueInfo q = wr::parseQueueContext(back, wr::kQueueTitlesMax);
-            index = title.empty() ? (q.tracks > 0 ? 1 : 0) : wr::queueIndexOf(q, title, true);
+            if (title.empty() && !randomStart) index = q.tracks > 0 ? 1 : 0;
+            else if (title.empty()) {  // au hasard dans toute la file : le WiiM la remplit par étapes, on attend
+                if (q.tracks > 0 && (q.tracks == lastCount || millis() - t0 > 6000))  // deux relevés égaux
+                    index = 1 + (int)(esp_random() % (uint32_t)q.tracks);
+                lastCount = q.tracks;
+            } else index = wr::queueIndexOf(q, title, true);
             if (index == 0 && q.tracks > 0 && millis() - t0 > 6000) index = 1;  // pas trouvé : début de l'album
         }
     }
@@ -184,6 +189,10 @@ void WiimWorker::runSaveAlbumFavorite(const AlbumFavRequest& r) {
 }
 
 void WiimWorker::runPlayFavorite(const String& id) {
+    if (id.startsWith("qobuz-favoris:") || id.startsWith("deezer-favoris:")) {
+        runPlayFavoriteList(id.startsWith("deezer"), id.endsWith(":shuffle"));
+        return;
+    }
     if (id.startsWith("qobuz-album:")) {
         runPlayQobuzAlbum(id.substring(12).c_str());
         return;

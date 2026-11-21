@@ -38,6 +38,8 @@ def tracks_of(url):
     if "album/get" in url:
         a = CATALOG.get(q.get("album_id", [""])[0])
         return [(t, a[1], a[0], q["album_id"][0]) for t in a[2]] if a else []
+    if "favorite/getUserFavorites" in url:  # morceaux favoris du compte (tuile « Favoris Qobuz »)
+        return [(t, CATALOG[i][1], CATALOG[i][0], i) for i in ("kob", "ram") for t in CATALOG[i][2][:2]]
     if "search" in url:
         words = q.get("query", [""])[0].lower().split()
         return [(t, artist, album, i) for i, (album, artist, titles) in CATALOG.items() for t in titles

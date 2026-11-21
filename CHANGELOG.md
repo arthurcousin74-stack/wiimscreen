@@ -16,6 +16,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
   count, pins; no clock needed). Pinned tiles come first, then the last played ones, then the others. The new order
   is applied after one minute without a touch, so tiles never move under the finger. Setup page › *Tile order*:
   *As saved* keeps the old order (pins still apply).
+- **Play all / Shuffle** in the *Qobuz favorites* and *Deezer favorites* lists: the whole list plays from the first
+  track, or from a random track with shuffle on. Shuffle is turned off before the queue is made (else the WiiM mixes
+  it and the first track is not the chosen one), and on again after it starts for *Shuffle*. Qobuz: the same queue
+  as the list (checked with the mock WiiM, `tools/relay/selftest.sh` case 7). Deezer: the "favorite tracks" playlist
+  of the profile through airable (`/deezer/playlist/<id>`): **not checked on a WiiM yet**. In these lists the two
+  buttons take the place of *Edit* (search stays in the side bar) and the title has no quotes.
 
 ### Changed
 - **Clearer tiles**: album tiles show the artist on a second line when the title fits; edition notes at the end of an

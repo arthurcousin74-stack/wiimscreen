@@ -76,6 +76,15 @@ std::vector<QobuzAlbum> parseDeezerAlbums(const std::string& json) {
     return out;
 }
 
+std::string deezerLovedPlaylist(const std::string& json) {
+    for (const std::string& it : jsonArray(jsonTop(json, "data")))
+        if (jsonTop(it, "is_loved_track") == "true") {
+            const std::string id = jsonText(jsonTop(it, "id"));
+            if (!id.empty() && id.find_first_not_of("0123456789") == std::string::npos) return id;
+        }
+    return "";
+}
+
 std::string baselineCoverUrl(const std::string& url) {
     static const char* hosts[] = {"https://cdn-images.dzcdn.net/", "https://e-cdns-images.dzcdn.net/",
                                   "http://cdn-images.dzcdn.net/", "http://e-cdns-images.dzcdn.net/"};

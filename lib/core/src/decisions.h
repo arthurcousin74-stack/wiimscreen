@@ -43,6 +43,9 @@ RestoreAction restoreAction(const PlaybackBefore& before, const PlayerStatus& no
 // shuffle is already off. 0 repeat all, 1 repeat one, 2 shuffle + repeat all, 3 shuffle, 4 no repeat, 5 shuffle +
 // repeat one. A search through a WiiM queue turns shuffle off for its duration: else the WiiM shuffles the results.
 int loopWithoutShuffle(int loop);
+// The other way: same repeat with shuffle (0 → 2, 4 → 3, 1 → 5), or -1 if shuffle is already on (2, 3, 5). An
+// unknown mode (-1 or another value) gives 3, shuffle without repeat ("Shuffle" of a favorites list).
+int loopWithShuffle(int loop);
 
 // Search through a WiiM queue: try the next way to write the query? `found`: the queue got tracks; `relevant`: they
 // share a word with the query; `empties`: queues that stayed empty so far (this one included). An empty queue means no

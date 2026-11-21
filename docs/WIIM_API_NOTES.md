@@ -292,6 +292,10 @@ remains as a fallback when `GetUserInfo` fails. `CreateQueue` is now sent with `
   if the Result holds `accessToken`/`access_token`, `GET https://api.deezer.com/user/me/albums?limit=50&access_token=…`
   (`wr::parseDeezerAlbums`); each album plays as a `Deezer2` queue `<airable origin>/deezer/album/<id>`. *File du
   WiiM* logs the linked services from `GetBasicUserInfo` (`showName` values) to find the right `AccountSource`.
+- **"Play all" of the Deezer favorites (wiimscreen, not yet verified on a WiiM):** `api.deezer.com/user/<n>/playlists`
+  (public) gives the playlist of the favorite tracks (`"is_loved_track": true`, `wr::deezerLovedPlaylist`); it plays
+  as a `Deezer2` queue `<airable origin>/deezer/playlist/<id>`, the same gateway as albums. Whether airable accepts
+  `/deezer/playlist/` was not checked: if the WiiM refuses it, the Journal says `Favoris Deezer : … (échec)`.
 
 - **Deezer Flow** from WiiM Home: queue `ListName` **Flow**, `SourceName` `Deezer2`, `ContentType` `station`, a
   `PicUrl` (Flow picture on `assets.airable.io`), `SearchUrl` `https://<id>.airable.io/deezer/mix/<mix id>`, one

@@ -23,6 +23,9 @@ std::string deezerUserId(const std::string& text);
 // Deezer API (api.deezer.com/user/<profile>/albums, public): {"data":[{id,title,cover_medium,nb_tracks,
 // artist{name}}]}. Same structure as QobuzAlbum (id, title, artist, image, tracks).
 std::vector<QobuzAlbum> parseDeezerAlbums(const std::string& json);
+// Deezer API user/<profile>/playlists (public): id of the playlist of the profile's favorite tracks
+// ("is_loved_track": true), empty if none.
+std::string deezerLovedPlaylist(const std::string& json);
 
 // Address of the same cover as a baseline JPEG when the server can make one: the decoder of the device (TJpgDec)
 // cannot draw progressive JPEGs. Deezer (cdn-images.dzcdn.net / e-cdns-images.dzcdn.net, name

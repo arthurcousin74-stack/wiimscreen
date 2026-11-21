@@ -128,9 +128,10 @@ public:
     const std::vector<wr::Key>& keys() const { return keys_; }
     // hearts : vide, ou un cœur par ligne (0 vide, 1 plein) : albums que l'on peut mettre en tuile.
     // covers : vide, ou une image par ligne (nullptr : pas encore là) ; une ligne dont `art` est vide garde son numéro
+    // listActions : liste de morceaux favoris, boutons « Tout lire » et « Aléatoire » (ResultsPlayAll) avant Modifier
     void renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
                        const String& status, int pressed = -1, const std::vector<int>& hearts = {},
-                       const std::vector<const ArtImage*>& covers = {});
+                       const std::vector<const ArtImage*>& covers = {}, bool listActions = false);
     // Pochette arrivée après l'affichage de la liste : seule sa case est redessinée (si la ligne est visible)
     void updateResultCover(int index, const ArtImage* img);
     int resultsFirst() const { return resultsFirst_; }

@@ -39,6 +39,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 2.4 | Touch one Qobuz album tile. | A ring turns on ⏯, then the album plays from track 1. | `Album Qobuz ▶ … CreateQueue 200, Play 200` |
 | 2.5 | Touch the **Favoris Qobuz** tile. | « Chargement de tes favoris Qobuz… », then the list of favorite tracks. **No music change** before you choose. | `Favoris Qobuz : N morceau(x), liste sans lecture` (or `(file)` for the fallback) |
 | 2.5b | Do 2.5 while music plays. | The music stops a few seconds (muted), then the same track comes back at the same place, also with shuffle on. | `Avant la recherche : lecture « … » (file connue)`, `Après la recherche : musique d'avant remise (200, 200, essai 1)` |
+| 2.5c | In the list of 2.5, touch **Play all**; open the list again and touch **Shuffle**. | Play all: the first favorite plays, shuffle off. Shuffle: another favorite, shuffle on (WiiM Home shows it). | `[favlist.play] deezer=0 shuffle=0 ok=1`, then `shuffle=1 ok=1` |
 | 2.6 | Touch one track in the list. | That track plays (then the rest of its album, or of the list for the fallback). | `Qobuz ▶ « … » (piste k) : CreateQueue 200, Play 200` (fallback: `Liste Qobuz ▶ …`) |
 | 2.7 | Search ⌕ › Qobuz › type « miles davis » › ↵. | Results in a few seconds. **The music does not change** before you choose. | `Recherche Qobuz directe « … » : N morceau(x) (… ms)` |
 | 2.8 | Touch a result. | That track plays. | `Qobuz ▶ …` |
@@ -54,6 +55,7 @@ The Journal masks tokens and passwords, but check anyway.
 | 3.2 | Touch a result. | « chargement de l'album… », then the album of this track plays, at this track if possible. | `Deezer ▶ « … » (piste k) : CreateQueue 200, Play 200` |
 | 3.3 | Setup page › **Favoris Deezer** › paste your profile number (deezer.com › your profile › number at the end of the address) › save. | After the restart: Deezer album tiles (if you have favorite albums) and a **Favoris Deezer** tile. | `Deezer : albums favoris 200, N` |
 | 3.4 | Touch **Favoris Deezer**. | The list of your favorite tracks; no music change before you choose. | `Favoris Deezer : 200, N morceau(x)` |
+| 3.4b | In the list of 3.4, touch **Play all**. **Not checked yet on any WiiM.** | Your favorite tracks play from the first one. If nothing plays, note the Journal lines: the WiiM may refuse the playlist address. | `Favoris Deezer : playlist des coups de cœur 200 <n>`, `[favlist.play] deezer=1 … ok=…` |
 | 3.5 | Touch a track, then a Deezer album tile. | The album of the track plays at this track; the album tile plays the album. | `Deezer ▶ …`, `Album Deezer ▶ …` |
 
 | 3.6 | In WiiM Home, start Deezer **Flow**. Wait for the next track on the Tab5 (or restart it). Play something else, then touch the **Flow** tile. | A **Flow** tile with the Flow picture appears by itself; the heart is filled while Flow plays. The tile starts Flow again (a new track). Remove it with ♥: it does not come back by itself. | `Flow vu sur le WiiM : tuile « Flow » ajoutée automatiquement : OK`, `Favori ▶ « Flow » : CreateQueue 200, 1 piste(s), PlayQueueWithIndex 200` |
@@ -130,11 +132,13 @@ Firmware version: `local-……`  Date: `……`  WiiM model / firmware: `……
 | 2.2–2.3 Qobuz album tiles | | |
 | 2.4 play Qobuz album tile | | |
 | 2.5–2.6 Favoris Qobuz list | | |
+| 2.5c Qobuz Play all / Shuffle | | |
 | 2.7–2.8 Qobuz search, no playback before choice | | |
 | 2.10 Qobuz album search, heart as tile | | |
 | 2.11 covers in result lists | | |
 | 3.1–3.2 Deezer search and play | | |
 | 3.3–3.5 Deezer favorites (profile) | | |
+| 3.4b Deezer Play all (playlist) | | |
 | 3.6 Deezer Flow tile | | |
 | 4.1–4.3 Tab5 favorites | | |
 | 4.4–4.8 tile menu, order, Library | | |

@@ -1280,6 +1280,21 @@ static void activateSearch(const wr::Target& tg) {
             show();
             return;
         }
+        case wr::Act::ResultsPlayAll: {  // liste de favoris : toute la liste, dans l'ordre ou en aléatoire
+            const bool deezer = g_search.resultsKind == SearchKind::DeezerFavorites;
+            if (!deezer && g_search.resultsKind != SearchKind::QobuzFavorites) return;
+            const bool shuffle = tg.arg == 1;
+            sound::tap();
+            logEvent("Favoris %s : %s", deezer ? "Deezer" : "Qobuz", shuffle ? "lecture al\xC3\xA9" "atoire" : "tout lire");
+            g_worker.playFavorite((std::string(deezer ? kDeezerFavsId : kQobuzFavsId) + (shuffle ? ":shuffle" : ":all")).c_str());
+            markPending(wr::kPlayPause, Await::Music, true);
+            setMessage(shuffle ? wr::L("Shuffling your favorites\xE2\x80\xA6", "Tes favoris en al\xC3\xA9" "atoire\xE2\x80\xA6")
+                               : wr::L("Playing your favorites\xE2\x80\xA6", "Lecture de tes favoris\xE2\x80\xA6"),
+                       9000);
+            g_view.screen = Screen::Controls;
+            show();
+            return;
+        }
         case wr::Act::ResultsPage:
             sound::tap();
             g_search.page += tg.arg;

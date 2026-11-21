@@ -469,6 +469,23 @@ void WiimWorker::runPlaySearchResult(int index) {
 void WiimWorker::runPlayFavorite(const String& id) {
     WiimEvent ev;
     ev.kind = WiimEvent::FavPlayed;
+    // Liste des favoris (Tout lire, Aléatoire) : la liste affichée, du premier morceau ou d'un au hasard
+    if (id.startsWith("qobuz-favoris:") || id.startsWith("deezer-favoris:")) {
+        const bool shuffle = id.endsWith(":shuffle");
+        pause(600, true);
+        if (!P.results.empty()) {
+            const size_t k = shuffle ? esp_random() % P.results.size() : 0;
+            play(P.results[k].first, P.results[k].second);
+            ev.ok = true;
+        } else {
+            ev.text = wr::L("the WiiM did not start the list", "le WiiM n'a pas lanc\xC3\xA9 la liste");
+        }
+        logTagged("favlist.play", "deezer=%d shuffle=%d ok=%d | Liste des favoris (simul\xC3\xA9" "e)",
+                  id.startsWith("deezer") ? 1 : 0, shuffle ? 1 : 0, ev.ok ? 1 : 0);
+        push(std::move(ev));
+        nextPoll_ = millis() + 300;
+        return;
+    }
     std::string albumId;
     if (id.startsWith("qobuz-album:")) albumId = id.substring(12).c_str();
     else if (id.startsWith("deezer-album:")) albumId = id.substring(13).c_str();

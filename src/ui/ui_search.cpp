@@ -174,7 +174,7 @@ void Ui::searchField(const std::string& query, const String& status, bool busy, 
 // Résultats : une ligne par morceau (titre, artiste · album), par pages
 void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrack>& items, int page,
                        const String& status, int pressed, const std::vector<int>& hearts,
-                       const std::vector<const ArtImage*>& covers) {
+                       const std::vector<const ArtImage*>& covers, bool listActions) {
     beginScreen(View::Other);
     auto& C = canvas_;
     background();
@@ -182,19 +182,43 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     const wr::Rect& A = layout_.content;
     const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
-    // En-tête : « texte » · nombre, bouton Modifier
+    // En-tête : « texte » · nombre, bouton Modifier ; liste de favoris : Tout lire et Aléatoire à sa place (la
+    // recherche reste dans la barre), à la largeur de leur texte (les polices ne suivent pas la taille de l'écran)
     const int bh = sc(52), bw = sc(170);
-    const wr::Rect resultsEdit = wr::Rect{X + W - bw, A.y + m, bw, bh};
-    C.fillRoundRect(resultsEdit.x, resultsEdit.y, bw, bh, bh / 2, kCard);
-    searchIcon(resultsEdit.x + sc(30), resultsEdit.y + bh / 2, sc(9), kText, kCard);
+    const bool actions = listActions && !items.empty();
+    wr::Rect resultsEdit, playAll, shuffle;
+    int headW = W - bw - sc(20);
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::middle_center);
-    C.setTextColor(kText);
-    C.drawString(wr::L("Edit", "Modifier"), resultsEdit.x + bw / 2 + sc(14), resultsEdit.y + bh / 2 + 1);
+    if (!actions) {
+        resultsEdit = wr::Rect{X + W - bw, A.y + m, bw, bh};
+        C.fillRoundRect(resultsEdit.x, resultsEdit.y, bw, bh, bh / 2, kCard);
+        searchIcon(resultsEdit.x + sc(30), resultsEdit.y + bh / 2, sc(9), kText, kCard);
+        C.setTextColor(kText);
+        C.drawString(wr::L("Edit", "Modifier"), resultsEdit.x + bw / 2 + sc(14), resultsEdit.y + bh / 2 + 1);
+    } else {
+        const char* playText = wr::L("Play all", "Tout lire");
+        const char* mixText = wr::L("Shuffle", "Al\xC3\xA9" "atoire");
+        const int pad = sc(22), ts = sc(9), icon = 2 * ts + sc(10), g = sc(10);
+        const int mw = (int)C.textWidth(mixText) + 2 * pad, pw = (int)C.textWidth(playText) + 2 * pad + icon;
+        shuffle = wr::Rect{X + W - mw, A.y + m, mw, bh};
+        playAll = wr::Rect{shuffle.x - g - pw, A.y + m, pw, bh};
+        headW = playAll.x - X - sc(20);
+        C.fillRoundRect(playAll.x, playAll.y, pw, bh, bh / 2, accent_);
+        const int tx = playAll.x + pad + ts * 2 / 3, ty = playAll.y + bh / 2;
+        C.fillTriangle(tx - ts * 2 / 3, ty - ts, tx - ts * 2 / 3, ty + ts, tx + ts, ty, kBg);
+        C.setTextColor(kBg);
+        C.drawString(playText, playAll.x + icon + (pw - icon) / 2, ty + 1);
+        C.fillRoundRect(shuffle.x, shuffle.y, mw, bh, bh / 2, kCard);
+        C.setTextColor(kText);
+        C.drawString(mixText, shuffle.x + mw / 2, shuffle.y + bh / 2 + 1);
+    }
     useFont(C, kMid);
     C.setTextDatum(textdatum_t::middle_left);
-    const std::string head = std::string(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + query + wr::L("\xE2\x80\x9D", " \xC2\xBB");
-    C.drawString(wr::wrapText(head, W - bw - sc(20), 1, measure)[0].c_str(), X, A.y + m + bh / 2);
+    C.setTextColor(kText);
+    // Texte cherché entre guillemets ; une liste de favoris a un nom, pas une recherche : sans guillemets
+    const std::string head = listActions ? query : std::string(wr::L("\xE2\x80\x9C", "\xC2\xAB ")) + query + wr::L("\xE2\x80\x9D", " \xC2\xBB");
+    C.drawString(wr::wrapText(head, std::max(sc(40), headW), 1, measure)[0].c_str(), X, A.y + m + bh / 2);
     useFont(C, kSmall);
     C.setTextDatum(textdatum_t::top_left);
     C.setTextColor(kText2);
@@ -281,7 +305,11 @@ void Ui::renderResults(const std::string& query, const std::vector<wr::QueueTrac
     // le focus de départ est Modifier.
     if (resultsPrev.w > 0) targets_.add(wr::Act::ResultsPage, -1, resultsPrev);
     if (resultsNext.w > 0) targets_.add(wr::Act::ResultsPage, 1, resultsNext);
-    targets_.add(wr::Act::ResultsEdit, 0, resultsEdit, items.empty() ? wr::kTargetDefault : 0);
+    if (playAll.w > 0) {
+        targets_.add(wr::Act::ResultsPlayAll, 0, playAll);
+        targets_.add(wr::Act::ResultsPlayAll, 1, shuffle);
+    }
+    if (resultsEdit.w > 0) targets_.add(wr::Act::ResultsEdit, 0, resultsEdit, items.empty() ? wr::kTargetDefault : 0);
     present();
 }
 

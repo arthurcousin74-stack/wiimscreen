@@ -55,7 +55,7 @@ static void feedAll(const std::string& s) {
     splitHostPort(s, name, port, 1);
     g_sink += baselineCoverUrl(s).size() + htmlEscape(s).size();
     g_sink += wrapText(s, 50, 2, fakeMeasure).size();
-    g_sink += tileStatsFromText(s).uses.size() + shortTitle(s).size();
+    g_sink += tileStatsFromText(s).uses.size() + shortTitle(s).size() + deezerLovedPlaylist(s).size();
     g_sink += decodeFields(s).size() + utf8PopBack(s).size();
     const QueueInfo q = parseQueueContext(s, kQueueTitlesMax);
     g_sink += q.items.size() + queueKey(q).size() + isLiveQueue(q) + queueIndexOf(q, "a", true);
