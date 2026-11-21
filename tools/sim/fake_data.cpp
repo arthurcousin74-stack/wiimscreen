@@ -143,6 +143,7 @@ std::mutex g_m;
 std::vector<wr::Favorite> g_list;
 std::map<std::string, std::string> g_ctx;
 std::string g_backup;
+std::string g_tiles;  // historique des tuiles (/fav/tiles.txt sur le Tab5)
 
 int g_next = 1;
 }  // namespace
@@ -195,9 +196,19 @@ bool hasDeezerModel() { return true; }
 bool hasQobuzModel() { return true; }
 bool saveSettingsBackup(const std::string& text) { return !(g_backup = text).empty() || true; }
 bool settingsBackup(std::string& out) { return !(out = g_backup).empty(); }
+bool saveTileStats(const std::string& text) {
+    std::lock_guard<std::mutex> l(g_m);
+    g_tiles = text;
+    return true;
+}
+bool tileStats(std::string& out) {
+    std::lock_guard<std::mutex> l(g_m);
+    out = g_tiles;
+    return !out.empty();
+}
 bool eraseAll() {
     std::lock_guard<std::mutex> l(g_m);
-    g_list.clear(), g_ctx.clear(), g_backup.clear();
+    g_list.clear(), g_ctx.clear(), g_backup.clear(), g_tiles.clear();
     return true;
 }
 }  // namespace fav

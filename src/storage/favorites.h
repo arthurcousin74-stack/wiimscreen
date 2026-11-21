@@ -37,6 +37,9 @@ bool hasQobuzModel();
 // Note kept while a search through a WiiM queue runs (wr::searchUndoText: sound and shuffle to put back), read at
 // the next start if the remote restarted in the middle. No secret in it. An empty text removes the note.
 bool saveSearchUndo(const std::string& text);
+// Historique des tuiles (wr::tileStatsToText : dernière lecture, nombre, épinglées) : /fav/tiles.txt. Petit fichier.
+bool saveTileStats(const std::string& text);
+bool tileStats(std::string& out);
 bool searchUndo(std::string& out);
 // Action automatique faite une seule fois (tuile Flow) : doneOnce() vrai si markOnce() a déjà été appelé pour cette
 // étiquette (petit fichier marqueur), ou sans stockage. Marquer seulement après la réussite : retirée, la tuile ne

@@ -95,6 +95,11 @@ public:
     enum MenuChoice { MenuNone = -1, MenuConfig = 0, MenuUpdate, MenuTouch, MenuLog, MenuSleep, MenuClose };
     void renderMenu(const char* version);  // éléments MenuChoice (arg = MenuChoice)
 
+    // Menu d'une tuile (appui long) : son image et son nom, Épingler / Désépingler, Retirer des favoris (removable),
+    // Fermer. Éléments TileChoice (arg = TileChoice)
+    enum TileChoice { TilePin = 0, TileRemove, TileClose };
+    void renderTileMenu(int index, bool pinned, bool removable);
+
     // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé. Éléments PickDevice (arg =
     // indice), PickRetry, PickSetup
     void renderPicker(const std::vector<std::pair<std::string, std::string>>& devices);
@@ -166,6 +171,8 @@ private:
     void transport(const UiState& st, int pressed);
     void volumePill(const UiState& st, int pressed);
     void tile(int slot, int index, bool pressed);
+    void tileAt(const wr::Rect& r, int index, bool pressed);  // tuile `index` dans le rectangle r
+    void tileArt(int index, int x, int y, uint32_t bg);  // image de la tuile (ou monogramme, grand cœur), côté thumbSide()
     void pageDots();
     void toast(const String& msg);
     void drawBars();

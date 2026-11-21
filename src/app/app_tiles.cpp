@@ -6,6 +6,8 @@
 #include <cstring>
 
 #include "app/app_internal.h"
+#include "app/log.h"
+#include "appstate.h"
 #include "storage/favorites.h"
 #include "i18n.h"
 
@@ -14,7 +16,8 @@ namespace app {
 static bool samePresets(const std::vector<wr::Preset>& a, const std::vector<wr::Preset>& b) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i)
-        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl || a[i].favId != b[i].favId)
+        if (a[i].slot != b[i].slot || a[i].label != b[i].label || a[i].picUrl != b[i].picUrl || a[i].favId != b[i].favId ||
+            a[i].sub != b[i].sub || a[i].list != b[i].list)
             return false;
     return true;
 }
@@ -26,6 +29,9 @@ static void applyPresets(const std::vector<wr::Preset>& list) {
         g_strip.touch = false;
         g_strip.preset = -1;
     }
+    // Tuile en cours (anneau, égaliseur) : suivie par sa clé, l'ordre a pu changer
+    std::string activeKey;
+    if (g_active.index >= 0 && g_active.index < (int)g_tiles.list.size()) activeKey = wr::tileKey(g_tiles.list[g_active.index]);
     g_tiles.list = list;
     // Images des tuiles disparues : libérées (PSRAM) quand le cache grandit
     if (g_img.presets.size() > 48)
@@ -36,6 +42,12 @@ static void applyPresets(const std::vector<wr::Preset>& list) {
         }
     g_ui.setPresets(g_tiles.list);
     g_active.index = -1;
+    for (size_t i = 0; !activeKey.empty() && i < g_tiles.list.size(); ++i)
+        if (wr::tileKey(g_tiles.list[i]) == activeKey) {
+            g_active.index = (int)i;
+            g_ui.setActivePreset((int)i);
+            break;
+        }
     for (size_t i = 0; i < g_tiles.list.size(); ++i) {
         const std::string& url = g_tiles.list[i].picUrl;
         if (url.empty()) continue;
@@ -52,7 +64,8 @@ void refreshTiles() {
     for (size_t i = 0; i < g_tiles.favs.size(); ++i) {
         wr::Preset p;
         p.slot = 100 + (int)i;
-        p.label = g_tiles.favs[i].title;
+        p.label = wr::shortTitle(g_tiles.favs[i].title);
+        p.sub = g_tiles.favs[i].artist;
         p.picUrl = g_tiles.favs[i].artUrl;
         p.favId = g_tiles.favs[i].id;
         list.push_back(p);
@@ -63,6 +76,7 @@ void refreshTiles() {
         p.slot = 99;
         p.label = wr::L("Qobuz favorites", "Favoris Qobuz");
         p.favId = kQobuzFavsId;
+        p.list = true;
         list.push_back(p);
     }
     // Favoris Deezer (profil public indiqué dans la configuration) : il faut un modèle de file Deezer du WiiM
@@ -70,15 +84,16 @@ void refreshTiles() {
         wr::Preset p;
         p.slot = 98;
         p.label = wr::L("Deezer favorites", "Favoris Deezer");
-
         p.favId = kDeezerFavsId;
+        p.list = true;
         list.push_back(p);
     }
     // Albums favoris Qobuz, avec leur pochette
     for (size_t i = 0; i < g_tiles.qobuzAlbums.size() && i < 36; ++i) {
         wr::Preset p;
         p.slot = 200 + (int)i;
-        p.label = g_tiles.qobuzAlbums[i].title;
+        p.label = wr::shortTitle(g_tiles.qobuzAlbums[i].title);
+        p.sub = g_tiles.qobuzAlbums[i].artist;
         p.picUrl = g_tiles.qobuzAlbums[i].image;
         p.favId = "qobuz-album:" + g_tiles.qobuzAlbums[i].id;
         list.push_back(p);
@@ -87,14 +102,72 @@ void refreshTiles() {
     for (size_t i = 0; i < g_tiles.deezerAlbums.size() && i < 36; ++i) {
         wr::Preset p;
         p.slot = 300 + (int)i;
-        p.label = g_tiles.deezerAlbums[i].title;
+        p.label = wr::shortTitle(g_tiles.deezerAlbums[i].title);
+        p.sub = g_tiles.deezerAlbums[i].artist;
         p.picUrl = g_tiles.deezerAlbums[i].image;
         p.favId = "deezer-album:" + g_tiles.deezerAlbums[i].id;
         list.push_back(p);
     }
-    if (samePresets(list, g_tiles.list)) return;
-    applyPresets(list);
+    // Ordre : épinglées, puis (réglage) les dernières lancées, d'après l'historique gelé (g_tiles.shown) : les
+    // tuiles ne bougent pas sous le doigt, serviceTileOrder() applique le nouvel ordre au repos
+    std::vector<std::string> keys;
+    for (auto& p : list) keys.push_back(wr::tileKey(p));
+    std::vector<wr::Preset> sorted;
+    for (size_t i : wr::tileOrder(keys, g_tiles.shown, g_settings.recentFirst)) sorted.push_back(list[i]);
+    if (samePresets(sorted, g_tiles.list)) return;
+    applyPresets(sorted);
     show();
+}
+
+void loadTileStats() {
+    std::string text;
+    if (g_tiles.favOk && fav::tileStats(text)) g_tiles.shown = g_tiles.stats = wr::tileStatsFromText(text);
+}
+
+static void saveTileStats() {
+    if (g_tiles.favOk && !fav::saveTileStats(wr::tileStatsToText(g_tiles.stats)))
+        logEvent("Historique des tuiles non enregistr\xC3\xA9");
+}
+
+void noteTilePlayed(int index) {
+    if (index < 0 || index >= (int)g_tiles.list.size()) return;
+    const std::string key = wr::tileKey(g_tiles.list[index]);
+    if (key.empty()) return;
+    g_tiles.stats.played(key);
+    g_tiles.orderDue = true;
+    g_tiles.statsDirty = true;  // écrit au repos (serviceTileOrder) : pas d'écriture en flash avant le retour de l'appui
+}
+
+void pinTile(int index, bool on) {
+    if (index < 0 || index >= (int)g_tiles.list.size()) return;
+    const std::string key = wr::tileKey(g_tiles.list[index]);
+    if (key.empty()) return;
+    g_tiles.stats.setPin(key, on);
+    saveTileStats();
+    logEvent(on ? "Tuile \xC3\xA9pingl\xC3\xA9" "e : %s" : "Tuile d\xC3\xA9" "s\xC3\xA9pingl\xC3\xA9" "e : %s",
+             g_tiles.list[index].label.c_str());
+    // Choix de l'utilisateur : appliqué tout de suite
+    g_tiles.shown = g_tiles.stats;
+    g_tiles.orderDue = false;
+    refreshTiles();
+}
+
+void serviceTileOrder(uint32_t now, bool touching) {
+    if (g_tiles.statsDirty && !touching && !g_strip.touch && wr::expired(now, g_idle.lastTouch, 2000)) {
+        g_tiles.statsDirty = false;
+        saveTileStats();
+    }
+    if (!g_tiles.orderDue || touching || g_strip.touch || g_view.screen != Screen::Controls || !wr::expired(now, g_idle.lastTouch, kTileOrderIdleMs)) return;
+    g_tiles.orderDue = false;
+    g_tiles.shown = g_tiles.stats;
+    // Anneau de focus (télécommande) sur une tuile : il la suit par sa clé, pas par son ancien indice
+    wr::FocusSpot& spot = g_focus.spot[(int)Screen::Controls];
+    std::string focusKey;
+    if (spot.act == wr::Act::Preset && spot.arg >= 0 && spot.arg < (int)g_tiles.list.size())
+        focusKey = wr::tileKey(g_tiles.list[spot.arg]);
+    refreshTiles();  // liste changée : page 1 (setPresets)
+    for (size_t i = 0; !focusKey.empty() && i < g_tiles.list.size(); ++i)
+        if (wr::tileKey(g_tiles.list[i]) == focusKey) spot.arg = (int)i;
 }
 
 // Favori correspondant à ce qui joue : même file (clé), sinon même album et même artiste

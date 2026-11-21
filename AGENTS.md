@@ -46,7 +46,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/wiim_api.*` | WiiM HTTP API answers: `PlayerStatus`, `TrackMeta`, `Preset`, `WiimIdentity`, getPlayerStatus/getMetaInfo/getPresetInfo/getStatusEx parsing, SSDP host, source name, time and quality texts |
 | `lib/core/src/json.*` | JSON helpers: flat lookups (`jsonString`, `jsonInt`) and depth-aware ones (`jsonTop`, `jsonArray`, `jsonText`, `jsonValuesOf`), one escape decoder |
 | `lib/core/src/http.*` | HTTP response parsing and keep-alive framing (`httpFrame`), URL/host checks, certificate fingerprints, `sniffImage` |
-| `lib/core/src/text.*` | `trim`, `hexVal`, UTF-8 helpers, `wrapText`, `htmlEscape`, `normalizeText`, `sharesWord`, `typeText` (search field typing, on-screen and real keyboard) |
+| `lib/core/src/text.*` | `trim`, `hexVal`, UTF-8 helpers, `wrapText`, `htmlEscape`, `normalizeText`, `sharesWord`, `shortTitle` (album title for a tile), `typeText` (search field typing, on-screen and real keyboard) |
 | `lib/core/src/layout.*` | `Rect`, `Layout`, `computeLayout`, on-screen keyboard (`keyboardLayout`) |
 | `lib/core/src/focus.*` | Tappable elements of a screen: `Act`, `Target` (drawn rect + touch area + flags), `TargetList` (first match in insertion order wins); D-pad moves `nextTarget` (geometry, beam first; edge reached) and `defaultTarget`; `pageEdgeMove` (results paging with Up/Down) |
 | `lib/core/src/color.*` | `nameColor`, `accentColor` (HSL) |
@@ -55,6 +55,7 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `lib/core/src/catalog.h` | `QobuzAlbum`, shared by the Qobuz and Deezer album parsers |
 | `lib/core/src/dsp.*` | FFT spectrum bands, visualizer smoothing, motion detector |
 | `lib/core/src/voice.*` | WAV header for the dictation; still declares the text and Deezer functions through its includes |
+| `lib/core/src/tiles.*` | Tile history and order: `TileStats` (last play as a counter, play count, pins; `played`, `setPin`), `tileKey`, text file format, `tileOrder` (pinned, then last played, then the given order) |
 | `lib/core/src/appstate.*` | Main-loop timing decisions without hardware: wrap-safe `expired`, `idleAction` (ambient, dim, screen off, sleep), `musicSettled` |
 | `lib/core/src/keys.*` | Key input without hardware: `NavKey`, `KeyEvent`, `KeyTracker` (raw down/up → press, long press on OK, repeat on arrows/Backspace; wrap-safe), key names for scripts |
 | `lib/core/src/decisions.*` | App decisions without hardware: pending-command confirmation, what to do after a search through a WiiM queue, queue stability, track index in a queue, dictation clean-up |
@@ -66,14 +67,14 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
 | `src/app/app_internal.h` | Internal to `main.cpp` and `app_*.cpp` only (namespace `app`): `enum class Screen` (`g_view.screen`), the app state grouped in structs (`g_pending`, `g_search`, `g_voice`, `g_tiles`, `g_img`…, one comment each), shared constants and the functions one file calls in another |
 | `src/app/app_search.cpp` | Search keyboard and results list (`openSearch`, `runSearchQuery`, `onSearchKey`, `renderResultsList`, `onSearchDone`), album hearts, "Qobuz/Deezer favorites" lists (`openFavoriteList`) |
 | `src/app/app_voice.cpp` | Dictation in the search field: microphone, ducking, `sttTask` (OpenAI transcription in its own task), `serviceTranscription` |
-| `src/app/app_tiles.cpp` | Preset and favorite tiles (`refreshTiles`, `onPresets`, `currentFavorite`, `favoriteState`), image downloads for the cover, tiles and result rows (`checkImages`, `retryImages`, `knownImage`) |
+| `src/app/app_tiles.cpp` | Preset and favorite tiles (`refreshTiles`, `onPresets`, `currentFavorite`, `favoriteState`), tile history and order (`noteTilePlayed`, `pinTile`, `serviceTileOrder`), image downloads for the cover, tiles and result rows (`checkImages`, `retryImages`, `knownImage`) |
 | `src/app/log.*` | Journal: last 40 events in RAM, also on the serial port (`logEvent`) |
 | `src/app/version.h` | Firmware version (CI or `tools/version.py`) |
 | `src/ui/ui.h` / `src/ui/ui.cpp` | Class `Ui` (public interface) / Controls view and ambient view: drawing, partial redraws (`updateProgress`, `updateTransport`, `showLevels`), hit tests |
 | `src/ui/ui_core.cpp` | Canvases (off-screen M5Canvas in PSRAM → display), `present`/`presentRect`, background gradient, cover decoding, `beginScreen`, fonts (VLW arrays included only here) and `useFont` |
 | `src/ui/ui_widgets.cpp` | Shared icons (heart, mic, home, gear, search) and the navigation rail with its hit tests |
 | `src/ui/ui_search.cpp` | Search keyboard, field, source chips, results list; `pressKey`, `updateSearchField`, `updateResultCover`; hit tests |
-| `src/ui/ui_screens.cpp` | Full-page screens: Settings menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
+| `src/ui/ui_screens.cpp` | Full-page screens: Settings menu, tile menu, Journal, touch test, WiiM picker, update, info, setup portal; hit tests |
 | `src/ui/ui_internal.h` | Internal to `ui*.cpp` only: colours, font pointers, `useFont`, `mix` (never include it elsewhere; do not widen `ui.h`) |
 | `src/ui/fonts/` | Generated VLW fonts (`tools/make_vlw.py`), included only by `ui_core.cpp` |
 | `src/net/wiim_worker.*` | Background task that owns all WiiM networking: `begin`, request mailbox (`command`, `search`, `playFavorite`…), `run`, polling (`pollOnce`), command queue, `pause`, events, rediscovery, identity |
@@ -258,6 +259,10 @@ Flashable image for USB (address `0x0`): see the merge step in `.github/workflow
   (`…-80-0-1.jpg`); `art.cpp` downloads that variant and keeps the original URL as the image key.
 - `tools/relay`: never read and write one TLS socket from two Python threads (with TLS 1.3, the WiiM's version
   too, the connection hung about one time in two); `bridge()` does both ways in one thread, non-blocking.
+- **Tile order** comes from `g_tiles.shown`, a copy of the history (`g_tiles.stats`) taken only after
+  `kTileOrderIdleMs` without a touch (`serviceTileOrder`) or on a pin change: never reorder the strip while the user
+  looks at it (a tile would move under the finger). `applyPresets()` keeps the active tile by its `wr::tileKey`, and
+  the tile menu (`Screen::TileMenu`) finds its tile by key too: indexes change with the order.
 - `show()` only marks the screen dirty; `renderNow()` draws once per loop. It must not draw over modal screens
   (any `Screen` other than `Controls`: menu, touch test, log, search, results): guarded by `modalOpen()`. The 1 Hz progress tick redraws only the progress strip.
 

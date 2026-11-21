@@ -225,6 +225,16 @@ bool searchUndo(std::string& out) {
     return g_ok && LittleFS.exists("/fav/search_undo") && readFile("/fav/search_undo", out) && !out.empty();
 }
 
+bool saveTileStats(const std::string& text) {
+    Guard g;
+    return g_ok && writeFile("/fav/tiles.txt", text);
+}
+
+bool tileStats(std::string& out) {
+    Guard g;
+    return g_ok && LittleFS.exists("/fav/tiles.txt") && readFile("/fav/tiles.txt", out);
+}
+
 bool doneOnce(const std::string& tag) {
     Guard g;
     return !g_ok || LittleFS.exists(onceMarker(tag).c_str());  // sans stockage : jamais d'action automatique

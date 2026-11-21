@@ -225,13 +225,20 @@ static String formPage(const Settings& s, const std::vector<Net>& nets, const St
     h += option("30", wr::L("After 30 min", "Apr\xC3\xA8s 30 min"), s.sleepMin == 30);
     h += option("60", wr::L("After 1 h", "Apr\xC3\xA8s 1 h"), s.sleepMin == 60);
     h += option("120", wr::L("After 2 h", "Apr\xC3\xA8s 2 h"), s.sleepMin == 120);
-    h += F("</select></div><div></div></div><small>");
+    h += F("</select></div><div><label>");
+    h += wr::L("Tile order", "Ordre des tuiles");
+    h += F("</label><select name=tileorder>");
+    h += option("recent", wr::L("Last played first", "Derni\xC3\xA8res lanc\xC3\xA9" "es d'abord"), s.recentFirst);
+    h += option("fixed", wr::L("As saved", "Comme enregistr\xC3\xA9" "es"), !s.recentFirst);
+    h += F("</select></div></div><small>");
     h += wr::L("Sleep: with no tap and no music, the Tab5 turns off; the power button turns it on again. HTTPS "
                "is recommended. Visualizer (experimental): in the ambient view, the microphone animates a "
-               "spectrum. The sound is analyzed on the device, never recorded or sent.",
+               "spectrum. The sound is analyzed on the device, never recorded or sent. Tile order: pinned tiles "
+               "first (hold a tile to pin it), then the last played.",
                "Mise en veille : sans appui et sans musique, le Tab5 s'\xC3\xA9teint ; le "
                "bouton d'alimentation le rallume. HTTPS est conseill\xC3\xA9. Visualiseur (exp\xC3\xA9rimental) : en vue ambiance, le micro anime un spectre. Le son est "
-               "analys\xC3\xA9 sur place, jamais enregistr\xC3\xA9 ni envoy\xC3\xA9.");
+               "analys\xC3\xA9 sur place, jamais enregistr\xC3\xA9 ni envoy\xC3\xA9. Ordre des tuiles : les tuiles "
+               "\xC3\xA9pingl\xC3\xA9" "es d'abord (doigt tenu sur une tuile pour l'\xC3\xA9pingler), puis les derni\xC3\xA8res lanc\xC3\xA9" "es.");
     h += F("</small></div></details>");
 
     // --- Dictée (recherche)
@@ -480,6 +487,7 @@ void runSetupPortal(Settings& s, Ui& ui, const String& reason) {
         next.motionWake = server.arg("motion") != "0";
         next.qobuzDirect = server.hasArg("qobuzdirect");  // case non cochée : absente du formulaire
         next.sleepMin = constrain(server.arg("sleep").toInt(), 0, 240);
+        next.recentFirst = server.arg("tileorder") != "fixed";
         String key = server.arg("oaikey");
         key.trim();
         if (key.length()) next.openaiKey = key;

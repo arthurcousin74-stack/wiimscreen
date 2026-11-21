@@ -17,4 +17,5 @@
 #include "json.h"      // jsonString, jsonInt, decodeJsonUnicode (and the depth-aware helpers)
 #include "layout.h"    // Rect, Layout, computeLayout, Key, keyboardLayout
 #include "text.h"      // appendUtf8, htmlEscape, wrapText, utf8PopBack (and trim, normalizeText…)
+#include "tiles.h"     // tile history (last play, count, pins) and the order of the strip
 #include "wiim_api.h"  // Preset, PlayerStatus, TrackMeta, WiimIdentity and their parsers

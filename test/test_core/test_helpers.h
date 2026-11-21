@@ -94,3 +94,4 @@ void run_audio_tests();
 void run_firmware_tests();
 void run_robust_tests();
 void run_focus_tests();
+void run_tiles_tests();

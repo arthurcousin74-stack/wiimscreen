@@ -25,5 +25,6 @@ int main() {
     run_firmware_tests();
     run_robust_tests();
     run_focus_tests();
+    run_tiles_tests();
     return UNITY_END();
 }

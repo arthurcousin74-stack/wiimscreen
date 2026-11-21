@@ -110,7 +110,26 @@ static void test_type_text() {
     TEST_ASSERT_EQUAL(5u, typeText("", "abcdefgh", 5).size());
 }
 
+static void test_short_title() {
+    TEST_ASSERT_EQUAL_STRING("Kind of Blue", shortTitle("Kind of Blue (Legacy Edition)").c_str());
+    TEST_ASSERT_EQUAL_STRING("Abbey Road", shortTitle("Abbey Road (Remastered 2019) [Super Deluxe]").c_str());
+    TEST_ASSERT_EQUAL_STRING("Rumours", shortTitle("Rumours - 35th Anniversary").c_str());
+    TEST_ASSERT_EQUAL_STRING("Mezzanine", shortTitle("  Mezzanine [R\xC3\xA9\xC3\xA9" "dition]  ").c_str());
+    TEST_ASSERT_EQUAL_STRING("Babylon (Music from the Motion Picture)",
+                             shortTitle("Babylon (Music from the Motion Picture)").c_str());
+    TEST_ASSERT_EQUAL_STRING("Alive (Live)", shortTitle("Alive (Live)").c_str());
+    TEST_ASSERT_EQUAL_STRING("A - B", shortTitle("A - B").c_str());
+    // Rien ne resterait : titre gardé
+    TEST_ASSERT_EQUAL_STRING("(Deluxe Edition)", shortTitle("(Deluxe Edition)").c_str());
+    TEST_ASSERT_EQUAL_STRING("- Deluxe", shortTitle("- Deluxe").c_str());
+    TEST_ASSERT_EQUAL_STRING("", shortTitle("").c_str());
+    TEST_ASSERT_EQUAL_STRING("X (a(b) Deluxe)", shortTitle("X (a(b) Deluxe)").c_str());  // imbriqué : gardé
+    TEST_ASSERT_EQUAL_STRING("Y", shortTitle("Y (Explicit)").c_str());
+    TEST_ASSERT_EQUAL_STRING("Z]", shortTitle("Z]").c_str());
+}
+
 void run_text_tests() {
+    RUN_TEST(test_short_title);
     RUN_TEST(test_type_text);
     RUN_TEST(test_utf8_pop_back_edges);
     RUN_TEST(test_shares_word);

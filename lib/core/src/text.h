@@ -35,5 +35,10 @@ std::string normalizeText(const std::string& s);
 // such word ("U2", "Yo Yo Ma", "AC/DC") is compared whole, word for word; a query with nothing to compare counts as
 // relevant. Letters outside Latin-1 (Cyrillic, Greek, CJK…) are kept by normalizeText and count as letters.
 bool sharesWord(const std::string& query, const std::vector<std::string>& texts);
+// Album title for a small tile: edition notes at the end removed, "(Legacy Edition)", "[Remastered 2011]",
+// " - Deluxe" (words: remaster, deluxe, edition, expanded, anniversary, bonus, legacy, reissue, explicit; accents
+// and case ignored), several in a row too. Other notes stay ("(Live)", "(Original Soundtrack)"); a title that
+// would become empty is returned trimmed.
+std::string shortTitle(const std::string& title);
 
 }  // namespace wr

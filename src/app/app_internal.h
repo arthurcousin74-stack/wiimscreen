@@ -63,6 +63,10 @@ struct TileData {
     bool fromWiim = false;                         // dernière liste de presets lue sur le WiiM
     uint32_t lastFetch = 0;
     std::string queueKey;                          // clé de la file qui joue (relevé du WiiM), vide si inconnue
+    wr::TileStats stats;                           // historique des tuiles (/fav/tiles.txt), à jour à chaque lancement
+    wr::TileStats shown;                           // historique qui a donné l'ordre affiché : copié de stats au repos
+    bool orderDue = false;                         // stats a changé depuis : nouvel ordre au prochain repos
+    bool statsDirty = false;                       // stats pas encore écrit (écrit hors d'un appui)
 };
 extern TileData g_tiles;
 
@@ -109,6 +113,7 @@ enum class Screen {
     Log,        // Journal (menu Réglages)
     Search,     // recherche : clavier
     Results,    // recherche : liste de résultats (ou favoris Qobuz / Deezer)
+    TileMenu,   // menu d'une tuile (appui long) : épingler, retirer ; OpenScreens::tileKey
     Count,      // nombre d'écrans (pas un écran) : toujours en dernier
 };
 constexpr int kScreenCount = (int)Screen::Count;  // tableaux indexés par (int)Screen (focus retenu par écran)
@@ -116,6 +121,7 @@ constexpr int kScreenCount = (int)Screen::Count;  // tableaux indexés par (int)
 // Écran affiché, vue ambiance, et compteurs des écrans Journal et test tactile
 struct OpenScreens {
     Screen screen = Screen::Controls;
+    std::string tileKey;  // menu d'une tuile : sa clé (wr::tileKey ; l'indice peut changer si la liste change)
     // Vue ambiance : façon de dessiner les commandes (micro du visualiseur ouvert). Drapeau à part, pas une valeur
     // de Screen : elle commence seulement sur les commandes, mais une tuile « Favoris » relâchée dans le tour
     // de boucle où elle commence ouvre la liste par-dessus (Results), et Accueil y ramène ensuite ; exitAmbient()
@@ -179,6 +185,7 @@ struct StripTouch {
     int preset = -1;
     int startX = 0;
     bool dragged = false;
+    uint32_t since = 0;  // doigt posé : appui long sur une tuile = son menu
 };
 extern StripTouch g_strip;
 
@@ -280,6 +287,13 @@ void setMessage(const String& m, uint32_t durationMs = 8000);
 
 // app_tiles.cpp : presets, tuiles des favoris, images (pochette, tuiles, lignes de résultats)
 void refreshTiles();
+// Historique des tuiles : lu au démarrage ; un lancement compte ; épingler / désépingler (ordre appliqué tout de
+// suite) ; serviceTileOrder() range les tuiles après kTileOrderIdleMs sans appui (pas sous le doigt)
+constexpr uint32_t kTileOrderIdleMs = 60000;
+void loadTileStats();
+void noteTilePlayed(int index);
+void pinTile(int index, bool on);
+void serviceTileOrder(uint32_t now, bool touching);
 std::string currentFavorite();
 int favoriteState();
 void onPresets(bool ok, const std::vector<wr::Preset>& fromWiim);

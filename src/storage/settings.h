@@ -30,6 +30,7 @@ struct Settings {
     // Recherche Qobuz directe (non officielle) : le Tab5 interroge Qobuz avec l'accès que le WiiM partage en UPnP
     // (GetUserInfo). Désactivée par défaut : le WiiM cherche lui-même (la musique s'interrompt quelques secondes).
     bool qobuzDirect = false;
+    bool recentFirst = true;  // tuiles : les dernières lancées d'abord (après les épinglées) ; faux : ordre enregistré
     String lang = "en";  // langue de l'interface : "en" (par défaut) ou "fr" (wr::langFromCode)
 
     bool voiceEnabled() const { return openaiKey.length() > 20; }

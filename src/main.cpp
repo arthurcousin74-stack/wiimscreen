@@ -85,6 +85,7 @@ static bool loadsAlbum(SearchKind k) {
 static constexpr int kSwipePx = 50;
 
 static constexpr uint32_t kLongPressMs = 3000;
+static constexpr uint32_t kTileHoldMs = 600;  // doigt tenu sur une tuile : son menu (épingler, retirer)
 static constexpr uint32_t kWifiTimeoutMs = 20000;
 static constexpr uint32_t kPresetRefreshMs = 10UL * 60 * 1000;
 static constexpr uint32_t kPresetRetryMs = 30UL * 1000;
@@ -714,10 +715,80 @@ struct Press {
     uint32_t now = 0;  // millis() du tour de boucle (l'appui long de l'en-tête se compte avec lui)
 };
 
+// ------------------------------------------------------------ menu d'une tuile
+
+// Tuile du menu ouvert : retrouvée par sa clé (la liste a pu changer depuis l'ouverture) ; -1 si elle n'existe plus
+static int tileMenuIndex() {
+    for (size_t i = 0; i < g_tiles.list.size(); ++i)
+        if (wr::tileKey(g_tiles.list[i]) == g_view.tileKey) return (int)i;
+    return -1;
+}
+
+// Seuls les favoris enregistrés sur la télécommande se retirent ici ; les albums des comptes (Qobuz, Deezer) et les
+// listes de favoris viennent des comptes, les presets du WiiM se changent dans l'app WiiM Home
+static bool tileRemovable(const wr::Preset& p) {
+    return !p.favId.empty() && !p.list && p.favId.rfind("qobuz-album:", 0) != 0 && p.favId.rfind("deezer-album:", 0) != 0;
+}
+
+static void renderTileMenu() {
+    const int i = tileMenuIndex();
+    const std::string& key = g_view.tileKey;
+    g_ui.renderTileMenu(i, g_tiles.stats.pinned(key), i >= 0 && tileRemovable(g_tiles.list[i]));
+}
+
+static void openTileMenu(int index) {
+    if (index < 0 || index >= (int)g_tiles.list.size() || wr::tileKey(g_tiles.list[index]).empty()) return;
+    g_view.tileKey = wr::tileKey(g_tiles.list[index]);
+    logEvent("Menu de la tuile : %s", g_tiles.list[index].label.c_str());
+    g_view.screen = Screen::TileMenu;
+    g_focus.spot[(int)Screen::TileMenu] = wr::FocusSpot{};
+    renderTileMenu();
+}
+
+static void openMenu();
+
+static void activateTileMenu(const wr::Target& tg, uint32_t now) {
+    switch (tg.act) {
+        case wr::Act::Search:
+            sound::tap();
+            openSearch();
+            return;
+        case wr::Act::Settings: openMenu(); return;
+        case wr::Act::Home: break;  // Accueil : fermer, vers les commandes
+        case wr::Act::TileChoice: break;
+        default: return;
+    }
+    sound::tap();
+    const int i = tileMenuIndex();
+    if (tg.act == wr::Act::TileChoice && i >= 0) {
+        const wr::Preset p = g_tiles.list[i];  // copie : la liste change ci-dessous
+        if (tg.arg == Ui::TilePin) {
+            const bool on = !g_tiles.stats.pinned(g_view.tileKey);
+            pinTile(i, on);
+            setMessage(String(on ? wr::L("Pinned: ", "\xC3\x89pingl\xC3\xA9" "e : ") : wr::L("Unpinned: ", "D\xC3\xA9s\xC3\xA9pingl\xC3\xA9" "e : ")) +
+                           p.label.c_str(),
+                       4000);
+        } else if (tg.arg == Ui::TileRemove && tileRemovable(p)) {
+            if (g_tiles.stats.pinned(g_view.tileKey)) pinTile(i, false);  // plus de place réservée en tête
+            const bool ok = fav::remove(p.favId);
+            logEvent("Favori retir\xC3\xA9 depuis sa tuile (%s) : %s", p.favId.c_str(), ok ? "OK" : "erreur");
+            refreshTiles();
+            setMessage(ok ? wr::L("Removed from favorites", "Retir\xC3\xA9 des favoris")
+                          : wr::L("Favorite not removed", "Favori non retir\xC3\xA9"),
+                       4000);
+        }
+    }
+    g_view.tileKey.clear();
+    g_idle.lastTouch = now;
+    g_view.screen = Screen::Controls;
+    show();
+}
+
 static void playPreset(int p) {
     if (p < 0 || p >= (int)g_tiles.list.size()) return;
     logEvent("Preset %d : %s", g_tiles.list[p].slot, g_tiles.list[p].label.c_str());
     sound::tap();
+    noteTilePlayed(p);  // historique : l'ordre des tuiles change au prochain repos
     if (g_tiles.list[p].favId == kQobuzFavsId || g_tiles.list[p].favId == kDeezerFavsId) {
         openFavoriteList(g_tiles.list[p].favId == kDeezerFavsId);  // liste : on choisit, rien ne joue avant
         return;
@@ -737,12 +808,16 @@ static void playPreset(int p) {
 }
 
 // Bande des presets, suivi du doigt : enfoncer, glisser (page), relâcher (lancer)
-static void serviceStrip(const m5::touch_detail_t& t) {
+static void serviceStrip(const m5::touch_detail_t& t, uint32_t now) {
     if (!g_strip.touch) return;
     if (t.isPressed()) {
         if (!g_strip.dragged && abs(t.x - g_strip.startX) > kSwipePx) {
             g_strip.dragged = true;  // c'est un glissement : la tuile n'est plus enfoncée
             showTile(g_strip.preset);
+        } else if (!g_strip.dragged && g_strip.preset >= 0 && wr::expired(now, g_strip.since, kTileHoldMs)) {
+            g_strip.touch = false;  // appui long : le menu de la tuile ; le doigt relevé ne lance rien
+            sound::confirm();
+            openTileMenu(g_strip.preset);
         }
         return;
     }
@@ -880,6 +955,7 @@ static void activateControls(const wr::Target& tg, const Press& at) {
             g_strip.touch = true;
             g_strip.dragged = false;
             g_strip.startX = x;
+            g_strip.since = at.now;
             g_strip.preset = tg.act == wr::Act::Preset ? tg.arg : -1;
             showTile(g_strip.preset);  // tuile montrée enfoncée tant que le doigt reste (elle seule)
             return;
@@ -1149,6 +1225,7 @@ static void redrawForFocus() {
         case Screen::TouchTest: g_ui.renderTouchTest(-1, -1, g_view.touchCount); break;
         case Screen::Search: renderSearch(g_search.keyDown); break;  // la touche enfoncée le reste
         case Screen::Results: renderResultsList(-1, g_search.results.empty() ? g_search.note : String()); break;
+        case Screen::TileMenu: renderTileMenu(); break;
         case Screen::Count: break;
     }
 }
@@ -1386,6 +1463,13 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
     if (screen == Screen::Controls && !g_ui.controlsShown()) renderNow();  // liste de la vue commandes (cf. tapControls)
     // OK tenu sur les commandes : Réglages, comme l'appui long sur l'en-tête
     if (k.key == NavKey::Ok && k.kind == wr::KeyEvent::LongPress && screen == Screen::Controls) {
+        // … sauf sur une tuile : son menu, comme l'appui long du doigt
+        const wr::Target* on = g_focus.visible ? wr::focusedTarget(g_ui.targets(), g_focus.spot[(int)screen]) : nullptr;
+        if (on && on->act == wr::Act::Preset) {
+            sound::confirm();
+            openTileMenu(on->arg);
+            return;
+        }
         sound::confirm();
         g_view.screen = Screen::Menu;
         g_ui.renderMenu(FW_VERSION);
@@ -1403,11 +1487,12 @@ static void onKey(const wr::KeyEvent& k, uint32_t now) {
     // OK : la même activation qu'un appui (copie : l'activation peut redessiner l'écran et vider la liste)
     const wr::Target tg = *cur;
     g_focus.spot[(int)screen] = wr::FocusSpot{tg.act, tg.arg};
-    static const char* const kScreenNames[kScreenCount] = {"controls", "menu", "touchtest", "log", "search", "results"};
+    static const char* const kScreenNames[kScreenCount] = {"controls", "menu", "touchtest", "log", "search", "results", "tilemenu"};
     logTagged("focus.ok", "screen=%s act=%s arg=%d | Touche OK", kScreenNames[(int)screen], wr::actName(tg.act), tg.arg);
     switch (screen) {
         case Screen::Controls: activateControls(tg, keyPress(tg, now)); break;
         case Screen::Menu: activateMenu(tg, now); break;
+        case Screen::TileMenu: activateTileMenu(tg, now); break;
         case Screen::Log: activateLog(tg, now); break;
         case Screen::TouchTest: activateTouchTest(tg, now); break;
         case Screen::Search:
@@ -1514,6 +1599,7 @@ void setup() {
     logEvent("Favoris : %s, %u", g_tiles.favOk ? "OK" : "m\xC3\xA9moire indisponible", (unsigned)fav::list().size());
     g_worker.begin(g_settings);
     if (!g_settings.autoPresets()) g_tiles.wiimPresets = g_settings.presets;  // liste saisie : tout de suite
+    loadTileStats();  // ordre des tuiles dès la première liste
     refreshTiles();
     requestPresets();
     g_state.online = true;  // jusqu'au premier relevé (une seconde environ)
@@ -1529,6 +1615,7 @@ void loop() {
     // Touches (télécommande, clavier, manette ; rien sur le Tab5), puis appui : l'anneau du focus disparaît
     serviceKeys(now);
     servicePerf(t.wasPressed(), now);
+    serviceTileOrder(now, t.isPressed() || t.wasPressed());  // jamais avec un doigt posé (cible d'avant)
     if (t.wasPressed()) hideFocus();
     logMemory();
     // Images arrivées (tous les écrans : la file de l'ArtFetcher est bornée, un résultat non lu serait perdu)
@@ -1634,6 +1721,8 @@ void loop() {
             if (g_view.ambient) exitAmbient();
         } else if (g_view.screen == Screen::Menu) {
             if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) activateMenu(*tg, now);
+        } else if (g_view.screen == Screen::TileMenu) {
+            if (const wr::Target* tg = g_ui.targets().hit(t.x, t.y)) activateTileMenu(*tg, now);
         } else if (g_view.ambient) {
             logEvent("Appui en vue ambiance (%d,%d)%s", t.x, t.y, g_ui.hitHome(t.x, t.y) ? " : Accueil" : "");
             exitAmbient();  // vue ambiance : un appui ramène les commandes
@@ -1642,7 +1731,7 @@ void loop() {
             tapControls(t.x, t.y, now);  // y compris l'appui long de l'en-tête et la bande des presets (suivis ci-dessous)
         }
     }
-    serviceStrip(t);
+    serviceStrip(t, now);
     serviceVolumeTouch(t, now);
     if (g_header.pressed) {
         if (!t.isPressed()) g_header.pressed = false;

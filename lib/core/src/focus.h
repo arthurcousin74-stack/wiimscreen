@@ -31,6 +31,8 @@ enum class Act : uint8_t {
     AmbientExit,  // anywhere: back to the controls view
     // Settings menu
     MenuChoice,  // arg = Ui::MenuChoice
+    // Tile menu (long press on a tile)
+    TileChoice,  // arg = Ui::TileChoice
     // WiiM picker
     PickDevice,  // arg = index in the list of players
     PickRetry,

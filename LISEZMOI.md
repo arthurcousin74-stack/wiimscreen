@@ -20,7 +20,7 @@ une télécommande ou une manette. Voir [docs/DESKTOP.md](docs/DESKTOP.md) (en a
 
 - **En cours de lecture** : grande pochette ; à côté, source et qualité audio en pastilles (« Spotify », « 16 bits · 44,1 kHz », « EN DIRECT » pour une radio), titre, artiste, album, progression, lecture/pause et volume regroupés près de ce qu'ils commandent
 - **Couleurs tirées de la pochette** : la lueur du fond, le bouton lecture et les barres prennent la teinte dominante de l'album
-- **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur
+- **Presets en tuiles** (image + nom) repris automatiquement du WiiM, par pages de 6 (glisser pour changer de page) ; sans image, des initiales sur une couleur propre à chaque preset. Le preset en cours est entouré et marqué d'une petite icône d'égaliseur. Les tuiles d'albums montrent l'artiste (titre sans « (Remastered) », « (Deluxe Edition) »…). Les dernières tuiles lancées passent en tête (après une minute sans appui, pour que rien ne bouge sous le doigt) ; doigt tenu sur une tuile : l'épingler en tête ou la retirer des favoris. Réglage « Ordre des tuiles » dans la configuration pour garder l'ordre enregistré
 - **Retours visuels** : anneau qui tourne autour du bouton lecture pendant le chargement d'un preset, notifications posées sur la pochette sans cacher le titre, commandes grisées quand le WiiM est injoignable
 - **Recherche à la voix** (facultative) : sur l'écran de recherche, touche le micro dans le champ, dis un artiste, un morceau ou un album, puis touche le bouton rouge : le texte s'écrit et la recherche part (Qobuz ou Deezer)
 - **Gestes directs** : toucher ou glisser sur la barre de volume règle le volume, maintenir − ou + le change pas à pas, toucher la barre de progression avance ou recule dans le morceau, toucher le haut-parleur coupe le son
@@ -111,6 +111,7 @@ C'est le même fichier que pour le flash USB : le Tab5 n'en garde que la partie 
 | − / + maintenu | Changer le volume pas à pas |
 | Haut-parleur (à gauche du volume) | Couper / rétablir le son |
 | Tuiles du bas | Lancer le preset (au relâcher) |
+| Doigt tenu sur une tuile | Menu de la tuile : épingler en tête / désépingler, retirer des favoris |
 | Glisser sur les tuiles, ou toucher les points | Page de presets suivante / précédente |
 | − / + (bouts de la barre de volume) | Volume (pas réglable) |
 | ◀◀ / ▶▶ | Piste précédente / suivante |

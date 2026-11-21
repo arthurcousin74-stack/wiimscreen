@@ -290,21 +290,18 @@ void Ui::volumePill(const UiState& st, int pressed) {
 
 // Tuile de preset : image (ou monogramme coloré) et nom ; le preset en cours a un
 // contour et une petite icône d'égaliseur de la couleur d'accent
-void Ui::tile(int slot, int index, bool pressed) {
+// Image d'une tuile : vignette téléchargée, sinon grand cœur (liste de favoris du compte) ou initiales
+void Ui::tileArt(int index, int ax, int ay, uint32_t bg) {
     auto& C = canvas_;
-    const wr::Rect& r = layout_.presets[slot];
-    const std::string& label = presets_[index].label;
-    const bool active = index == active_;
-    const uint32_t card = pressed ? accent_ : kCard;
-    const int R = sc(14);
-    C.fillRoundRect(r.x, r.y, r.w, r.h, R, card);
-    if (active && !pressed)
-        for (int k = 0; k < sc(3); ++k) C.drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, R - k, accent_);
-
+    const wr::Preset& pr = presets_[index];
+    const std::string& label = pr.label;
     const int side = thumbSide();
-    const int ax = r.x + (r.w - side) / 2, ay = r.y + sc(10);
     if (M5Canvas* t = thumbs_[index].get()) {
-        roundedPush(*t, ax, ay, sc(10), false, card);
+        roundedPush(*t, ax, ay, sc(10), false, bg);
+    } else if (pr.list) {
+        // Liste de morceaux favoris du compte : grand cœur sur la couleur du nom
+        C.fillRoundRect(ax, ay, side, side, sc(10), wr::nameColor(label));
+        heartIcon(ax + side / 2, ay + side / 2 - side / 32, side / 4, kText);
     } else {
         // Monogramme : initiales sur une couleur tirée du nom
         C.fillRoundRect(ax, ay, side, side, sc(10), wr::nameColor(label));
@@ -328,7 +325,25 @@ void Ui::tile(int slot, int index, bool pressed) {
         C.setTextColor(kText);
         C.drawString(ini.c_str(), ax + side / 2, ay + side / 2 + 1);
     }
-    if (!presets_[index].favId.empty()) {  // favori de la télécommande : petit cœur dans le coin
+}
+
+void Ui::tile(int slot, int index, bool pressed) { tileAt(layout_.presets[slot], index, pressed); }
+
+void Ui::tileAt(const wr::Rect& r, int index, bool pressed) {
+    auto& C = canvas_;
+    const std::string& label = presets_[index].label;
+    const bool active = index == active_;
+    const uint32_t card = pressed ? accent_ : kCard;
+    const int R = sc(14);
+    C.fillRoundRect(r.x, r.y, r.w, r.h, R, card);
+    if (active && !pressed)
+        for (int k = 0; k < sc(3); ++k) C.drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, R - k, accent_);
+
+    const int side = thumbSide();
+    const int ax = r.x + (r.w - side) / 2, ay = r.y + sc(10);
+    const wr::Preset& pr = presets_[index];
+    tileArt(index, ax, ay, card);
+    if (!pr.favId.empty() && !pr.list) {  // favori de la télécommande : petit cœur dans le coin
         const int d = sc(26), hx = ax + sc(4), hy = ay + sc(4);
         C.fillRoundRect(hx, hy, d, d, sc(8), kBg);
         heartIcon(hx + d / 2, hy + d / 2 - sc(1), sc(7), accent_);
@@ -341,21 +356,35 @@ void Ui::tile(int slot, int index, bool pressed) {
         for (int k = 0; k < 3; ++k)
             C.fillRect(ex + (d - 3 * bw - 2 * gap) / 2 + k * (bw + gap), base - hs[k], bw, hs[k], accent_);
     }
-    // Nom : une ligne en police normale, sinon deux lignes plus petites
+    // Nom : une ligne en police normale, sinon deux lignes plus petites. Avec un artiste : le nom puis l'artiste,
+    // une ligne chacun en petite police, si le nom y tient en entier (sinon le nom seul : il compte plus)
     auto measure = [&](const std::string& s) { return (int)C.textWidth(s.c_str()); };
     std::vector<std::string> lines;
-    useFont(C, kSmall);
-    lines = wr::wrapText(label, r.w - sc(16), 1, measure);
-    if (endsWithEllipsis(lines)) {
+    bool withSub = !pr.sub.empty();
+    if (withSub) {
         useFont(C, kTiny);
-        lines = wr::wrapText(label, r.w - sc(16), 2, measure);
+        lines = wr::wrapText(label, r.w - sc(16), 1, measure);
+        withSub = !endsWithEllipsis(lines);
+        if (withSub) {
+            std::vector<std::string> sub = wr::wrapText(pr.sub, r.w - sc(16), 1, measure);
+            if (!sub.empty()) lines.push_back(sub.front());
+        }
+    }
+    if (!withSub) {
+        useFont(C, kSmall);
+        lines = wr::wrapText(label, r.w - sc(16), 1, measure);
+        if (endsWithEllipsis(lines)) {
+            useFont(C, kTiny);
+            lines = wr::wrapText(label, r.w - sc(16), 2, measure);
+        }
     }
     const int lh = C.fontHeight() + sc(1);
     C.setTextDatum(textdatum_t::middle_center);
-    C.setTextColor(pressed ? kBg : kText);
     int ly = ay + side + (r.bottom() - ay - side) / 2 - (int)(lines.size() - 1) * lh / 2;
-    for (auto& l : lines) {
-        C.drawString(l.c_str(), r.x + r.w / 2, ly);
+    for (size_t k = 0; k < lines.size(); ++k) {
+        const bool second = withSub && k == 1;  // artiste : texte secondaire
+        C.setTextColor(pressed ? kBg : second ? kText2 : kText);
+        C.drawString(lines[k].c_str(), r.x + r.w / 2, ly);
         ly += lh;
     }
 }

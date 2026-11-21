@@ -83,6 +83,79 @@ void Ui::renderMenu(const char* version) {
     present();
 }
 
+// Menu d'une tuile : en-tête (image, nom, artiste), puis les choix, puis Fermer. Ouvert par un appui long sur la tuile
+void Ui::renderTileMenu(int index, bool pinned, bool removable) {
+    beginScreen(View::Other);
+    auto& C = canvas_;
+    background();
+    navRail(0);
+    const wr::Rect& A = layout_.content;
+    const int W = A.w;
+    if (index < 0 || index >= (int)presets_.size()) {
+        present();
+        return;
+    }
+    const wr::Preset& p = presets_[index];
+    useFont(C, kMid);
+    const int titleH = C.fontHeight();
+    useFont(C, kSmall);
+    const int textH = titleH + sc(4) + C.fontHeight();
+    const int bw = std::min(W - 2 * sc(40), sc(560)), bh = std::max(sc(58), textH + sc(2)), gap = sc(8);
+    const int side = thumbSide(), pad = sc(12);
+    const int headH = side + 2 * pad;
+    const int rows = removable ? 2 : 1;
+    const int cw = sc(150), ch = sc(44);
+    // En-tête, rangées et Fermer centrés ensemble dans la hauteur
+    const int total = headH + sc(20) + rows * bh + (rows - 1) * gap + sc(14) + ch;
+    const int x = A.x + (W - bw) / 2;
+    const int y0 = A.y + std::max(sc(16), (A.h - total) / 2);
+    // En-tête : image de la tuile et ses deux lignes
+    C.fillRoundRect(x, y0, bw, headH, sc(16), kCard);
+    tileArt(index, x + pad, y0 + pad, kCard);
+    const int tx = x + pad + side + sc(16), tw = x + bw - pad - tx;
+    auto measure = [&](const std::string& t) { return (int)C.textWidth(t.c_str()); };
+    useFont(C, kMid);
+    const int lh = C.fontHeight();
+    useFont(C, kSmall);
+    const int sh = p.sub.empty() ? 0 : C.fontHeight() + sc(4);
+    const int ty = y0 + (headH - lh - sh) / 2;
+    C.setTextDatum(textdatum_t::top_left);
+    useFont(C, kMid);
+    C.setTextColor(kText);
+    C.drawString(wr::wrapText(p.label, tw, 1, measure)[0].c_str(), tx, ty);
+    if (!p.sub.empty()) {
+        useFont(C, kSmall);
+        C.setTextColor(kText2);
+        C.drawString(wr::wrapText(p.sub, tw, 1, measure)[0].c_str(), tx, ty + lh + sc(4));
+    }
+    wr::Rect rects[3];
+    int y = y0 + headH + sc(20);
+    rects[TilePin] = wr::Rect{x, y, bw, bh};
+    menuButton(C, rects[TilePin], pinned ? wr::L("Unpin", "D\xC3\xA9s\xC3\xA9pingler") : wr::L("Pin to the front", "\xC3\x89pingler en t\xC3\xAAte"),
+               pinned ? wr::L("Back to its usual place", "Retour \xC3\xA0 sa place habituelle")
+                      : wr::L("Stays at the front", "Reste en t\xC3\xAAte"),
+               accent_, sc(16));
+    y += bh + gap;
+    if (removable) {
+        rects[TileRemove] = wr::Rect{x, y, bw, bh};
+        menuButton(C, rects[TileRemove], wr::L("Remove from favorites", "Retirer des favoris"),
+                   wr::L("The tile goes away", "La tuile dispara\xC3\xAEt"), kRed, sc(16));
+        y += bh + gap;
+    }
+    rects[TileClose] = wr::Rect{A.x + (W - cw) / 2, y - gap + sc(14), cw, ch};
+    const wr::Rect& c = rects[TileClose];
+    C.fillRoundRect(c.x, c.y, c.w, c.h, c.h / 2, kCard);
+    useFont(C, kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    C.setTextColor(kText);
+    C.drawString(wr::L("Close", "Fermer"), c.x + c.w / 2, c.y + c.h / 2 + 1);
+    // Touchables (la barre est inscrite par navRail), dans l'ordre de TileChoice
+    targets_.add(wr::Act::TileChoice, TilePin, rects[TilePin], wr::kTargetDefault);
+    if (removable) targets_.add(wr::Act::TileChoice, TileRemove, rects[TileRemove]);
+    targets_.add(wr::Act::TileChoice, TileClose, rects[TileClose]);
+    present();
+}
+
 // Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin
 void Ui::renderLog(const std::vector<String>& lines, const char* version) {
     beginScreen(View::Other);

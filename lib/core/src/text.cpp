@@ -257,4 +257,37 @@ std::string normalizeText(const std::string& s) {
     return out;
 }
 
+// Note d'édition en fin de titre : « (Legacy Edition) », « [Remastered 2011] », « - Deluxe »
+static bool editionNote(const std::string& inner) {
+    static const char* const kWords[] = {"remaster", "deluxe", "edition", "expanded", "anniversary",
+                                         "bonus",    "legacy", "reissue", "explicit"};
+    const std::string n = normalizeText(inner);
+    for (const char* w : kWords)
+        if (n.find(w) != std::string::npos) return true;
+    return false;
+}
+
+std::string shortTitle(const std::string& title) {
+    std::string s = trim(title);
+    for (;;) {
+        if (s.empty()) break;
+        size_t cut = std::string::npos, from = 0, to = 0;
+        const char last = s.back();
+        if (last == ')' || last == ']') {
+            cut = s.rfind(last == ')' ? '(' : '[');
+            if (cut != std::string::npos) from = cut + 1, to = s.size() - 1;
+        } else {
+            cut = s.rfind(" - ");
+            if (cut != std::string::npos) from = cut + 3, to = s.size();
+        }
+        if (cut == std::string::npos || cut == 0) break;
+        const std::string inner = s.substr(from, to - from);
+        if (inner.find_first_of("()[]") != std::string::npos || !editionNote(inner)) break;  // imbriqué : gardé
+        const std::string rest = trim(s.substr(0, cut));
+        if (rest.empty()) break;
+        s = rest;
+    }
+    return s;
+}
+
 }  // namespace wr

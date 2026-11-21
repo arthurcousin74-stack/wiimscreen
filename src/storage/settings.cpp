@@ -43,6 +43,7 @@ static constexpr Field kFields[] = {
     Field::text("deezeruser", &Settings::deezerUser),
     Field::text("lang", &Settings::lang),
     Field::flag("qobuzdirect", &Settings::qobuzDirect),
+    Field::flag("tilesrecent", &Settings::recentFirst),
 };
 // + 1 : Settings::presets, déduit de presetsText
 static_assert(wr::aggregateFieldCount<Settings>() == sizeof(kFields) / sizeof(kFields[0]) + 1,

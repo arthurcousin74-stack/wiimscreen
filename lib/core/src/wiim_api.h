@@ -15,6 +15,8 @@ struct Preset {
     std::string label;
     std::string picUrl;  // image du preset (getPresetInfo), vide si aucune
     std::string favId;   // favori enregistré sur la télécommande (file du WiiM), vide pour un preset du WiiM
+    std::string sub;     // deuxième ligne de la tuile (artiste), vide : le nom seul sur deux lignes
+    bool list = false;   // tuile d'une liste de morceaux favoris du compte (Qobuz, Deezer) : grand cœur pour image
 };
 
 // Le WiiM encode Title/Artist en hexadécimal UTF-8 : décode si c'est le cas.

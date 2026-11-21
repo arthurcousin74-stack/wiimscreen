@@ -144,21 +144,33 @@ int main(int argc, char** argv) {
     ui.render(st);
     save(out, "1-lecture.ppm");
     {
-        // Presets du WiiM suivis de favoris de la télécommande (petit cœur), album en cours déjà favori
-        std::vector<wr::Preset> mix(six.begin(), six.begin() + 3);
-        wr::Preset f1{101, "Kind of Blue (Legacy Edition)", "x"};
+        // Presets du WiiM suivis de favoris de la télécommande (petit cœur, titre court et artiste, comme
+        // refreshTiles()), album en cours déjà favori, puis la tuile de la liste « Favoris Qobuz »
+        std::vector<wr::Preset> mix(six.begin(), six.begin() + 2);
+        wr::Preset f1{101, wr::shortTitle("Kind of Blue (Legacy Edition)"), "x"};
         f1.favId = "a1";
-        wr::Preset f2{102, "Babylon (Music from the Motion Picture)", ""};
+        f1.sub = "Miles Davis";
+        wr::Preset f2{102, wr::shortTitle("Babylon (Music from the Motion Picture)"), ""};
         f2.favId = "a2";
+        f2.sub = "Justin Hurwitz";
+        wr::Preset f3{99, wr::L("Qobuz favorites", "Favoris Qobuz"), ""};
+        f3.favId = "qobuz-favoris";
+        f3.list = true;
         mix.push_back(f1);
         mix.push_back(f2);
+        mix.push_back(f3);
         ui.setPresets(mix);
-        for (int i = 0; i < 3; ++i) ui.setPresetArt(i, &thumbs[i]);
-        ui.setPresetArt(3, &thumbs[3]);
-        ui.setActivePreset(3);
+        for (int i = 0; i < 2; ++i) ui.setPresetArt(i, &thumbs[i]);
+        ui.setPresetArt(2, &thumbs[3]);
+        ui.setActivePreset(2);
         ui.setFavorite(2);
         ui.render(st);
         save(out, "23-favoris.ppm");
+        // Menu d'une tuile (appui long) : favori de la télécommande (Retirer proposé), puis preset épinglé
+        ui.renderTileMenu(2, false, true);
+        save(out, "49-menu-tuile.ppm");
+        ui.renderTileMenu(0, true, false);
+        save(out, "50-menu-tuile-epinglee.ppm");
         UiState wait = st;
         wait.pending = wr::kNext;  // ⏭ envoyé, le WiiM n'a pas encore changé de morceau
         ui.render(wait);

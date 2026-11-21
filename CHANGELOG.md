@@ -5,6 +5,19 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+### Added
+- **Tile menu**: hold a finger on a tile (or hold OK on a focused tile) to pin it at the front of the tiles, unpin it,
+  or remove a favorite saved on the remote. The Journal shows `Menu de la tuile : …` and `Tuile épinglée : …`.
+- **Last played tiles first**: the remote keeps a short history of the tiles you start (`/fav/tiles.txt`: last play,
+  count, pins; no clock needed). Pinned tiles come first, then the last played ones, then the others. The new order
+  is applied after one minute without a touch, so tiles never move under the finger. Setup page › *Tile order*:
+  *As saved* keeps the old order (pins still apply).
+
+### Changed
+- **Clearer tiles**: album tiles show the artist on a second line when the title fits; edition notes at the end of an
+  album title ("(Legacy Edition)", "[Remastered 2011]", " - Deluxe") are removed on the tile. The *Qobuz favorites*
+  and *Deezer favorites* tiles show a large heart instead of initials.
+
 ## [0.3.1-beta] — 2026-11-20 — Faster touch feedback, volume by touch
 
 **Tab5:** checked in the simulator only, like v0.3.0-beta: this firmware has **not been checked on a Tab5 yet**. If a
