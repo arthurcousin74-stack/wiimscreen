@@ -104,6 +104,9 @@ public:
     // de la bande) ; filters : filtres proposés (wr::TileKind, -1 = toutes) ; filter : le choisi ; pressed : tuile
     // enfoncée (-1). Éléments LibFilter, LibTile (arg = indice global), LibPage. Rend la page montrée (bornée).
     int renderLibrary(const std::vector<int>& shown, const std::vector<int>& filters, int filter, int page, int pressed = -1);
+    // Une tuile de la Bibliothèque montrée redessinée seule (image arrivée, doigt posé ou relevé) ; false si elle
+    // n'est pas à l'écran (autre page, autre écran)
+    bool updateLibraryTile(int index, bool pressed);
 
     // Choix du WiiM trouvé sur le réseau : (nom, adresse) ; liste vide = aucun trouvé. Éléments PickDevice (arg =
     // indice), PickRetry, PickSetup
@@ -177,6 +180,7 @@ private:
     void transport(const UiState& st, int pressed);
     void volumePill(const UiState& st, int pressed);
     void tile(int slot, int index, bool pressed);
+    std::vector<std::pair<int, wr::Rect>> libTiles_;  // tuiles de la Bibliothèque à l'écran (indice, rectangle)
     void tileAt(const wr::Rect& r, int index, bool pressed);  // tuile `index` dans le rectangle r (bande, Bibliothèque)
     void tileArt(int index, int x, int y, uint32_t bg);  // image de la tuile (ou monogramme, grand cœur), côté thumbSide()
     void pageDots();

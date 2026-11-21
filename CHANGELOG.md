@@ -5,6 +5,11 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+### Fixed
+- **Library**: on a narrow screen (portrait, 800×480) the filters go on a second line instead of losing the last
+  ones, so a chosen filter always stays visible. A tile picture that arrives, or a finger on a tile, now redraws
+  only that tile instead of the whole screen.
+
 ## [0.4.0-beta] — 2026-11-21 — Library, tile menu, last played tiles first, Play all
 
 **Tab5:** checked in the simulator and with a mock WiiM only: this firmware has **not been checked on a Tab5 yet**.

@@ -84,6 +84,7 @@ void Ui::relayout() {
 
 void Ui::beginScreen(View view) {
     view_ = view;
+    libTiles_.clear();  // la Bibliothèque les remet en se dessinant
     targets_.clear();  // l'écran qui commence inscrit ses éléments touchables en se dessinant
 }
 

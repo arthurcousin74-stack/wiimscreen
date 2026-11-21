@@ -882,7 +882,7 @@ static void activateLibrary(const wr::Target& tg, const Press& at) {
             if (at.touch) {  // doigt suivi : relâché = jouer, tenu = menu
                 g_lib.touch = tg.arg;
                 g_lib.since = at.now;
-                renderLibrary(tg.arg);  // tuile enfoncée
+                if (!g_ui.updateLibraryTile(tg.arg, true)) renderLibrary(tg.arg);  // tuile enfoncée, seule
                 return;
             }
             g_view.screen = Screen::Controls;
@@ -911,7 +911,7 @@ static void serviceLibraryTouch(const m5::touch_detail_t& t, uint32_t now) {
         g_view.screen = Screen::Controls;
         playPreset(i);
         show();
-    } else {
+    } else if (!g_ui.updateLibraryTile(i, false)) {
         renderLibrary();
     }
 }

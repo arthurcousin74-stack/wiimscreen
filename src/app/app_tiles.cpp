@@ -224,7 +224,7 @@ void requestPresets() {
 
 // Images téléchargées en tâche de fond : pochette ou image de preset
 void checkImages() {
-    bool tileImage = false;  // image d'une tuile arrivée (Bibliothèque à redessiner)
+    std::vector<int> tileImages;  // tuiles dont l'image est arrivée (Bibliothèque : redessinées seules)
     ArtImage img;
     bool changed = false;
     while (g_img.fetcher.poll(img)) {
@@ -280,16 +280,19 @@ void checkImages() {
         ArtImage& stored = g_img.presets[url];
         stored = std::move(img);
         for (size_t i = 0; i < g_tiles.list.size(); ++i)
-            if (g_tiles.list[i].picUrl == url) g_ui.setPresetArt((int)i, &stored);
-        tileImage = true;
+            if (g_tiles.list[i].picUrl == url) {
+                g_ui.setPresetArt((int)i, &stored);
+                tileImages.push_back((int)i);
+            }
         if (g_view.screen == Screen::Results && g_img.coverRequested.count(url))  // même image dans la liste ouverte
             for (size_t i = 0; i < g_search.results.size(); ++i)
                 if (g_search.results[i].art == url) g_ui.updateResultCover((int)i, &stored);
         changed = true;
     }
     if (changed) show();
-    // Bibliothèque ouverte : la nouvelle image d'une tuile (pas pendant un appui : la tuile enfoncée le reste)
-    if (tileImage && g_view.screen == Screen::Library && g_lib.touch < 0) renderLibrary();
+    // Bibliothèque ouverte : seulement les tuiles montrées dont l'image vient d'arriver (la tuile enfoncée le reste)
+    if (g_view.screen == Screen::Library)
+        for (int i : tileImages) g_ui.updateLibraryTile(i, i == g_lib.touch);
 }
 
 // Images manquantes (échec, ou résultat perdu pendant un écran sans checkImages) : redemandées toutes les minutes

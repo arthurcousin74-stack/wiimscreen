@@ -165,42 +165,50 @@ int Ui::renderLibrary(const std::vector<int>& shown, const std::vector<int>& fil
     navRail(3);
     const wr::Rect& A = layout_.content;
     const int m = sc(18), X = A.x + m, W = A.w - 2 * m;
-    // Grille : tuiles de la taille de celles de la bande (calculée d'abord : les filtres s'alignent dessus)
-    const int chipH = sc(48);
+    // Grille : tuiles de la taille de celles de la bande (colonnes d'abord : les filtres s'alignent dessus)
+    const int chipH = sc(48), cg = sc(10);
     const wr::Rect t0 = layout_.presets.empty() ? wr::Rect{0, 0, sc(150), sc(150)} : layout_.presets[0];
     const int tw = t0.w, th = t0.h, g = sc(12), navH = sc(56);
-    const int top = A.y + m + chipH + sc(16);
     const int cols = std::max(1, (W + g) / (tw + g));
     const int gx = X + (W - (cols * tw + (cols - 1) * g)) / 2;
+    // Pastilles des filtres, à la largeur de leur texte. Toutes se voient (sinon un filtre choisi ne pourrait plus se
+    // voir ni se rechoisir) : marges réduites si la ligne est trop courte, puis une seconde ligne (portrait étroit ;
+    // les polices ne suivent pas la taille de l'écran)
+    static const char* const kEn[] = {"Presets", "Favorites", "Qobuz", "Deezer"};
+    static const char* const kFr[] = {"Presets", "Favoris", "Qobuz", "Deezer"};
+    auto chipText = [&](int f) { return f < 0 ? wr::L("All", "Tout") : (f < 4 ? wr::L(kEn[f], kFr[f]) : "?"); };
+    useFont(C, kSmall);
+    C.setTextDatum(textdatum_t::middle_center);
+    const int n = (int)filters.size();
+    int text = 0;
+    for (int f : filters) text += (int)C.textWidth(chipText(f));
+    const int pad = n > 0 ? std::max(sc(12), std::min(sc(20), (W - text - (n - 1) * cg) / (2 * n))) : sc(20);
+    const int total = text + n * 2 * pad + std::max(0, n - 1) * cg;
+    const int x0 = gx + total <= X + W ? gx : X;  // alignées sur la grille, sinon depuis la marge
+    std::vector<std::pair<int, wr::Rect>> chips;
+    {
+        int cx = x0, cy = A.y + m;
+        for (int f : filters) {
+            const int w = (int)C.textWidth(chipText(f)) + 2 * pad;
+            if (cx > x0 && cx + w > X + W) cx = x0, cy += chipH + cg;  // ligne suivante
+            chips.push_back({f, wr::Rect{cx, cy, w, chipH}});
+            cx += w + cg;
+        }
+    }
+    for (auto& c : chips) {
+        const wr::Rect& r = c.second;
+        const bool on = c.first == filter;
+        C.fillRoundRect(r.x, r.y, r.w, r.h, r.h / 2, on ? accent_ : kCard);
+        C.setTextColor(on ? kBg : kText);
+        C.drawString(chipText(c.first), r.x + r.w / 2, r.y + r.h / 2 + 1);
+    }
+    const int top = (chips.empty() ? A.y + m + chipH : chips.back().second.bottom()) + sc(16);
     auto rowsFor = [&](int bottom) { return std::max(1, (bottom - top + g) / (th + g)); };
     int rows = rowsFor(A.bottom() - m);
     if ((int)shown.size() > cols * rows) rows = rowsFor(A.bottom() - m - navH - sc(10));  // place des pages
     const int per = cols * rows;
     const int pages = std::max(1, ((int)shown.size() + per - 1) / per);
     page = std::max(0, std::min(pages - 1, page));
-    // Pastilles des filtres, à la largeur de leur texte
-    static const char* const kEn[] = {"Presets", "Favorites", "Qobuz", "Deezer"};
-    static const char* const kFr[] = {"Presets", "Favoris", "Qobuz", "Deezer"};
-    const int pad = sc(20), cg = sc(10);
-    useFont(C, kSmall);
-    C.setTextDatum(textdatum_t::middle_center);
-    auto chipText = [&](int f) { return f < 0 ? wr::L("All", "Tout") : (f < 4 ? wr::L(kEn[f], kFr[f]) : "?"); };
-    int total = 0;
-    for (int f : filters) total += (int)C.textWidth(chipText(f)) + 2 * pad + cg;
-    int cx = gx + total - cg <= X + W ? gx : X;  // alignées sur la grille, sinon depuis la marge
-    std::vector<std::pair<int, wr::Rect>> chips;
-    for (int f : filters) {
-        const char* t = chipText(f);
-        const int w = (int)C.textWidth(t) + 2 * pad;
-        if (cx + w > X + W) break;  // plus de place : les derniers filtres ne sont pas montrés
-        const wr::Rect r{cx, A.y + m, w, chipH};
-        const bool on = f == filter;
-        C.fillRoundRect(r.x, r.y, r.w, r.h, r.h / 2, on ? accent_ : kCard);
-        C.setTextColor(on ? kBg : kText);
-        C.drawString(t, r.x + r.w / 2, r.y + r.h / 2 + 1);
-        chips.push_back({f, r});
-        cx += w + cg;
-    }
     std::vector<std::pair<int, wr::Rect>> tiles;
     for (int k = 0; k < per && page * per + k < (int)shown.size(); ++k) {
         const int i = shown[page * per + k];
@@ -209,6 +217,7 @@ int Ui::renderLibrary(const std::vector<int>& shown, const std::vector<int>& fil
         tileAt(r, i, i == pressed);
         tiles.push_back({i, r});
     }
+    libTiles_ = tiles;
     if (shown.empty()) {
         C.setTextDatum(textdatum_t::middle_center);
         C.setTextColor(kText2);
@@ -242,6 +251,21 @@ int Ui::renderLibrary(const std::vector<int>& shown, const std::vector<int>& fil
     if (next.w > 0) targets_.add(wr::Act::LibPage, 1, next);
     present();
     return page;
+}
+
+bool Ui::updateLibraryTile(int index, bool pressed) {
+    for (auto& t : libTiles_) {
+        if (t.first != index || index < 0 || index >= (int)presets_.size()) continue;
+        const wr::Rect& r = t.second;
+        auto& C = canvas_;
+        C.setClipRect(r.x, r.y, r.w, r.h);
+        bg_.pushSprite(&C, 0, 0);
+        tileAt(r, index, pressed);
+        C.clearClipRect();
+        presentRect(r);
+        return true;
+    }
+    return false;
 }
 
 // Journal : les lignes les plus récentes en bas, sur deux colonnes si besoin

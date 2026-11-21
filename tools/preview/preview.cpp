@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
         ui.renderTileMenu(0, true, false);
         save(out, "50-menu-tuile-epinglee.ppm");
         // Bibliothèque : toutes les tuiles, filtres des sortes présentes (presets, favoris, Qobuz)
-        ui.renderLibrary({0, 1, 2, 3, 4}, {-1, 0, 1, 2}, -1, 0);
+        ui.renderLibrary({0, 1, 2, 3, 4}, {-1, 0, 1, 2, 3}, -1, 0);  // les quatre sortes : 800x480 aussi
         save(out, "51-bibliotheque.ppm");
         ui.renderLibrary({2, 3}, {-1, 0, 1, 2}, 1, 0, 2);  // filtre Favoris, tuile enfoncée
         save(out, "52-bibliotheque-favoris.ppm");
@@ -325,6 +325,9 @@ int main(int argc, char** argv) {
             save(out, "33-albums-portrait.ppm");
             up.renderResults("miles", found, 0, "", -1, {1, 0, 0, 0, 0, 0, 0});
             save(out, "34-albums-resultats-portrait.ppm");
+            // Bibliothèque en portrait : les cinq filtres tiennent sur la ligne, le dernier (Deezer) choisi
+            up.renderLibrary({0, 1, 2, 3, 4, 5}, {-1, 0, 1, 2, 3}, 3, 0);
+            save(out, "53-bibliotheque-portrait.ppm");
         }
         D.deleteSprite();
         D.createSprite(W, H);
