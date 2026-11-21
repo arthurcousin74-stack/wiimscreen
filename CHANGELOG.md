@@ -5,6 +5,12 @@ the *Settings* menu (`<build>-<commit>` for CI builds, `vX.Y.Z` for releases).
 
 ## [Unreleased]
 
+## [0.4.0-beta] — 2026-11-21 — Library, tile menu, last played tiles first, Play all
+
+**Tab5:** checked in the simulator and with a mock WiiM only: this firmware has **not been checked on a Tab5 yet**.
+**Deezer *Play all*** has not been tried on any WiiM: if nothing plays, send the Journal lines. If a tile or a button
+does not react, report it and install v0.3.1-beta again.
+
 ### Added
 - **Library**: a new button in the side bar (grid, between Home and Search) shows all the tiles on one screen, in the
   order of the strip, with filters for the kinds you have (*Presets*, *Favorites*, *Qobuz*, *Deezer*) and pages. A
